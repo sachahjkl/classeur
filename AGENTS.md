@@ -35,6 +35,6 @@ Every step is a command of `tools/classeurtool` (`help` lists them):
 ## Pitfalls met
 
 - `if !ui.row(...) { return }` closes the row at once (the scope of a deferred procedure is the `if`): build children
-  inside `if ui.row(...) { ... }`.
+  inside `if ui.row(...) { ... }`. `classeurtool check` refuses it.
 - A test that calls the program's procedures sets `context.allocator = runtime.heap_allocator()` first: what the program
   keeps must come from its own allocator, not from the test's tracking one.

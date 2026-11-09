@@ -68,6 +68,8 @@ COMMANDS := [?]Command{
 	{id = "lock", title = "Lock the tab (folders open in a new tab)", icon = lucide.LOCK, run = act_lock},
 	{id = "hidden", title = "Show or hide the hidden files", icon = lucide.EYE, keys = {{.H, {.Ctrl}}, {.Period, {.Ctrl}}}, in_text = true, run = act_toggle_hidden},
 	{id = "sidebar", title = "Show or hide the sidebar", icon = lucide.PANEL_LEFT, keys = {{.B, {.Ctrl}}, {}}, in_text = true, run = act_toggle_sidebar},
+	{id = "view_details", title = "Details view", icon = lucide.LIST, keys = {{.N1, {.Ctrl}}, {}}, in_text = true, run = act_view_details},
+	{id = "view_grid", title = "Grid view, with thumbnails", icon = lucide.LAYOUT_GRID, keys = {{.N2, {.Ctrl}}, {}}, in_text = true, run = act_view_grid},
 	{id = "sort_name", title = "Sort by name", icon = lucide.ARROW_UP_DOWN, run = act_sort_name},
 	{id = "sort_modified", title = "Sort by date modified", icon = lucide.ARROW_UP_DOWN, run = act_sort_modified},
 	{id = "sort_size", title = "Sort by size", icon = lucide.ARROW_UP_DOWN, run = act_sort_size},

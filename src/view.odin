@@ -27,6 +27,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app := (^App)(h.user)
 	em := ui.font_size()
 	app.room = size.x / max(ui.scale(), 0.01)
+	app.frame += 1
 	// a text field had the keyboard at the end of the last build: only the commands that work while typing run
 	clear(&app.text_keys_before)
 	append(&app.text_keys_before, ..app.text_keys[:])
@@ -51,6 +52,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	jobs_tidy(app)
 	watcher_update(app)
 	measure_update(app)
+	thumbs_tidy(app)
 }
 
 // A text field built this frame: while it has the keyboard, the keys of the list are its own.
@@ -213,19 +215,26 @@ list_keys :: proc(app: ^App) {
 	f := &t.folder
 	n := len(f.shown)
 	if n == 0 { return }
-	page := max(t.vl.page_rows - 1, 1)
-	moves := [?]struct { key: Shortcut, to: int }{
-		{{.Down, {.Shift}}, f.cursor + 1},
-		{{.Up, {.Shift}}, f.cursor - 1},
-		{{.Page_Down, {.Shift}}, f.cursor + page},
-		{{.Page_Up, {.Shift}}, f.cursor - page},
-		{{.Home, {.Shift}}, 0},
-		{{.End, {.Shift}}, n - 1},
+	grid := t.view == .Grid
+	row := grid ? max(t.grid_cols, 1) : 1
+	page := max(t.vl.page_rows - 1, 1) * row
+	Move :: struct { key: Shortcut, to: int, extend: bool }
+	moves := make([dynamic]Move, context.temp_allocator)
+	append(&moves, Move{{.Down, {.Shift}}, f.cursor + row, true}, Move{{.Up, {.Shift}}, f.cursor - row, true},
+		Move{{.Page_Down, {.Shift}}, f.cursor + page, true}, Move{{.Page_Up, {.Shift}}, f.cursor - page, true},
+		Move{{.Home, {.Shift}}, 0, true}, Move{{.End, {.Shift}}, n - 1, true})
+	if grid {
+		// (the grid's moves are its own: the list under it moves by rows of cards)
+		append(&moves, Move{{.Right, {}}, f.cursor + 1, false}, Move{{.Left, {}}, f.cursor - 1, false},
+			Move{{.Down, {}}, f.cursor + row, false}, Move{{.Up, {}}, f.cursor - row, false},
+			Move{{.Page_Down, {}}, f.cursor + page, false}, Move{{.Page_Up, {}}, f.cursor - page, false},
+			Move{{.Home, {}}, 0, false}, Move{{.End, {}}, n - 1, false},
+			Move{{.Right, {.Shift}}, f.cursor + 1, true}, Move{{.Left, {.Shift}}, f.cursor - 1, true})
 	}
 	for m in moves {
 		if ui.key_press(m.key.key, m.key.mods) {
-			folder_pick(f, clamp(m.to, 0, n - 1), extend = true)
-			ui.list_select(&t.vl, f.cursor)
+			folder_pick(f, clamp(m.to, 0, n - 1), extend = m.extend)
+			ui.list_select(&t.vl, grid ? f.cursor / row : f.cursor)
 		}
 	}
 	if ui.key_press(.Space, {.Ctrl}) { folder_pick(f, f.cursor, toggle = true) }

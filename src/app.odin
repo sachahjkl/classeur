@@ -29,7 +29,11 @@ App :: struct {
 	devtools:    ^devtools.Server,  // TOOLKIT_DEVTOOLS=<port>: driven and captured over the Chrome DevTools Protocol
 	theme_shown: ui.Theme_Shown,
 	pool:        Pool,
-	measure_pool: Pool,             // the measures of folders (measure.odin)
+	measure_pool: Pool,
+	thumb_pool:  Pool,              // the thumbnails of the grid (thumbs.odin)
+	thumbs:      map[string]Thumb,  // by path (the keys owned)
+	frame:       u64,               // the frames built (what a thumbnail was last used in)
+	default_view: View_Mode,             // the measures of folders (measure.odin)
 	measures:    map[string]Measure,   // by path (the keys owned)
 	measure_gen: u64,               // atomic: a measure asked in an older generation is dropped
 	recents:     [dynamic]string,   // owned: the folders visited, the last first (the sidebar)
@@ -122,6 +126,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 
 	pool_start(&app.pool)
 	pool_start(&app.measure_pool, MEASURE_THREADS)
+	pool_start(&app.thumb_pool, THUMB_THREADS)
 	app.side_open = {.Recents = false, .Bookmarks = true, .Storage = true, .Places = true}
 	jobs_start(app)
 	watcher_start(app)
@@ -147,6 +152,8 @@ app_close :: proc(app: ^App) {
 	pool_stop(&app.pool, proc(data: rawptr) {})   // (a read left waiting: its memory goes with the process)
 	sync.atomic_add(&app.measure_gen, 1)          // (the measures running end at their next folder)
 	pool_stop(&app.measure_pool, proc(data: rawptr) {})
+	pool_stop(&app.thumb_pool, proc(data: rawptr) {})
+	thumbs_free(app)   // (before the renderer goes: the textures are its)
 	devtools.stop(app.devtools)
 	host.host_close(&app.main)
 	app_free(app)

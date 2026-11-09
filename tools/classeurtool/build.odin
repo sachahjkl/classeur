@@ -76,6 +76,7 @@ run_test :: proc(args: []string) -> int {
 }
 
 run_check :: proc(args: []string) -> int {
+	if !check_scopes() { return 1 }
 	if !toolbox.run(odin_cmd("check", "src", nil), {echo = true}) { return 1 }
 	// (the file system's code of the other system is checked too: the program is written for both; the whole program
 	// cannot be, the renderer of the other system needs its libraries)
@@ -84,4 +85,32 @@ run_check :: proc(args: []string) -> int {
 	if !toolbox.run({"odin", "check", "tools/classeurtool", collection(), "-vet"}, {echo = true}) { return 1 }
 	if run_test(nil) != 0 { return 1 }
 	return run_build({"release"})
+}
+
+// The scopes of gui_toolkit (ui.row, ui.parent...) end with the statement they open: `if !ui.row(...) { return }` closes
+// the row at once and its children go to the parent's parent. The compiler accepts it; this check does not.
+SCOPES :: [?]string{"parent", "row", "column", "field_frame", "scroll_y", "style", "tags", "title_bar", "modal", "ctx_menu", "menu_submenu", "tooltip"}
+
+check_scopes :: proc() -> bool {
+	files, err := os.read_all_directory_by_path("src", context.temp_allocator)
+	if err != nil { return false }
+	ok := true
+	scopes := SCOPES
+	for f in files {
+		if !strings.has_suffix(f.name, ".odin") { continue }
+		data, rerr := os.read_entire_file(f.fullpath, context.temp_allocator)
+		if rerr != nil { continue }
+		text := string(data)
+		n := 0
+		for line in strings.split_lines_iterator(&text) {
+			n += 1
+			for sc in scopes {
+				if strings.contains(line, fmt.tprintf("if !ui.%s(", sc)) {
+					fmt.eprintfln("%s:%d: `if !ui.%s(...)` ends the scope at once: build inside `if ui.%s(...)` and its block", f.fullpath, n, sc, sc)
+					ok = false
+				}
+			}
+		}
+	}
+	return ok
 }

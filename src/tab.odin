@@ -28,9 +28,13 @@ Tab :: struct {
 	space:        fs.Space,          // the volume's free and total bytes, read with the folder
 	has_space:    bool,
 	measured:     u64,               // the read whose folders were given to the measures
-	locked:       bool,              // a folder opened from it opens in a new tab (the lock of the toolbar)
+	locked:       bool,
+	view:         View_Mode,
+	grid_cols:    int,               // the cards per row of the grid, as last laid out              // a folder opened from it opens in a new tab (the lock of the toolbar)
 	cursor_rect:  ui.Rect,           // the cursor's row as last built (where the Menu key opens the menu)
 }
+
+View_Mode :: enum u8 { Details, Grid }
 
 // What the next build gives the keyboard to (it knows the boxes' keys).
 Focus_Due :: enum u8 { None, List, Filter, Address }
@@ -47,6 +51,7 @@ tab_new :: proc(app: ^App, path: string) -> ^Tab {
 	t.folder.sort = app.default_sort
 	t.folder.show_hidden = app.show_hidden
 	t.folder.cursor = -1
+	t.view = app.default_view
 	t.path = fs.clean(path)
 	tab_load(app, t)
 	return t

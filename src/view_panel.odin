@@ -43,9 +43,14 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 		if t == nil { return box.rect }
 		wide := (box.rect.max.x - box.rect.min.x) > em * WIDE_EM
 		toolbar(app, p, t, index, em)
-		header(app, t, wide, em)
 		ui.next({width = ui.fill(), height = ui.fill()})
-		folder_list(app, t, focused, wide, em)
+		if t.view == .Grid {
+			grid_list(app, t, focused, em)
+		} else {
+			header(app, t, wide, em)
+			ui.next({width = ui.fill(), height = ui.fill()})
+			folder_list(app, t, focused, wide, em)
+		}
 		footer(app, t, focused, em)
 	}
 	return box.rect
@@ -270,30 +275,34 @@ check_box :: proc(app: ^App, id: string, on, some: bool, em: f32) -> bool {
 ////////////////////////////////
 // The list
 
+// What the list says when it has no row (reading, an error, empty, all filtered out). True: it said it.
+empty_state :: proc(app: ^App, t: ^Tab, em: f32) -> bool {
+	f := &t.folder
+	if f.loaded && f.listing.error == .None && len(f.shown) > 0 { return false }
+	message := "Reading…"
+	switch {
+	case !f.loaded:                    message = "Reading…"
+	case f.listing.error != .None:     message = fs.ERROR_TEXT[f.listing.error]
+	case len(f.listing.entries) == 0:  message = "This folder is empty."
+	case f.filter != "":               message = "No name has these letters."
+	case:                              message = "Only hidden files are here (Ctrl+H shows them)."
+	}
+	ui.next({width = ui.fill(), height = ui.fill()})
+	empty := ui.build_box({.Clickable}, "###empty")
+	if ui.parent(empty) {
+		if ui.tags("weak") {
+			ui.next({width = ui.fill(), height = ui.px(em * 5), text_align = .Center})
+			ui.label(fmt.tprintf("%s###msg", message))
+		}
+	}
+	if ui.signal(empty).right_clicked && f.loaded && f.listing.error == .None { entry_menu_open(app, t, ui.mouse_pos(), on_entry = false) }
+	return true
+}
+
 @(private = "file")
 folder_list :: proc(app: ^App, t: ^Tab, focused, wide: bool, em: f32) {
 	f := &t.folder
-	if !f.loaded || f.listing.error != .None || len(f.shown) == 0 {
-		message := "Reading…"
-		switch {
-		case !f.loaded:                    message = "Reading…"
-		case f.listing.error != .None:     message = fs.ERROR_TEXT[f.listing.error]
-		case len(f.listing.entries) == 0:  message = "This folder is empty."
-		case f.filter != "":               message = "No name has these letters."
-		case:                              message = "Only hidden files are here (Ctrl+H shows them)."
-		}
-		ui.next({width = ui.fill(), height = ui.fill()})
-		empty := ui.build_box({.Clickable}, "###empty")
-		if ui.parent(empty) {
-			if ui.tags("weak") {
-				ui.next({width = ui.fill(), height = ui.px(em * 5), text_align = .Center})
-				ui.label(fmt.tprintf("%s###msg", message))
-			}
-		}
-		if ui.signal(empty).right_clicked && f.loaded && f.listing.error == .None { entry_menu_open(app, t, ui.mouse_pos(), on_entry = false) }
-		return
-	}
-
+	if empty_state(app, t, em) { return }
 	// the cursor and the list's active row are the same row
 	t.vl.sel = f.cursor
 	labels := make([]string, len(f.shown), context.temp_allocator)
@@ -425,6 +434,11 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 			if t.has_space && t.space.total > 0 {
 				used := 100 - int(100 * f64(t.space.free) / f64(t.space.total))
 				stat(app, "disk", lucide.HARD_DRIVE, fmt.tprintf("%d%%", used), fmt.tprintf("%s free of %s", size_text(t.space.free), size_text(t.space.total)), em)
+			}
+			vrule(em)
+			if ui.tags("weak") {
+				if icon_action(app, "view_details", lucide.LIST, command_tip("view_details"), em, on = t.view == .Details) { t.view = .Details }
+				if icon_action(app, "view_grid", lucide.LAYOUT_GRID, command_tip("view_grid"), em, on = t.view == .Grid) { t.view = .Grid }
 			}
 		}
 		ui.spacer(ui.px(em * 0.5))

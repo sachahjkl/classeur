@@ -6,10 +6,12 @@ package classeur
 
 import "base:runtime"
 import "core:fmt"
+import "core:math"
 import "core:os"
 import "core:slice"
 import "core:strings"
 import "core:testing"
+import "gt:png"
 import "gt:testkit"
 import "gt:testkit/session"
 import "fs"
@@ -209,31 +211,112 @@ test_tabs_and_panels :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(app.panels), 1)
 }
 
-// The pictures of the README (classeurtool shots): a home folder of made-up files, two panels, the palette.
+// A made-up photograph: a sky, a sun, three rows of hills, in the colours of `seed`.
+@(private = "file")
+landscape :: proc(w, h: int, seed: int) -> []u8 {
+	out := make([]u8, w * h * 4, context.temp_allocator)
+	hue := f32(seed % 7) / 7
+	sky_top := [3]f32{0.15 + 0.5 * hue, 0.35, 0.75 - 0.4 * hue}
+	sky_low := [3]f32{0.95, 0.75 - 0.3 * hue, 0.55 + 0.2 * hue}
+	sun := [2]f32{f32(w) * (0.25 + 0.5 * f32(seed % 3) / 3), f32(h) * 0.35}
+	for y in 0 ..< h {
+		for x in 0 ..< w {
+			fy := f32(y) / f32(h)
+			c := sky_top + (sky_low - sky_top) * fy
+			dx, dy := f32(x) - sun.x, f32(y) - sun.y
+			if dx * dx + dy * dy < f32(h * h) * 0.012 { c = {1, 0.93, 0.7} }
+			for k in 0 ..< 3 {
+				fk := f32(k)
+				ridge := 0.45 + 0.13 * fk + 0.06 * math.sin(f32(x) / f32(w) * (5 + fk * 3) + f32(seed) * 1.7 + fk)
+				if fy > ridge {
+					shade := 0.55 - 0.15 * fk
+					c = {0.12 + shade * 0.3 * hue, 0.22 + shade * 0.5, 0.18 + shade * 0.25}
+				}
+			}
+			o := out[(y * w + x) * 4:]
+			o[0], o[1], o[2], o[3] = u8(clamp(c.r, 0, 1) * 255), u8(clamp(c.g, 0, 1) * 255), u8(clamp(c.b, 0, 1) * 255), 255
+		}
+	}
+	return out
+}
+
+@(private = "file")
+write_pictures :: proc(dir: string, names: []string) {
+	for name, i in names {
+		w, h := 480, 320
+		data := png.encode(landscape(w, h, i + 1), w, h, .Fast, context.temp_allocator)
+		_ = os.write_entire_file(fs.join(dir, name, context.temp_allocator), data)
+	}
+}
+
+@(private = "file")
+thumbs_ready :: proc(s: ^session.Session) -> bool {
+	app := (^App)(s.user)
+	if len(app.thumbs) == 0 { return false }
+	for _, th in app.thumbs { if th.state == .Asked { return false } }
+	return true
+}
+
+@(test)
+test_grid :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	write_pictures(fs.join(dir, "Photos", context.temp_allocator), {"a.png", "b.png", "c.png", "d.png", "e.png", "f.png", "g.png"})
+	s, app := start(t, {fs.join(dir, "Photos", context.temp_allocator)}, size = {1100, 700})
+	tab := current_tab(app)
+	session.key(s, .N2, {.Ctrl})
+	testing.expect_value(t, tab.view, View_Mode.Grid)
+	session.wait_until(s, thumbs_ready, "the thumbnails")
+	for _, th in app.thumbs {
+		testing.expect_value(t, th.state, Thumb_State.Ready)
+		testing.expect(t, max(th.size.x, th.size.y) <= THUMB_PX)
+	}
+	session.frames(s, 2)
+	testing.expect(t, tab.grid_cols >= 2, "cards side by side")
+	session.key(s, .Home)
+	session.key(s, .Right)
+	testing.expect_value(t, tab.folder.cursor, 1)
+	session.key(s, .Down)
+	testing.expect_value(t, tab.folder.cursor, min(1 + tab.grid_cols, 6))
+	testing.expect_value(t, tab.folder.count, 1)
+	session.key(s, .N1, {.Ctrl})
+	testing.expect_value(t, tab.view, View_Mode.Details)
+}
+
+// The pictures of the README (classeurtool shots): a home folder of made-up files; the grid of the pictures beside the
+// details of the home folder; the palette.
 @(test)
 test_shots :: proc(t: ^testing.T) {
 	when !SHOTS { return }
 	home := []string{
 		"Desktop/", "Documents/", "Downloads/", "Music/", "Pictures/", "Projects/", "Videos/",
-		"Projects/classeur/", "Projects/website/", "Projects/notes.md",
+		"Projects/classeur/", "Projects/website/", "Projects/notes.md", "Projects/classeur/src/", "Projects/classeur/README.md",
 		"Documents/Invoices/", "Documents/Taxes 2025/", "Documents/contract.pdf", "Documents/budget 2026.xlsx", "Documents/letter.odt",
-		"Pictures/Holidays 2026/", "Pictures/harbour.jpg", "Pictures/mountain 2.png", "Pictures/mountain 10.png",
+		"Pictures/Holidays 2026/", "Pictures/Holidays 2026/beach.png",
 		"Downloads/odin-linux-amd64.tar.gz", "Downloads/fonts.zip", "Downloads/manual.pdf", "Downloads/setup.exe",
 		"Music/album/", "Music/track 01.flac", "Music/track 02.flac", "Videos/talk.mp4",
-		"todo.txt", "photo.jpg", "build.sh", "README.md", "archive.zip", "notes 2.txt", "notes 10.txt",
+		"todo.txt", "photo.jpg", "build.sh", "README.md", "archive.zip", "notes 2.txt", "notes 10.txt", ".bashrc",
 	}
 	dir := make_fixture(t, home)
-	s, app := start(t, {dir}, size = {1400, 820}, home = dir)
+	write_pictures(fs.join(dir, "Pictures", context.temp_allocator), {"harbour.png", "mountain 2.png", "mountain 10.png", "lake.png", "valley.png", "sunset.png", "ridge.png", "dawn.png"})
+	s, app := start(t, {dir}, size = {1600, 900}, home = dir)
+	session.frames(s, 4)
 	session.save_png(s, "main.png")
 
+	// the grid of the pictures at the left, the details of the home folder at the right with three folders selected
+	context.allocator = runtime.heap_allocator()   // (what the application keeps is its allocator's)
 	session.key(s, .D, {.Ctrl, .Shift})
 	wait_read(s)
-	other := current_tab(app)
-	context.allocator = runtime.heap_allocator()   // (what the application keeps is its allocator's)
-	tab_go(app, other, fs.join(dir, "Pictures", context.temp_allocator))
+	left := panel_tab(app.panels[0])
+	tab_go(app, left, fs.join(dir, "Pictures", context.temp_allocator))
+	left.view = .Grid
 	wait_read(s)
+	session.wait_until(s, thumbs_ready, "the thumbnails")
+	left.folder.cursor = 2
+	session.key(s, .Home)
+	session.key(s, .Down)
 	session.key(s, .Down, {.Shift}, repeat = 2)
-	session.frames(s, 2)
+	session.frames(s, 4)
 	session.save_png(s, "panels.png")
 
 	session.key(s, .P, {.Ctrl, .Shift})

@@ -32,7 +32,11 @@ menu_command :: proc(app: ^App, id: string, enabled := true, checked := false) {
 entry_menu_build :: proc(app: ^App, em: f32) {
 	m := &app.menu
 	if m.key == 0 { return }
-	if !ui.ctx_menu(m.key, em * MENU_WIDTH_EM) { return }
+	if ui.ctx_menu(m.key, em * MENU_WIDTH_EM) { entry_menu_items(app, m) }
+}
+
+@(private = "file")
+entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 	t := find_tab(app, m.tab)
 	if t == nil { ui.ctx_menu_close(); return }
 	if m.on_entry {
@@ -43,8 +47,16 @@ entry_menu_build :: proc(app: ^App, em: f32) {
 		menu_command(app, "open_other_panel", enabled = folder)
 		menu_command(app, "open_system")
 		ui.menu_separator()
-		menu_command(app, "rename", enabled = t.folder.count <= 1)
+		menu_command(app, "cut")
+		menu_command(app, "copy")
 		menu_command(app, "copy_path")
+		ui.menu_separator()
+		menu_command(app, "trash")
+		menu_command(app, "delete")
+		menu_command(app, "rename", enabled = t.folder.count <= 1)
+		ui.menu_separator()
+	} else {
+		menu_command(app, "paste")
 		ui.menu_separator()
 	}
 	menu_command(app, "new_folder")

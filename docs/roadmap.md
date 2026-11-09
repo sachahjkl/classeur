@@ -52,6 +52,9 @@ with one line on how it is made, and update [architecture.md](architecture.md).
   the panel's menu); a box per row, filled icons (drawn yellow folders, coloured kinds, white pages); the columns Name,
   Modified (wide panels), Type, Folders, Files, Size; the selection solid blue; a footer per panel (the filter, the
   selected, the folders and files shown of all, how full the volume is). No status bar: messages are toasts.
+- The grid view (Ctrl+2; Ctrl+1 the details; the buttons of the footer): cards in rows of a virtual list, the arrows
+  move card by card; thumbnails of PNG, JPEG and BMP decoded and shrunk (256 px) on a pool of their own, their
+  textures kept for the 400 last used (`src/thumbs.odin`, `src/view_grid.odin`).
 - Folder measures (`src/measure.odin`): the folders shown are measured all the way down on a pool of their own (2
   threads): their folders, files and bytes, kept by path and date; a navigation drops the measures not started.
 
@@ -68,8 +71,8 @@ with one line on how it is made, and update [architecture.md](architecture.md).
    the monospaced font; an image: decoded on a worker (PNG, JPEG, BMP by `core:image`; later WebP, AVIF), fitted; a
    folder: its listing; other files: their size, dates, type, permissions.
 2. **Sort by the measures** (Size, Folders, Files on folders) and a bar in the size column (TreeSize's view) as an option.
-3. **The grid view** (File Pilot's left panel in its pictures) with thumbnails (Ctrl+1 details, Ctrl+2 list, Ctrl+3 grid), the thumbnails made on the workers and
-   kept in a cache on the disk (`$XDG_CACHE_HOME/classeur`).
+3. **The thumbnails' cache on the disk** (`$XDG_CACHE_HOME/classeur`), more formats (WebP, GIF, AVIF, videos' frames),
+   the cards' size with Ctrl+wheel (File Pilot's zoom).
 
 ### File Pilot's details still missing
 
