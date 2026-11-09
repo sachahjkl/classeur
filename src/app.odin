@@ -50,6 +50,11 @@ App :: struct {
 	text_keys:   [dynamic]ui.Key,   // the text fields built in this frame (view.odin: the keys of the list are not theirs)
 	text_keys_before: [dynamic]ui.Key,   // and in the last one
 	menu:        Entry_Menu,        // the entries' menu (menu.odin)
+	jobs:        Jobs,              // copies, moves, the trash (jobs.odin)
+	confirm:     Confirm,           // delete for good? (dialogs.odin)
+	conflict:    Conflict_View,     // a name taken: what to do (dialogs.odin)
+	clip_cut:    bool,              // the files this program put on the clipboard were cut
+	clip_seq:    u32,               // the clipboard's sequence after that
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
 }
@@ -103,6 +108,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	h.before_input = proc(h: ^host.Host) { app := (^App)(h.user); devtools.service(app.devtools, &h.state, &app.shared.r) }
 
 	pool_start(&app.pool)
+	jobs_start(app)
 	places_load(app)
 	first := new(Panel)
 	append(&app.panels, first)
@@ -120,6 +126,7 @@ app_frame :: proc(app: ^App) {
 }
 
 app_close :: proc(app: ^App) {
+	jobs_stop(app)
 	pool_stop(&app.pool, proc(data: rawptr) {})   // (a read left waiting: its memory goes with the process)
 	devtools.stop(app.devtools)
 	host.host_close(&app.main)
@@ -137,6 +144,7 @@ app_free :: proc(app: ^App) {
 	delete(app.places)
 	palette_free(&app.palette)
 	rename_free(&app.rename)
+	confirm_free(&app.confirm)
 	delete(app.home)
 	delete(app.status)
 	delete(app.text_keys)

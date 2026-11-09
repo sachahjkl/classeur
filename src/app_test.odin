@@ -8,6 +8,7 @@ import "base:runtime"
 import "core:fmt"
 import "core:os"
 import "core:slice"
+import "core:strings"
 import "core:testing"
 import "gt:testkit"
 import "gt:testkit/session"
@@ -57,6 +58,13 @@ wait_read :: proc(s: ^session.Session, loc := #caller_location) {
 		return true
 	}, "the folders read", loc = loc)
 	session.frames(s, 2)
+}
+
+// The cursor on `name`, and it alone selected (as a click does).
+@(private = "file")
+point_at :: proc(t: ^testing.T, tab: ^Tab, name: string, loc := #caller_location) {
+	testing.expect(t, folder_cursor_to_name(&tab.folder, name), loc = loc)
+	folder_pick(&tab.folder, tab.folder.cursor)
 }
 
 @(private = "file")
@@ -233,4 +241,81 @@ test_shots :: proc(t: ^testing.T) {
 	session.frames(s, 2)
 	session.save_png(s, "palette.png")
 	session.key(s, .Escape)
+}
+
+// Frames until every job has ended and its folders are read again.
+@(private = "file")
+wait_jobs :: proc(s: ^session.Session, loc := #caller_location) {
+	session.wait_until(s, proc(s: ^session.Session) -> bool {
+		app := (^App)(s.user)
+		for job in app.jobs.list { if job.ended_ms == 0 { return false } }
+		return true
+	}, "the jobs ended", loc = loc)
+	wait_read(s, loc)
+}
+
+@(test)
+test_jobs :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	// (the trash of the test, never the person's)
+	data := fs.join(dir, ".data", context.temp_allocator)
+	os.set_env("XDG_DATA_HOME", data)
+	s, app := start(t, {dir})
+	tab := current_tab(app)
+
+	// copy notes.txt, paste it in Documents
+	point_at(t, tab, "notes.txt")
+	session.key(s, .C, {.Ctrl})
+	point_at(t, tab, "Documents")
+	session.key(s, .Return)
+	wait_read(s)
+	session.key(s, .V, {.Ctrl})
+	wait_jobs(s)
+	testing.expect(t, fs.exists(fs.join(dir, "Documents/notes.txt", context.temp_allocator)), "the copy is there")
+	testing.expect(t, fs.exists(fs.join(dir, "notes.txt", context.temp_allocator)), "the original stays")
+	testing.expect(t, slice.contains(shown_names(tab), "notes.txt"), "the folder is read again")
+
+	// again: the name is taken, the person keeps both
+	session.key(s, .V, {.Ctrl})
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return job_asking((^App)(s.user)) != nil }, "the question")
+	session.wait_box(s, "both")
+	session.click(s, "both")
+	wait_jobs(s)
+	testing.expect(t, fs.exists(fs.join(dir, "Documents/notes 2.txt", context.temp_allocator)), "kept both: notes 2.txt")
+
+	// cut a file in the parent folder, paste it here: it moves
+	session.key(s, .Backspace)
+	wait_read(s)
+	point_at(t, tab, "report 2.pdf")
+	session.key(s, .X, {.Ctrl})
+	point_at(t, tab, "Photos")
+	session.key(s, .Return)
+	wait_read(s)
+	session.key(s, .V, {.Ctrl})
+	wait_jobs(s)
+	testing.expect(t, fs.exists(fs.join(dir, "Photos/report 2.pdf", context.temp_allocator)), "moved into Photos")
+	testing.expect(t, !fs.exists(fs.join(dir, "report 2.pdf", context.temp_allocator)), "and gone from where it was")
+
+	// to the trash, with what the desktop's trash needs to put it back
+	session.key(s, .Backspace)
+	wait_read(s)
+	point_at(t, tab, "archive.zip")
+	session.key(s, .Delete)
+	wait_jobs(s)
+	testing.expect(t, !fs.exists(fs.join(dir, "archive.zip", context.temp_allocator)), "archive.zip left")
+	testing.expect(t, fs.exists(fs.join(data, "Trash/files/archive.zip", context.temp_allocator)), "into the trash")
+	info, _ := os.read_entire_file(fs.join(data, "Trash/info/archive.zip.trashinfo", context.temp_allocator), context.temp_allocator)
+	testing.expect(t, strings.has_prefix(string(info), "[Trash Info]\nPath=/"), "with its .trashinfo")
+	testing.expect(t, strings.contains(string(info), "/archive.zip\nDeletionDate="), "where it was, and when")
+
+	// for good, after the question
+	point_at(t, tab, "notes.txt")
+	session.key(s, .Delete, {.Shift})
+	testing.expect(t, app.confirm.open)
+	session.wait_box(s, "delete")
+	session.click(s, "delete")
+	wait_jobs(s)
+	testing.expect(t, !fs.exists(fs.join(dir, "notes.txt", context.temp_allocator)), "deleted")
+	testing.expect(t, !slice.contains(shown_names(tab), "notes.txt"))
 }

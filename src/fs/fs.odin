@@ -35,15 +35,44 @@ Error :: enum u8 {
 	Not_Found,
 	Denied,
 	Not_A_Folder,
+	Exists,         // the name is taken
+	Cross_Volume,   // a rename to another volume: copy, then delete
+	No_Space,
+	Cancelled,
 	Other,
 }
 
+// What a listing's error says in the list.
 ERROR_TEXT := [Error]string {
 	.None         = "",
 	.Not_Found    = "This folder does not exist.",
 	.Denied       = "You do not have the permission to read this folder.",
 	.Not_A_Folder = "This is not a folder.",
+	.Exists       = "The name is taken.",
+	.Cross_Volume = "This is on another volume.",
+	.No_Space     = "The volume is full.",
+	.Cancelled    = "Cancelled.",
 	.Other        = "This folder cannot be read.",
+}
+
+// What an error says after a file's name ("cannot be copied: ...").
+ERROR_REASON := [Error]string {
+	.None         = "",
+	.Not_Found    = "it is not there",
+	.Denied       = "permission denied",
+	.Not_A_Folder = "it is not a folder",
+	.Exists       = "the name is taken",
+	.Cross_Volume = "it is on another volume",
+	.No_Space     = "the volume is full",
+	.Cancelled    = "cancelled",
+	.Other        = "the system refused",
+}
+
+// What a long operation (a copy) reports as it goes, and how it is stopped. Both are called on the thread that copies.
+Progress :: struct {
+	user:      rawptr,
+	on_bytes:  proc(user: rawptr, bytes: i64),   // bytes written since the last call
+	cancelled: proc(user: rawptr) -> bool,
 }
 
 // A folder as it was read.

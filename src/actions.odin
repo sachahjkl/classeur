@@ -296,3 +296,78 @@ act_folders_mixed :: proc(app: ^App) {
 	folder_set_sort(&t.folder, s)
 	app.default_sort = s
 }
+
+////////////////////////////////
+// Copy, move, trash
+
+// The paths of the selection (or of the cursor's row).
+@(private = "file")
+target_paths :: proc(t: ^Tab, allocator := context.temp_allocator) -> []string {
+	targets := folder_targets(&t.folder)
+	out := make([]string, len(targets), allocator)
+	for e, i in targets { out[i] = fs.join(t.path, e.name, allocator) }
+	return out
+}
+
+@(private = "file")
+clipboard_put :: proc(app: ^App, cut: bool) {
+	t := current_tab(app)
+	if t == nil { return }
+	paths := target_paths(t)
+	if len(paths) == 0 { return }
+	platform.clipboard_set(app.main.win, {files = paths, text = strings.join(paths, "\n", context.temp_allocator)})
+	// (the clipboard says nothing of a cut to this program: it remembers which content it cut)
+	app.clip_cut, app.clip_seq = cut, platform.clipboard_sequence()
+	say(app, "%d item%s %s.", len(paths), len(paths) == 1 ? "" : "s", cut ? "cut: paste them to move them" : "copied")
+}
+
+act_copy :: proc(app: ^App) { clipboard_put(app, false) }
+act_cut :: proc(app: ^App) { clipboard_put(app, true) }
+
+// What the clipboard holds goes into the current folder: a copy, or a move after a cut. Copied into the folder it
+// comes from, a file keeps both ("name 2.ext").
+act_paste :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	paths, ok := platform.clipboard_get_files(app.main.win, context.temp_allocator)
+	if !ok || len(paths) == 0 {
+		say(app, "The clipboard holds no files.")
+		return
+	}
+	cut := app.clip_cut && platform.clipboard_sequence() == app.clip_seq
+	job_add(app, cut ? .Move : .Copy, paths, t.path)
+	if cut { app.clip_cut = false }
+}
+
+@(private = "file")
+to_other_panel :: proc(app: ^App, kind: Job_Kind) {
+	t := current_tab(app)
+	if t == nil || len(app.panels) < 2 { say(app, "There is no other panel."); return }
+	other := panel_tab(app.panels[(app.focus + 1) % len(app.panels)])
+	if other == nil || other.path == t.path { return }
+	job_add(app, kind, target_paths(t), other.path)
+}
+
+act_copy_to_other :: proc(app: ^App) { to_other_panel(app, .Copy) }
+act_move_to_other :: proc(app: ^App) { to_other_panel(app, .Move) }
+
+act_trash :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	paths := target_paths(t)
+	if len(paths) == 0 { return }
+	job_add(app, .Trash, paths)
+}
+
+// Deleting for good asks first (dialogs.odin).
+act_delete :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	paths := target_paths(t)
+	if len(paths) == 0 { return }
+	confirm_delete(app, paths)
+}
+
+act_jobs_cancel :: proc(app: ^App) {
+	for job in app.jobs.list { job_cancel(job) }
+}

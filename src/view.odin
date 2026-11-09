@@ -6,6 +6,7 @@ package classeur
 import "core:fmt"
 import "core:slice"
 import "core:strings"
+import "core:sync"
 import "gt:host"
 import lucide "gt:lucide"
 import "gt:ui"
@@ -28,7 +29,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	append(&app.text_keys_before, ..app.text_keys[:])
 	clear(&app.text_keys)
 	typing := slice.contains(app.text_keys_before[:], ui.focus_key())
-	if !app.palette.open {
+	if !app.palette.open && !app.confirm.open && !app.conflict.open {
 		commands_keys(app, typing)
 		if !typing { list_keys(app) }
 	}
@@ -45,6 +46,8 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	}
 	entry_menu_build(app, em)
 	palette_build(app)
+	dialogs_build(app, em)
+	jobs_tidy(app)
 }
 
 // A text field built this frame: while it has the keyboard, the keys of the list are its own.
@@ -191,6 +194,7 @@ build_status :: proc(app: ^App, em: f32) {
 	if ui.row(.Center) {
 		ui.spacer(ui.px(em * 0.7))
 		if ui.style({font_size = em * 0.86}) {
+			job_status(app, em)
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), height = ui.pct(1)})
 				msg := app.status
@@ -262,4 +266,26 @@ home_path :: proc(app: ^App, path: string) -> string {
 	if path == app.home { return "~" }
 	if strings.has_prefix(path, app.home) && fs.is_separator(path[len(app.home)]) { return fmt.tprintf("~%s", path[len(app.home):]) }
 	return path
+}
+
+// The job that runs, in the status bar: what it does, how far, a cancel.
+@(private = "file")
+job_status :: proc(app: ^App, em: f32) {
+	for job in app.jobs.list {
+		st := sync.atomic_load(&job.state)
+		if st != .Counting && st != .Running && st != .Asking { continue }
+		glyph(app, lucide.LOADER, em * 1.5, ui.color("accent"))
+		total, done := sync.atomic_load(&job.bytes_total), sync.atomic_load(&job.bytes_done)
+		files, files_done := sync.atomic_load(&job.files_total), sync.atomic_load(&job.files_done)
+		t := total > 0 ? f32(f64(done) / f64(total)) : files > 0 ? f32(files_done) / f32(files) : 0
+		text := st == .Counting ? fmt.tprintf("%s: counting…", JOB_VERB[job.kind]) : fmt.tprintf("%s %d of %d · %s", JOB_VERB[job.kind], min(files_done + 1, files), files, shown_text(job_current(job)))
+		ui.next({width = ui.text_size(em * 0.4), height = ui.pct(1)})
+		ui.label(fmt.tprintf("%s###job%d", text, job.id))
+		ui.next({width = ui.px(em * 8), height = ui.px(em * 0.5)})
+		ui.progress(fmt.tprintf("###jobbar%d", job.id), clamp(t, 0, 1), st == .Counting)
+		ui.spacer(ui.px(em * 0.3))
+		if icon_action(app, fmt.tprintf("jobcancel%d", job.id), lucide.X, "Cancel", em) { job_cancel(job) }
+		ui.spacer(ui.px(em * 0.6))
+		return
+	}
 }

@@ -113,3 +113,43 @@ test_list :: proc(t: ^testing.T) {
 	testing.expect_value(t, list(&l, join(dir, "missing", context.temp_allocator)), Error.Not_Found)
 	testing.expect_value(t, list(&l, join(dir, "hello.txt", context.temp_allocator)), Error.Not_A_Folder)
 }
+
+@(test)
+test_operations :: proc(t: ^testing.T) {
+	dir := join(os.get_env("TMPDIR", context.temp_allocator) != "" ? os.get_env("TMPDIR", context.temp_allocator) : "/tmp", fmt.tprintf("classeur_ops_test_%d", os.get_pid()), context.temp_allocator)
+	when ODIN_OS == .Windows { dir = join(os.get_env("TEMP", context.temp_allocator), fmt.tprintf("classeur_ops_test_%d", os.get_pid()), context.temp_allocator) }
+	_ = os.make_directory_all(dir)
+	defer os.remove_all(dir)
+	a := join(dir, "a.txt", context.temp_allocator)
+	b := join(dir, "b.txt", context.temp_allocator)
+	data := make([]u8, 3 * 1024 * 1024 + 7, context.temp_allocator)
+	for &c, i in data { c = u8(i * 31) }
+	testing.expect(t, os.write_entire_file(a, data) == nil)
+
+	seen: i64
+	p := Progress{user = &seen, on_bytes = proc(user: rawptr, n: i64) { (^i64)(user)^ += n }}
+	testing.expect_value(t, copy_file(a, b, &p), Error.None)
+	testing.expect_value(t, seen, i64(len(data)))
+	got, _ := os.read_entire_file(b, context.temp_allocator)
+	testing.expect(t, string(got) == string(data), "the copy has the same bytes")
+	testing.expect_value(t, copy_file(a, b), Error.Exists)
+
+	// a cancelled copy leaves nothing
+	c := join(dir, "c.txt", context.temp_allocator)
+	stop := Progress{cancelled = proc(user: rawptr) -> bool { return true }}
+	testing.expect_value(t, copy_file(a, c, &stop), Error.Cancelled)
+	testing.expect(t, !exists(c))
+
+	testing.expect_value(t, rename(a, b), Error.Exists)
+	testing.expect_value(t, rename(a, c), Error.None)
+	testing.expect(t, !exists(a) && exists(c))
+	testing.expect_value(t, make_folder(join(dir, "sub", context.temp_allocator)), Error.None)
+	testing.expect_value(t, make_folder(join(dir, "sub", context.temp_allocator)), Error.Exists)
+	testing.expect_value(t, remove(join(dir, "sub", context.temp_allocator)), Error.None)
+	testing.expect_value(t, remove(c), Error.None)
+
+	testing.expect_value(t, numbered_name("photo.jpg", 2, context.temp_allocator), "photo 2.jpg")
+	testing.expect_value(t, numbered_name("Projects", 3, context.temp_allocator), "Projects 3")
+	testing.expect_value(t, free_name(dir, "b.txt", context.temp_allocator), "b 2.txt")
+	testing.expect_value(t, free_name(dir, "new.txt", context.temp_allocator), "new.txt")
+}

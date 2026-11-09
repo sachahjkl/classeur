@@ -3,6 +3,7 @@ package fs
 // Paths as the system writes them: '/' on POSIX, '\' on Windows (a '/' typed by the person is turned into '\').
 // A root keeps its separator ("/", "C:\"); no other path ends with one.
 
+import "core:fmt"
 import "core:os"
 import "core:strings"
 
@@ -133,5 +134,21 @@ home :: proc(allocator := context.allocator) -> string {
 	} else {
 		if v := os.get_env("HOME", allocator); v != "" { return v }
 		return strings.clone("/", allocator)
+	}
+}
+
+// "name.ext" -> "name 2.ext"; "folder" -> "folder 2".
+numbered_name :: proc(name: string, n: int, allocator := context.allocator) -> string {
+	ext := extension(name)
+	if ext == "" { return fmt.aprintf("%s %d", name, n, allocator = allocator) }
+	return fmt.aprintf("%s %d.%s", name[:len(name) - len(ext) - 1], n, ext, allocator = allocator)
+}
+
+// A name in `dir` that nothing has: `name`, else "name 2", "name 3"...
+free_name :: proc(dir, name: string, allocator := context.allocator) -> string {
+	if !exists(join(dir, name, context.temp_allocator)) { return strings.clone(name, allocator) }
+	for n := 2; ; n += 1 {
+		candidate := numbered_name(name, n, context.temp_allocator)
+		if !exists(join(dir, candidate, context.temp_allocator)) { return strings.clone(candidate, allocator) }
 	}
 }
