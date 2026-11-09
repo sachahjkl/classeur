@@ -741,6 +741,9 @@ filter_field :: proc(app: ^App, t: ^Tab, em: f32) {
 		}
 		if res.committed { act_open(app) }
 		if ui.tags("weak") {
+			if icon_action(app, "types", lucide.FILTER, "The types shown: files, folders, extensions", em, on = folder_types_filtered(&t.folder)) {
+				types_menu_open(app, t)
+			}
 			if icon_action(app, "flat", lucide.FOLDER_TREE, command_tip("flat"), em, on = t.flat) {
 				t.flat = !t.flat
 				tab_load(app, t)

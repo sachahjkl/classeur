@@ -91,6 +91,42 @@ Panel_Menus :: struct {
 	history_tab: u64,
 	panel_key:   ui.Key,
 	tab_key:     ui.Key,
+	types_key:   ui.Key,
+	types_tab:   u64,
+}
+
+// The types' popup (the filter's funnel): files and folders, or one of them; each extension of the folder with its
+// count, ticked when shown. It stays open while types are ticked.
+types_menu_open :: proc(app: ^App, t: ^Tab) {
+	m := &app.panel_menus
+	if m.types_key == 0 { m.types_key = ui.key_from_string(0, "classeur_types_menu") }
+	m.types_tab = t.id
+	ui.ctx_menu_open(m.types_key, ui.mouse_pos())
+}
+
+@(private = "file")
+types_menu_build :: proc(app: ^App, em: f32) {
+	m := &app.panel_menus
+	if m.types_key == 0 { return }
+	if ui.ctx_menu(m.types_key, em * MENU_WIDTH_EM) {
+		t := find_tab(app, m.types_tab)
+		if t == nil { ui.ctx_menu_close(); return }
+		f := &t.folder
+		if ui.menu_item("Files and folders###k0", checked = f.kinds == .All, keep_open = true).clicked { folder_set_kinds(f, .All) }
+		if ui.menu_item("Files only###k1", checked = f.kinds == .Files, keep_open = true).clicked { folder_set_kinds(f, .Files) }
+		if ui.menu_item("Folders only###k2", checked = f.kinds == .Folders, keep_open = true).clicked { folder_set_kinds(f, .Folders) }
+		ui.menu_separator()
+		types := folder_types(f)
+		all := len(f.types_off) == 0
+		if ui.menu_item("Every type###tall", checked = all, keep_open = true).clicked { folder_all_types(f, !all) }
+		for ty, i in types {
+			label := ty.ext == "" ? "No extension" : strings.to_upper(ty.ext, context.temp_allocator)
+			on := ty.ext not_in f.types_off
+			if ui.menu_item(fmt.tprintf("%s###ty%d", label, i), fmt.tprintf("%d", ty.count), checked = on, keep_open = true).clicked {
+				folder_toggle_type(f, ty.ext)
+			}
+		}
+	}
 }
 
 // A tab's menu (a right click on it): what to do with it and the tabs beside it.
@@ -141,6 +177,7 @@ panel_menus_build :: proc(app: ^App, em: f32) {
 	history_menu_build(app, em)
 	panel_menu_build(app, em)
 	tab_menu_build(app, em)
+	types_menu_build(app, em)
 }
 
 @(private = "file")

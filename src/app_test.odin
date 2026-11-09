@@ -841,3 +841,29 @@ test_band :: proc(t: ^testing.T) {
 	testing.expect_value(t, tab.folder.count, 3)
 	testing.expect(t, !app.band.active)
 }
+
+@(test)
+test_types :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir})
+	tab := current_tab(app)
+	f := &tab.folder
+	all := len(f.shown)
+	context.allocator = runtime.heap_allocator()
+	// the PDFs out: two rows fewer
+	folder_toggle_type(f, "pdf")
+	testing.expect_value(t, len(f.shown), all - 2)
+	testing.expect(t, !slice.contains(shown_names(tab), "report 2.pdf"))
+	// the folders alone
+	folder_set_kinds(f, .Folders)
+	for n in shown_names(tab) { testing.expect(t, n == "Documents" || n == "Photos" || n == "Projects", n) }
+	// back to all
+	folder_set_kinds(f, .All)
+	folder_all_types(f, true)
+	testing.expect_value(t, len(f.shown), all)
+	types := folder_types(f)
+	testing.expect(t, len(types) > 0 && types[0].ext == "pdf" && types[0].count == 2, "the most common type first")
+	_ = s
+	_ = app
+}

@@ -21,6 +21,8 @@ Folder :: struct {
 	sort:        fs.Sort,
 	show_hidden: bool,
 	filter:      string,            // owned; lower case; "" shows every row
+	kinds:       Kind_Filter,       // files and folders, or one of them (the types' popup)
+	types_off:   map[string]bool,   // the extensions left out, lower case, keys owned ("" the files with none)
 	order:       [dynamic]u32,      // every entry, sorted
 	shown:       [dynamic]u32,      // the rows: `order` without what the filter and the hidden setting leave out
 	ids:         [dynamic]u64,      // a stable identity per row (the hash of its name): the virtual list's
@@ -34,6 +36,8 @@ Folder :: struct {
 folder_destroy :: proc(f: ^Folder) {
 	fs.listing_destroy(&f.listing)
 	delete(f.filter)
+	for k in f.types_off { delete(k) }
+	delete(f.types_off)
 	delete(f.order)
 	delete(f.shown)
 	delete(f.ids)
@@ -114,6 +118,66 @@ folder_set_filter :: proc(f: ^Folder, text: string) {
 	if f.cursor < 0 && len(f.shown) > 0 { f.cursor = 0 }
 }
 
+// Which entries the types' popup keeps (File Pilot's): both, the files alone, the folders alone.
+Kind_Filter :: enum u8 { All, Files, Folders }
+
+// The type of a file as the popup counts it: its extension in lower case ("" none).
+type_key :: proc(e: fs.Entry) -> string {
+	return strings.to_lower(fs.extension(fs.base(e.name)), context.temp_allocator)
+}
+
+folder_set_kinds :: proc(f: ^Folder, k: Kind_Filter) {
+	if f.kinds == k { return }
+	f.kinds = k
+	folder_refilter(f)
+	if f.cursor < 0 && len(f.shown) > 0 { f.cursor = 0 }
+}
+
+// A type in or out of the rows.
+folder_toggle_type :: proc(f: ^Folder, ext: string) {
+	if ext in f.types_off {
+		key, _ := delete_key(&f.types_off, ext)
+		delete(key)
+	} else {
+		f.types_off[strings.clone(ext)] = true
+	}
+	folder_refilter(f)
+	if f.cursor < 0 && len(f.shown) > 0 { f.cursor = 0 }
+}
+
+// Every type in or out at once (out: each type of the listing).
+folder_all_types :: proc(f: ^Folder, on: bool) {
+	for k in f.types_off { delete(k) }
+	clear(&f.types_off)
+	if !on {
+		for e in f.listing.entries {
+			if e.kind == .Directory { continue }
+			k := type_key(e)
+			if k not_in f.types_off { f.types_off[strings.clone(k)] = true }
+		}
+	}
+	folder_refilter(f)
+}
+
+Type_Count :: struct { ext: string, count: int }
+
+// The types of the files of the listing (the hidden ones as shown), the most common first.
+folder_types :: proc(f: ^Folder, allocator := context.temp_allocator) -> []Type_Count {
+	counts := make(map[string]int, allocator = context.temp_allocator)
+	for e in f.listing.entries {
+		if e.kind == .Directory { continue }
+		if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { continue }
+		counts[type_key(e)] += 1
+	}
+	out := make([dynamic]Type_Count, allocator)
+	for k, n in counts { append(&out, Type_Count{k, n}) }
+	slice.sort_by(out[:], proc(a, b: Type_Count) -> bool { return a.count != b.count ? a.count > b.count : a.ext < b.ext })
+	return out[:]
+}
+
+// Whether the types' popup leaves anything out.
+folder_types_filtered :: proc(f: ^Folder) -> bool { return f.kinds != .All || len(f.types_off) > 0 }
+
 folder_set_show_hidden :: proc(f: ^Folder, show: bool) {
 	if f.show_hidden == show { return }
 	name := ""
@@ -142,6 +206,9 @@ folder_refilter :: proc(f: ^Folder) {
 	for i in f.order {
 		e := entries[i]
 		if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { continue }
+		folder := e.kind == .Directory
+		if (f.kinds == .Files && folder) || (f.kinds == .Folders && !folder) { continue }
+		if !folder && len(f.types_off) > 0 && type_key(e) in f.types_off { continue }
 		if f.filter != "" {
 			if !fuzzy_holds(f.lowered[i], f.filter) { continue }
 			score, _, _ := ui.fuzzy_score(f.filter, fs.base(e.name))
