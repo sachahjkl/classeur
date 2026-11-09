@@ -45,7 +45,7 @@ grid_list :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	}
 	look := row_look(app, focused, em)
 	for r in rows.first ..< rows.last {
-		ui.next({height = ui.px(item_h + (lines ? 0 : gap)), radius = 0})
+		ui.next({height = ui.px(item_h + (lines ? 0 : gap)), radius = 0, cross = .Center})
 		row := ui.list_row(&t.vl, r, "", selectable = false)
 		opened := false
 		if ui.parent(row.box) {
@@ -77,6 +77,7 @@ item :: proc(app: ^App, t: ^Tab, row: int, look: ^Row_Look, line: bool, width, h
 		l := ui.frame_new(Row_Look)
 		l^ = look^
 		l.inset, l.line = 0, {}
+		l.card, l.card_edge = draw.hex(surfaces(app).head), draw.hex(surfaces(app).edge)
 		card_look = l
 	}
 	row_paint(b, card_look, selected, cursor)

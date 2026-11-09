@@ -25,6 +25,9 @@ COL_COUNT_EM    :: 5.6
 COL_SIZE_EM     :: 6.5
 // How far the rows' pills and lines stand from the panel's sides, in ems.
 ROW_INSET_EM :: 0.5
+// The selection's border (sRGB): a brighter step of its fill.
+SELECTION_EDGE_DARK  :: 0x35b6e9ff
+SELECTION_EDGE_LIGHT :: 0x0a7cadff
 // The ring of the cursor (sRGB).
 CURSOR_DARK  :: 0x1aa3d9ff
 CURSOR_LIGHT :: 0x0a7cadff
@@ -100,7 +103,8 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 @(private = "file")
 toolbar :: proc(app: ^App, p: ^Panel, t: ^Tab, index: int, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOOLBAR_EM))})
-	if ui.row(.Center, {.Draw_Side_Bottom}, "###toolbar") {
+	ui.next_merge({bg = draw.hex(surfaces(app).list)})
+	if ui.row(.Center, {.Draw_Side_Bottom, .Draw_Background}, "###toolbar") {
 		ui.spacer(ui.px(em * 0.3))
 		if ui.tags("weak") {
 			if icon_action(app, "back", lucide.ARROW_LEFT, command_tip("back"), em, len(t.back) > 0) { tab_back(app, t) }
@@ -230,8 +234,8 @@ list_move :: proc(t: ^Tab, by: int) {
 @(private = "file")
 header :: proc(app: ^App, t: ^Tab, wide: Columns, em: f32) {
 	f := &t.folder
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * HEADER_EM))})
-	if ui.row(.Center, {}, "###header") {
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * HEADER_EM)), bg = draw.hex(surfaces(app).head)})
+	if ui.row(.Center, {.Draw_Background, .Draw_Side_Bottom}, "###header") {
 		ui.spacer(ui.px(em * ROW_INSET_EM))
 		// the box of every row: all, some or none of them selected
 		all := len(f.shown) > 0 && f.count == len(f.shown)
@@ -407,6 +411,9 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 // How the rows of a list are painted, File Pilot's way: a line under each, the selection a pill a little in from the
 // sides (solid while the panel has the keyboard), the cursor a ring of the accent.
 Row_Look :: struct {
+	edge:    ui.Color,  // the selection's border
+	card:    ui.Color,  // a card's own surface (the grid), clear for a row
+	card_edge: ui.Color,
 	stripes: bool,      // every other row a shade lighter (the option)
 	stripe:  ui.Color,
 	inset:   f32,
@@ -432,6 +439,7 @@ row_look :: proc(app: ^App, focused: bool, em: f32) -> ^Row_Look {
 		inset = em * ROW_INSET_EM, radius = em * 0.25,
 		line = ui.color("border") * {1, 1, 1, 0.7},
 		fill = focused ? sel : sel * {1, 1, 1, 0.35},
+		edge = focused ? draw.hex(app.theme_shown.light ? SELECTION_EDGE_LIGHT : SELECTION_EDGE_DARK) : draw.hex(app.theme_shown.light ? SELECTION_EDGE_LIGHT : SELECTION_EDGE_DARK) * {1, 1, 1, 0.45},
 		ring = draw.hex(app.theme_shown.light ? CURSOR_LIGHT : CURSOR_DARK),
 		focused = focused,
 		stripes = app.settings.alternating_rows,
@@ -455,7 +463,8 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	inner := ui.Rect{{r.min.x + l.inset, r.min.y + 1}, {r.max.x - l.inset, r.max.y - 1}}
 	if l.stripes && d.odd { draw.rect(dc, inner, l.stripe, radius = l.radius) }
 	draw.rect(dc, {{inner.min.x, r.max.y - 1}, {inner.max.x, r.max.y}}, l.line)
-	if d.selected { draw.rect(dc, inner, l.fill, radius = l.radius) }
+	if l.card.a > 0 && !d.selected { paint_raised(dc, inner, {base = l.card, edge = l.card_edge, radii = radii_all(l.radius)}) }
+	if d.selected { paint_raised(dc, inner, {base = l.fill, edge = l.edge, radii = radii_all(l.radius)}) }
 	if d.cursor { draw.rect(dc, inner, l.ring, radius = l.radius, border = 1) }
 }
 
@@ -587,14 +596,15 @@ match_text :: proc(text: string, ranges: []ui.Fuzzy_Range, offset: int, selected
 @(private = "file")
 footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	f := &t.folder
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * FOOTER_EM))})
-	if ui.row(.Center, {}, "###footer") {
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * FOOTER_EM)), bg = draw.hex(surfaces(app).side)})
+	if ui.row(.Center, {.Draw_Background, .Draw_Side_Top}, "###footer") {
 		ui.spacer(ui.px(em * 0.3))
 		filter_field(app, t, em)
 		ui.spacer(ui.fill())
 		if focused { job_status(app, em) }
-		ui.next({width = ui.children_sum(), height = ui.px(ui.dense(em * 2.0)), radius = em * 0.35, border = ui.color("border")})
-		if ui.row(.Center, {.Draw_Border}, "###stats") {
+		ui.next({width = ui.children_sum(), height = ui.px(ui.dense(em * 2.0))})
+		if ui.row(.Center, {}, "###stats") {
+			raise(ui.parent_box(), {base = draw.hex(surfaces(app).raised), edge = draw.hex(surfaces(app).edge), radii = radii_all(em * 0.35)})
 			if ui.style({font_size = em * 0.92}) {
 				folders, files, folders_shown, files_shown: int
 				for e in f.listing.entries { if e.kind == .Directory { folders += 1 } else { files += 1 } }
@@ -676,8 +686,10 @@ stat :: proc(app: ^App, id, icon, text, tip: string, em: f32) {
 
 @(private = "file")
 filter_field :: proc(app: ^App, t: ^Tab, em: f32) {
-	ui.next({width = ui.px(em * FILTER_EM), height = ui.px(ui.dense(em * 2.0)), radius = em * 0.35, border = t.flat ? ui.color("accent") : ui.color("border")})
-	if ui.row(.Center, {.Draw_Border}, "###filterbox") {
+	ui.next({width = ui.px(em * FILTER_EM), height = ui.px(ui.dense(em * 2.0))})
+	if ui.row(.Center, {}, "###filterbox") {
+		// (a well: darker than the footer, its border the accent's while it searches every folder below)
+		raise(ui.parent_box(), {base = draw.hex(surfaces(app).top), edge = t.flat ? ui.color("accent") : draw.hex(surfaces(app).edge), radii = radii_all(em * 0.35), no_top = true})
 		ui.spacer(ui.px(em * 0.4))
 		if ui.tags("weak") { glyph(app, lucide.SEARCH, em * 1.5) }
 		key := ui.key_from_string(ui.parent_box().key, "###filter")

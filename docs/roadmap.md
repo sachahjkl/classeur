@@ -70,9 +70,7 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 
 ### Layer 3: see inside
 
-1. **The inspector** (File Pilot's Space and Ctrl+I): a pane at the right of the panel. A text file: its first 64 KB in
-   the monospaced font; an image: decoded on a worker (PNG, JPEG, BMP by `core:image`; later WebP, AVIF), fitted; a
-   folder: its listing; other files: their size, dates, type, permissions.
+1. **The inspector, more**: its width dragged, a text highlighted by its language, PDF and videos, the permissions.
 2. **Sort by the measures** (Size, Folders, Files on folders) and a bar in the size column (TreeSize's view) as an option.
 3. **The thumbnails' cache on the disk** (`$XDG_CACHE_HOME/classeur`), more formats (WebP, GIF, AVIF, videos' frames),
    the cards' size with Ctrl+wheel (File Pilot's zoom).

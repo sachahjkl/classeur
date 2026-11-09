@@ -8,6 +8,7 @@ import "core:fmt"
 import "core:slice"
 import "core:strings"
 import "core:sync"
+import "gt:draw"
 import "gt:host"
 import lucide "gt:lucide"
 import "gt:ui"
@@ -38,7 +39,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 		if !typing { list_keys(app) }
 	}
 
-	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = draw.hex(surfaces(app).list)})
 	page := ui.build_box({.Draw_Background}, "###page")
 	if ui.parent(page) {
 		build_top(app, em)
@@ -103,7 +104,7 @@ command_tip :: proc(id: string) -> string {
 
 @(private = "file")
 build_top :: proc(app: ^App, em: f32) {
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOP_EM))})
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOP_EM)), bg = draw.hex(surfaces(app).top)})
 	ui.push_tags("bar")
 	defer ui.pop_tags()
 	if ui.title_bar("###titlebar", {.Draw_Background}) {
@@ -143,11 +144,15 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 		for t, i in p.tabs {
 			on := i == p.active
 			ui.spacer(ui.px(em * 0.15))
-			ui.next({width = ui.px(tab_w), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .Y, radius = em * 0.45, bg = on ? ui.color("track") : nil})
+			ui.next({width = ui.px(tab_w), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .Y, radius = em * 0.45})
 			flags := ui.Box_Flags{.Clickable, .Hot_Within, .Middle_Click}
-			flags += on ? {.Draw_Background} : {.Draw_Hot_Effects}
+			if !on { flags += {.Draw_Hot_Effects} }
 			tab := ui.build_box(flags, fmt.tprintf("###tab%d", t.id))
 			tab.square_corners = {.Bottom_Left, .Bottom_Right}
+			if on {
+				r := em * 0.45 * ui.rounding(&app.main.state)
+				raise(tab, {base = draw.hex(surfaces(app).list), edge = draw.hex(surfaces(app).edge), radii = {r, 0, r, 0}})
+			}
 			sig := ui.signal(tab)
 			if ui.parent(tab) {
 				// (with several panels, the line of the accent says which one has the keyboard)
