@@ -70,6 +70,8 @@ COMMANDS := [?]Command{
 	{id = "sidebar", title = "Show or hide the sidebar", icon = lucide.PANEL_LEFT, keys = {{.B, {.Ctrl}}, {}}, in_text = true, run = act_toggle_sidebar},
 	{id = "view_details", title = "Details view", icon = lucide.LIST, keys = {{.N1, {.Ctrl}}, {}}, in_text = true, run = act_view_details},
 	{id = "view_grid", title = "Grid view, with thumbnails", icon = lucide.LAYOUT_GRID, keys = {{.N2, {.Ctrl}}, {}}, in_text = true, run = act_view_grid},
+	{id = "zoom_in", title = "Zoom in: the next view, larger items", icon = lucide.PLUS, keys = {{.Equal, {.Ctrl}}, {.Num_Add, {.Ctrl}}}, in_text = true, run = act_zoom_in},
+	{id = "zoom_out", title = "Zoom out: the previous view, smaller items", icon = lucide.X, keys = {{.Minus, {.Ctrl}}, {.Num_Subtract, {.Ctrl}}}, in_text = true, run = act_zoom_out},
 	{id = "sort_name", title = "Sort by name", icon = lucide.ARROW_UP_DOWN, run = act_sort_name},
 	{id = "sort_modified", title = "Sort by date modified", icon = lucide.ARROW_UP_DOWN, run = act_sort_modified},
 	{id = "sort_size", title = "Sort by size", icon = lucide.ARROW_UP_DOWN, run = act_sort_size},

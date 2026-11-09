@@ -33,7 +33,7 @@ App :: struct {
 	thumb_pool:  Pool,              // the thumbnails of the grid (thumbs.odin)
 	thumbs:      map[string]Thumb,  // by path (the keys owned)
 	frame:       u64,               // the frames built (what a thumbnail was last used in)
-	default_view: View_Mode,             // the measures of folders (measure.odin)
+	default_zoom: int,             // the measures of folders (measure.odin)
 	measures:    map[string]Measure,   // by path (the keys owned)
 	measure_gen: u64,               // atomic: a measure asked in an older generation is dropped
 	recents:     [dynamic]string,   // owned: the folders visited, the last first (the sidebar)
@@ -121,6 +121,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	ui.set_density(&h.state, DENSITY)
 	h.partial_redraw = true
 	h.params = app_params
+	h.input = app_input
 	app.devtools = devtools.start_from_env(win, APP_NAME)
 	h.before_input = proc(h: ^host.Host) { app := (^App)(h.user); devtools.service(app.devtools, &h.state, &app.shared.r) }
 
@@ -196,6 +197,7 @@ app_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 	if ui.theme_show(&app.shared.theme, themes(), choice, &app.theme_shown, render.blend_space(&app.shared.r)) {
 		platform.set_dark_title(h.win, !app.theme_shown.light)
 	}
+	bp.disable_zoom = true
 	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(26)}, font = app.shared.font, font_size = 13.5, text_pad = 5, cursor = .Arrow}
 }
 
@@ -217,19 +219,19 @@ STATUS_SHOWN_MS :: 4000
 // classeur's own theme, first of the list, File Pilot's colours: a near-black grey for every surface, the bars a step
 // darker, thin lines, a strong blue for the selection; a light version of the same steps.
 THEME_CLASSEUR :: ui.Theme_Def{"Graphite",
-	{{0x161616ff, 0x1f1f1fff, 0x1a1a1aff, 0x232323ff, 0x2b2b2bff, 0x2f2f2fff}, {0x5c5c5cff, 0x8c8c8cff, 0xd6d6d6ff, 0xffffffff},
-		{0x1e78c2ff, 0x4f9de8ff, 0xa78bfaff, 0x5dc48aff, 0xe8b84eff, 0xe9605fff, 0x4cc2ffff, 0xe476a8ff}},
-	{{0xffffffff, 0xfbfbfbff, 0xf0f0f0ff, 0xf5f5f5ff, 0xffffffff, 0xd9d9d9ff}, {0xa6a6a6ff, 0x6b6b6bff, 0x1b1b1bff, 0x000000ff},
-		{0x1a6fc0ff, 0x2563ebff, 0x7c3aedff, 0x2f8f46ff, 0xb7820cff, 0xd23c3cff, 0x0e7490ff, 0xc2477aff}},
-	.Both, nil, false, 0}
+	{{0x141517ff, 0x1c1d1fff, 0x1c1d1fff, 0x232427ff, 0x2b2c2fff, 0x2e3033ff}, {0x5b5e63ff, 0x8d9096ff, 0xd8dadeff, 0xffffffff},
+		{0x0a7cadff, 0x4f9de8ff, 0xa78bfaff, 0x5dc48aff, 0xe8b84eff, 0xe9605fff, 0x1aa3d9ff, 0xe476a8ff}},
+	{{0xffffffff, 0xfafbfcff, 0xf3f4f6ff, 0xf3f4f6ff, 0xe9ebeeff, 0xd8dbe0ff}, {0xa3a7adff, 0x676c73ff, 0x1b1d20ff, 0x000000ff},
+		{0x0a7cadff, 0x2563ebff, 0x7c3aedff, 0x2f8f46ff, 0xb7820cff, 0xd23c3cff, 0x0e7490ff, 0xc2477aff}},
+	.Both, nil, false, 0xffffffff}
 
 // How square the corners are (1: the toolkit's) and how dense the rows (1: the toolkit's).
-ROUNDING :: 0.15
+ROUNDING :: 0.5
 DENSITY  :: 1.0
 
 // The selection's fill, solid as File Pilot's (the theme's own is a tint).
-SELECTION_DARK  :: 0x1d5f96ff
-SELECTION_LIGHT :: 0xcce4f7ff
+SELECTION_DARK  :: 0x0a78a8ff
+SELECTION_LIGHT :: 0x9fd3ecff
 
 selection_color :: proc(app: ^App) -> ui.Color {
 	return draw.hex(app.theme_shown.light ? SELECTION_LIGHT : SELECTION_DARK)
@@ -258,4 +260,25 @@ shown_text :: proc(text: string, allocator := context.temp_allocator) -> string 
 	if !strings.contains(text, "##") { return text }
 	out, _ := strings.replace_all(text, "##", "#​#", allocator)
 	return out
+}
+
+// The window's input before the interface: Ctrl+wheel over a panel zooms its view (File Pilot's), and the list under it
+// does not scroll.
+@(private = "file")
+app_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Event {
+	app := (^App)(h.user)
+	out := make([dynamic]platform.Event, 0, len(events), context.temp_allocator)
+	for e in events {
+		if e.kind == .Scroll && .Ctrl in e.mods {
+			for r, i in app.panel_rects {
+				if e.pos.x < r.min.x || e.pos.x >= r.max.x || e.pos.y < r.min.y || e.pos.y >= r.max.y { continue }
+				if t := panel_tab(app.panels[i]); t != nil && e.delta.y != 0 {
+					tab_set_zoom(app, t, t.zoom + (e.delta.y < 0 ? 1 : -1))
+				}
+			}
+			continue
+		}
+		append(&out, e)
+	}
+	return out[:]
 }

@@ -52,7 +52,10 @@ with one line on how it is made, and update [architecture.md](architecture.md).
   the panel's menu); a box per row, filled icons (drawn yellow folders, coloured kinds, white pages); the columns Name,
   Modified (wide panels), Type, Folders, Files, Size; the selection solid blue; a footer per panel (the filter, the
   selected, the folders and files shown of all, how full the volume is). No status bar: messages are toasts.
-- The grid view (Ctrl+2; Ctrl+1 the details; the buttons of the footer): cards in rows of a virtual list, the arrows
+- File Pilot's zoom (Ctrl+wheel over a panel, Ctrl+= and Ctrl+-, the percent in the footer): 0 % the details, 10 % the
+  names alone, 20 % the names in columns, 30 % to 100 % cards ever larger. Its look: the selection a pill of the accent
+  in from the sides, the cursor a ring, a thin line under each row, the columns' titles parted by lines, the footer's
+  filter and counts in two boxes. The grid (Ctrl+2; Ctrl+1 the details): cards in rows of a virtual list, the arrows
   move card by card; thumbnails of PNG, JPEG and BMP decoded and shrunk (256 px) on a pool of their own, their
   textures kept for the 400 last used (`src/thumbs.odin`, `src/view_grid.odin`).
 - Folder measures (`src/measure.odin`): the folders shown are measured all the way down on a pool of their own (2

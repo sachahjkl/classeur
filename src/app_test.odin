@@ -265,7 +265,7 @@ test_grid :: proc(t: ^testing.T) {
 	s, app := start(t, {fs.join(dir, "Photos", context.temp_allocator)}, size = {1100, 700})
 	tab := current_tab(app)
 	session.key(s, .N2, {.Ctrl})
-	testing.expect_value(t, tab.view, View_Mode.Grid)
+	testing.expect_value(t, tab_mode(tab), View_Mode.Grid)
 	session.wait_until(s, thumbs_ready, "the thumbnails")
 	for _, th in app.thumbs {
 		testing.expect_value(t, th.state, Thumb_State.Ready)
@@ -280,7 +280,7 @@ test_grid :: proc(t: ^testing.T) {
 	testing.expect_value(t, tab.folder.cursor, min(1 + tab.grid_cols, 6))
 	testing.expect_value(t, tab.folder.count, 1)
 	session.key(s, .N1, {.Ctrl})
-	testing.expect_value(t, tab.view, View_Mode.Details)
+	testing.expect_value(t, tab_mode(tab), View_Mode.Details)
 }
 
 // The pictures of the README (classeurtool shots): a home folder of made-up files; the grid of the pictures beside the
@@ -309,7 +309,7 @@ test_shots :: proc(t: ^testing.T) {
 	wait_read(s)
 	left := panel_tab(app.panels[0])
 	tab_go(app, left, fs.join(dir, "Pictures", context.temp_allocator))
-	left.view = .Grid
+	left.zoom = ZOOM_GRID
 	wait_read(s)
 	session.wait_until(s, thumbs_ready, "the thumbnails")
 	left.folder.cursor = 2

@@ -105,12 +105,12 @@ build_top :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOP_EM))})
 	ui.push_tags("bar")
 	defer ui.pop_tags()
-	if ui.title_bar("###titlebar", {.Draw_Background, .Draw_Side_Bottom}) {
+	if ui.title_bar("###titlebar", {.Draw_Background}) {
 		// each part as wide as what is under it (the boxes of the last frame: the first has no width yet)
 		have := len(app.panel_rects) == len(app.panels) && app.panel_rects[0].max.x > 0
 		head := have ? app.panel_rects[0].min.x : app.sidebar ? app.sidebar_px * ui.scale() : em * 5
 		ui.next({width = ui.px(head), height = ui.pct(1)})
-		if ui.row(.Center, {.Draw_Side_Right}, "###head") {
+		if ui.row(.Center, {}, "###head") {
 			ui.spacer(ui.px(em * 0.6))
 			drawn_icon(.Folder, em * 1.8, ui.color("accent"))
 			ui.spacer(ui.fill())
@@ -134,21 +134,24 @@ build_top :: proc(app: ^App, em: f32) {
 tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, em: f32) {
 	focused := index == app.focus
 	ui.next({width = width, height = ui.pct(1)})
-	if ui.row(.Center, {.Clip}, fmt.tprintf("###tabs%d", index)) {
+	if ui.row(.End, {.Clip}, fmt.tprintf("###tabs%d", index)) {
 		n := len(p.tabs)
 		tab_w := em * TAB_EM
 		if room > 0 && n > 0 { tab_w = clamp((room - em * 4.5) / f32(n), em * TAB_MIN_EM, em * TAB_EM) }
 		close := -1
 		for t, i in p.tabs {
 			on := i == p.active
-			ui.next({width = ui.px(tab_w), height = ui.pct(1), axis = .Y, radius = 0, bg = on ? ui.color("background") : nil})
-			flags := ui.Box_Flags{.Clickable, .Hot_Within, .Middle_Click, .Draw_Side_Right}
+			ui.spacer(ui.px(em * 0.15))
+			ui.next({width = ui.px(tab_w), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .Y, radius = em * 0.45, bg = on ? ui.color("track") : nil})
+			flags := ui.Box_Flags{.Clickable, .Hot_Within, .Middle_Click}
 			flags += on ? {.Draw_Background} : {.Draw_Hot_Effects}
 			tab := ui.build_box(flags, fmt.tprintf("###tab%d", t.id))
+			tab.square_corners = {.Bottom_Left, .Bottom_Right}
 			sig := ui.signal(tab)
 			if ui.parent(tab) {
-				line := on && focused ? ui.color("accent") : ui.Color{}
-				ui.next({width = ui.fill(), height = ui.px(max(2, ui.scale() * 2)), bg = line})
+				// (with several panels, the line of the accent says which one has the keyboard)
+				line := on && focused && len(app.panels) > 1 ? ui.color("accent") : ui.Color{}
+				ui.next({width = ui.fill(), height = ui.px(max(2, ui.scale() * 2)), bg = line, radius = 0})
 				ui.build_box({.Draw_Background}, "###top")
 				ui.next({width = ui.fill(), height = ui.fill()})
 				if ui.row(.Center) {
@@ -215,8 +218,8 @@ list_keys :: proc(app: ^App) {
 	f := &t.folder
 	n := len(f.shown)
 	if n == 0 { return }
-	grid := t.view == .Grid
-	row := grid ? max(t.grid_cols, 1) : 1
+	grid := tab_mode(t) >= .Columns
+	row := tab_row_items(t)
 	page := max(t.vl.page_rows - 1, 1) * row
 	Move :: struct { key: Shortcut, to: int, extend: bool }
 	moves := make([dynamic]Move, context.temp_allocator)

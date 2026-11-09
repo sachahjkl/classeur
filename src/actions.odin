@@ -390,14 +390,7 @@ bookmark_toggle :: proc(app: ^App, path: string) {
 act_bookmark :: proc(app: ^App) { if t := current_tab(app); t != nil { bookmark_toggle(app, t.path) } }
 act_lock :: proc(app: ^App) { if t := current_tab(app); t != nil { t.locked = !t.locked } }
 
-act_view_details :: proc(app: ^App) { set_view(app, .Details) }
-act_view_grid :: proc(app: ^App) { set_view(app, .Grid) }
-
-@(private = "file")
-set_view :: proc(app: ^App, v: View_Mode) {
-	t := current_tab(app)
-	if t == nil { return }
-	t.view = v
-	app.default_view = v
-	ui.list_select(&t.vl, v == .Grid ? t.folder.cursor / max(t.grid_cols, 1) : t.folder.cursor)
-}
+act_view_details :: proc(app: ^App) { if t := current_tab(app); t != nil { tab_set_zoom(app, t, 0) } }
+act_view_grid :: proc(app: ^App) { if t := current_tab(app); t != nil { tab_set_zoom(app, t, ZOOM_GRID) } }
+act_zoom_in :: proc(app: ^App) { if t := current_tab(app); t != nil { tab_set_zoom(app, t, t.zoom + 1) } }
+act_zoom_out :: proc(app: ^App) { if t := current_tab(app); t != nil { tab_set_zoom(app, t, t.zoom - 1) } }

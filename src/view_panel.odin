@@ -21,8 +21,13 @@ FOOTER_EM  :: 2.3
 COL_CHECK_EM    :: 2.4
 COL_MODIFIED_EM :: 9.5
 COL_TYPE_EM     :: 8.5
-COL_COUNT_EM    :: 4.6
+COL_COUNT_EM    :: 5.6
 COL_SIZE_EM     :: 6.5
+// How far the rows' pills and lines stand from the panel's sides, in ems.
+ROW_INSET_EM :: 0.5
+// The ring of the cursor (sRGB).
+CURSOR_DARK  :: 0x1aa3d9ff
+CURSOR_LIGHT :: 0x0a7cadff
 // Under this width (ems), the date column is left out.
 WIDE_EM :: 62
 // The filter's width in the footer, in ems.
@@ -43,13 +48,17 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 		if t == nil { return box.rect }
 		wide := (box.rect.max.x - box.rect.min.x) > em * WIDE_EM
 		toolbar(app, p, t, index, em)
-		ui.next({width = ui.fill(), height = ui.fill()})
-		if t.view == .Grid {
-			grid_list(app, t, focused, em)
-		} else {
+		switch tab_mode(t) {
+		case .Details:
 			header(app, t, wide, em)
 			ui.next({width = ui.fill(), height = ui.fill()})
-			folder_list(app, t, focused, wide, em)
+			folder_list(app, t, focused, wide, false, em)
+		case .List:
+			ui.next({width = ui.fill(), height = ui.fill()})
+			folder_list(app, t, focused, false, true, em)
+		case .Columns, .Grid:
+			ui.next({width = ui.fill(), height = ui.fill()})
+			grid_list(app, t, focused, em)
 		}
 		footer(app, t, focused, em)
 	}
@@ -183,7 +192,7 @@ list_move :: proc(t: ^Tab, by: int) {
 	f := &t.folder
 	if len(f.shown) == 0 { return }
 	folder_pick(f, clamp(f.cursor + by, 0, len(f.shown) - 1))
-	ui.list_select(&t.vl, f.cursor)
+	ui.list_select(&t.vl, f.cursor / tab_row_items(t))
 }
 
 ////////////////////////////////
@@ -193,7 +202,8 @@ list_move :: proc(t: ^Tab, by: int) {
 header :: proc(app: ^App, t: ^Tab, wide: bool, em: f32) {
 	f := &t.folder
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * HEADER_EM))})
-	if ui.row(.Center, {.Draw_Side_Bottom}, "###header") {
+	if ui.row(.Center, {}, "###header") {
+		ui.spacer(ui.px(em * ROW_INSET_EM))
 		// the box of every row: all, some or none of them selected
 		all := len(f.shown) > 0 && f.count == len(f.shown)
 		if check_box(app, "check_all", all, f.count > 0 && !all, em) {
@@ -207,24 +217,25 @@ header :: proc(app: ^App, t: ^Tab, wide: bool, em: f32) {
 			plain_head("Files", em * COL_COUNT_EM, em)
 			column_head(app, t, .Size, "Size", ui.px(em * COL_SIZE_EM), .Right, em)
 		}
-		ui.spacer(ui.px(em * 0.9))
+		ui.spacer(ui.px(em * (ROW_INSET_EM + 0.5)))
 	}
 }
 
+// A column's title, a line before it; the sort's arrow at its right end. A click sorts by it.
 @(private = "file")
 column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: ui.Size, align: ui.Text_Align, em: f32) {
 	s := t.folder.sort
 	on := s.key == key
-	ui.next({width = width, height = ui.pct(1), radius = 0})
+	ui.next({width = width, height = ui.pct(1), radius = em * 0.2})
 	sig: ui.Signal
 	if ui.row(.Center, {.Clickable, .Draw_Hot_Effects}, fmt.tprintf("###col_%s", title)) {
 		sig = ui.signal(ui.parent_box())
+		if key != .Name { vrule(em, 1.2) } else { ui.spacer(ui.px(em * 0.4)) }
 		if align == .Right { ui.spacer(ui.fill()) }
-		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.text_size(), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###t", title))
-		if on { glyph(app, s.descending ? lucide.ARROW_DOWN : lucide.ARROW_UP, em * 1.3) }
-		ui.spacer(ui.px(em * 0.4))
+		if align == .Left { ui.spacer(ui.fill()) }
+		if on { glyph(app, s.descending ? lucide.ARROW_DOWN : lucide.ARROW_UP, em * 1.4) } else { ui.spacer(ui.px(em * 0.4)) }
 	}
 	if sig.clicked {
 		folder_sort_by(&t.folder, key)
@@ -234,8 +245,12 @@ column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: 
 
 @(private = "file")
 plain_head :: proc(title: string, width, em: f32) {
-	ui.next({width = ui.px(width), height = ui.pct(1), text_align = .Right})
-	ui.label(fmt.tprintf("%s###col_%s", title, title))
+	ui.next({width = ui.px(width), height = ui.pct(1)})
+	if ui.row(.Center, {}, fmt.tprintf("###col_%s", title)) {
+		vrule(em, 1.2)
+		ui.next({width = ui.fill(), height = ui.pct(1)})
+		ui.label(fmt.tprintf("%s###t", title))
+	}
 }
 
 @(private = "file")
@@ -300,7 +315,7 @@ empty_state :: proc(app: ^App, t: ^Tab, em: f32) -> bool {
 }
 
 @(private = "file")
-folder_list :: proc(app: ^App, t: ^Tab, focused, wide: bool, em: f32) {
+folder_list :: proc(app: ^App, t: ^Tab, focused, wide, names_only: bool, em: f32) {
 	f := &t.folder
 	if empty_state(app, t, em) { return }
 	// the cursor and the list's active row are the same row
@@ -314,19 +329,18 @@ folder_list :: proc(app: ^App, t: ^Tab, focused, wide: bool, em: f32) {
 		t.focus_due = .None
 	}
 	clicked := false
-	selection := selection_color(app)
+	look := row_look(app, focused, em)
 	for row in rows.first ..< rows.last {
 		e := &f.listing.entries[f.shown[row]]
-		// the selection solid when the panel has the keyboard, faded when not; the cursor alone is the list's own
 		selected := f.selected[f.shown[row]]
-		bg: Maybe(ui.Color)
-		if selected { bg = focused ? selection : selection * {1, 1, 1, 0.55} }
-		ui.next({height = ui.px(ui.dense(em * ROW_EM)), radius = 0, flags = selected ? {.Draw_Background} : {}, bg = bg})
-		if selected { ui.push_tags("selected") }
+		// (the list's own fill of the cursor's row is clear: the row draws its pill itself)
+		ui.next({height = ui.px(ui.dense(em * ROW_EM)), radius = 0, bg = ui.Color{}})
+		if selected && focused { ui.push_tags("selected") }
 		sig := ui.list_row(&t.vl, row, e.name)
-		if selected { ui.pop_tags() }
+		if selected && focused { ui.pop_tags() }
+		row_paint(sig.box, look, selected, row == f.cursor && (!selected || f.count > 1))
 		check := false
-		if ui.parent(sig.box) { check = entry_row(app, t, e, row, selected, wide, em) }
+		if ui.parent(sig.box) { check = entry_row(app, t, e, row, selected, wide, names_only, em) }
 		if row == t.vl.sel { t.cursor_rect = sig.box.rect }
 		if check {
 			clicked = true
@@ -355,34 +369,72 @@ folder_list :: proc(app: ^App, t: ^Tab, focused, wide: bool, em: f32) {
 	if t.vl.activated && !clicked { act_open(app) }
 }
 
-// The cells of a row: its box, its icon, its name (or the field that renames it), its date, its type, its counts and its
-// size. True: its box was clicked.
+// How the rows of a list are painted, File Pilot's way: a line under each, the selection a pill a little in from the
+// sides (solid while the panel has the keyboard), the cursor a ring of the accent.
+Row_Look :: struct {
+	inset:   f32,
+	radius:  f32,
+	line:    ui.Color,
+	fill:    ui.Color,
+	ring:    ui.Color,
+	focused: bool,
+}
+
 @(private = "file")
-entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected, wide: bool, em: f32) -> (check: bool) {
-	check = check_box(app, fmt.tprintf("check%d", row), selected, false, em)
+Row_Paint :: struct {
+	look:     ^Row_Look,
+	selected: bool,
+	cursor:   bool,
+}
+
+row_look :: proc(app: ^App, focused: bool, em: f32) -> ^Row_Look {
+	look := ui.frame_new(Row_Look)
+	sel := selection_color(app)
+	look^ = {
+		inset = em * ROW_INSET_EM, radius = em * 0.25,
+		line = ui.color("border") * {1, 1, 1, 0.7},
+		fill = focused ? sel : sel * {1, 1, 1, 0.35},
+		ring = draw.hex(app.theme_shown.light ? CURSOR_LIGHT : CURSOR_DARK),
+		focused = focused,
+	}
+	return look
+}
+
+// The box `b` (a row, a card) draws its pill and its ring under what it holds.
+row_paint :: proc(b: ^ui.Box, look: ^Row_Look, selected, cursor: bool) {
+	d := ui.frame_new(Row_Paint)
+	d^ = {look, selected, cursor && look.focused}
+	b.custom, b.custom_user = row_draw, d
+}
+
+@(private = "file")
+row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+	d := (^Row_Paint)(user)
+	l := d.look
+	r := b.rect
+	inner := ui.Rect{{r.min.x + l.inset, r.min.y + 1}, {r.max.x - l.inset, r.max.y - 1}}
+	draw.rect(dc, {{inner.min.x, r.max.y - 1}, {inner.max.x, r.max.y}}, l.line)
+	if d.selected { draw.rect(dc, inner, l.fill, radius = l.radius) }
+	if d.cursor { draw.rect(dc, inner, l.ring, radius = l.radius, border = 1) }
+}
+
+// The cells of a row: its box, its icon, its name (or the field that renames it), its date, its type, its counts and its
+// size. `names_only`: the icon and the name. True: its box was clicked.
+@(private = "file")
+entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected, wide, names_only: bool, em: f32) -> (check: bool) {
+	ui.spacer(ui.px(em * ROW_INSET_EM))
+	if names_only {
+		ui.spacer(ui.px(em * 0.4))
+	} else {
+		check = check_box(app, fmt.tprintf("check%d", row), selected, false, em)
+	}
 	folder := e.kind == .Directory
 	entry_glyph(app, e^, em * 1.9)
 	ui.spacer(ui.px(em * 0.5))
-	r := &app.rename
-	if r.active && r.tab == t.id && r.name == e.name {
-		key := ui.key_from_string(ui.parent_box().key, "###rename")
-		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.7)), radius = em * 0.15})
-		res := ui.line_edit("###rename", &r.field)
-		note_text_field(app, key)
-		if r.focus_due {
-			ui.set_focus(key)
-			r.focus_due = false
-		} else if !res.focused && ui.focus_key() != key {
-			rename_commit(app)   // (the keyboard went elsewhere: what was typed stays)
-		}
-		if res.committed { rename_commit(app) }
-		if res.cancelled { rename_end(app) }
-	} else {
-		ui.next({width = ui.fill(), height = ui.pct(1)})
-		hidden := .Hidden in e.flags && !selected
-		if hidden { ui.push_tags("weak") }
-		ui.label(fmt.tprintf("%s###n", shown_text(e.name)))
-		if hidden { ui.pop_tags() }
+	entry_name(app, t, e, selected, em)
+	if names_only {
+		ui.spacer(ui.px(em * ROW_INSET_EM))
+		return
 	}
 	m: Measure
 	measured := false
@@ -399,49 +451,116 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected, wide: bo
 			if !measured || n == 0 { return "--" }
 			return count_text(n)
 		}
-		ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1), text_align = .Right})
+		ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###fo", folder ? count(m.folders, measured) : "--"))
-		ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1), text_align = .Right})
+		ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###fi", folder ? count(m.files, measured) : "--"))
-		size := ""
-		if e.size >= 0 { size = size_text(e.size) } else if measured { size = size_text(m.bytes) }
+		size := "--"
+		if e.size >= 0 { size = size_text(e.size) } else if measured && m.bytes > 0 { size = size_text(m.bytes) }
 		ui.next({width = ui.px(em * COL_SIZE_EM), height = ui.pct(1), text_align = .Right})
 		ui.label(fmt.tprintf("%s###s", size))
 	}
 	if !selected { ui.pop_tags() }
-	ui.spacer(ui.px(em * 0.9))
+	ui.spacer(ui.px(em * (ROW_INSET_EM + 0.5)))
 	return
+}
+
+// The name of an entry, or the field that renames it.
+entry_name :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, em: f32) {
+	r := &app.rename
+	if r.active && r.tab == t.id && r.name == e.name {
+		key := ui.key_from_string(ui.parent_box().key, "###rename")
+		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.7)), radius = em * 0.15})
+		res := ui.line_edit("###rename", &r.field)
+		note_text_field(app, key)
+		if r.focus_due {
+			ui.set_focus(key)
+			r.focus_due = false
+		} else if !res.focused && ui.focus_key() != key {
+			rename_commit(app)   // (the keyboard went elsewhere: what was typed stays)
+		}
+		if res.committed { rename_commit(app) }
+		if res.cancelled { rename_end(app) }
+		return
+	}
+	ui.next({width = ui.fill(), height = ui.pct(1)})
+	hidden := .Hidden in e.flags && !selected
+	if hidden { ui.push_tags("weak") }
+	ui.label(fmt.tprintf("%s###n", shown_text(e.name)))
+	if hidden { ui.pop_tags() }
 }
 
 ////////////////////////////////
 // The footer
 
+// The footer, File Pilot's: two boxes floating on the panel's colour, the filter at the left, the counts and the zoom
+// at the right.
 @(private = "file")
 footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	f := &t.folder
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * FOOTER_EM))})
-	if ui.row(.Center, {.Draw_Side_Top}, "###footer") {
+	if ui.row(.Center, {}, "###footer") {
+		ui.spacer(ui.px(em * 0.3))
 		filter_field(app, t, em)
 		ui.spacer(ui.fill())
-		if ui.style({font_size = em * 0.9}) {
-			if focused { job_status(app, em) }
-			folders, files, folders_shown, files_shown: int
-			for e in f.listing.entries { if e.kind == .Directory { folders += 1 } else { files += 1 } }
-			for i in f.shown { if f.listing.entries[i].kind == .Directory { folders_shown += 1 } else { files_shown += 1 } }
-			stat(app, "sel", lucide.LAYERS_2, fmt.tprintf("%d", f.count), "Selected", em)
-			stat(app, "fol", lucide.FOLDER, fmt.tprintf("%d/%d", folders_shown, folders), "Folders shown, of all", em)
-			stat(app, "fil", lucide.FILE, fmt.tprintf("%d/%d", files_shown, files), "Files shown, of all", em)
-			if t.has_space && t.space.total > 0 {
-				used := 100 - int(100 * f64(t.space.free) / f64(t.space.total))
-				stat(app, "disk", lucide.HARD_DRIVE, fmt.tprintf("%d%%", used), fmt.tprintf("%s free of %s", size_text(t.space.free), size_text(t.space.total)), em)
-			}
-			vrule(em)
-			if ui.tags("weak") {
-				if icon_action(app, "view_details", lucide.LIST, command_tip("view_details"), em, on = t.view == .Details) { t.view = .Details }
-				if icon_action(app, "view_grid", lucide.LAYOUT_GRID, command_tip("view_grid"), em, on = t.view == .Grid) { t.view = .Grid }
+		if focused { job_status(app, em) }
+		ui.next({width = ui.children_sum(), height = ui.px(ui.dense(em * 2.0)), radius = em * 0.35, border = ui.color("border")})
+		if ui.row(.Center, {.Draw_Border}, "###stats") {
+			if ui.style({font_size = em * 0.92}) {
+				folders, files, folders_shown, files_shown: int
+				for e in f.listing.entries { if e.kind == .Directory { folders += 1 } else { files += 1 } }
+				for i in f.shown { if f.listing.entries[i].kind == .Directory { folders_shown += 1 } else { files_shown += 1 } }
+				if f.count > 0 { stat(app, "sel", lucide.LAYERS_2, fmt.tprintf("%d", f.count), "Selected", em) }
+				stat(app, "fol", lucide.FOLDER, fmt.tprintf("%d/%s", folders_shown, count_text(i64(folders))), "Folders shown, of all", em)
+				stat(app, "fil", lucide.FILE, fmt.tprintf("%d/%s", files_shown, count_text(i64(files))), "Files shown, of all", em)
+				if t.has_space && t.space.total > 0 {
+					used := 100 - int(100 * f64(t.space.free) / f64(t.space.total))
+					stat(app, "disk", lucide.HARD_DRIVE, fmt.tprintf("%d%%", used), fmt.tprintf("%s free of %s", size_text(t.space.free), size_text(t.space.total)), em)
+				}
+				ui.spacer(ui.px(em * 0.3))
+				zoom_pill(app, t, em)
+				ui.spacer(ui.px(em * 0.3))
 			}
 		}
-		ui.spacer(ui.px(em * 0.5))
+		ui.spacer(ui.px(em * 0.3))
+	}
+}
+
+@(private = "file")
+Zoom_Draw :: struct { t: f32, fill, track: ui.Color }
+
+@(private = "file")
+zoom_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+	d := (^Zoom_Draw)(user)
+	r := b.rect
+	rad := (r.max.y - r.min.y) * 0.22
+	draw.rect(dc, r, d.track, radius = rad)
+	w := max((r.max.x - r.min.x) * d.t, (r.max.y - r.min.y) * 0.3)
+	draw.rect(dc, {r.min, {r.min.x + w, r.max.y}}, d.fill, radius = rad)
+}
+
+// The zoom as File Pilot shows it: its percent on a bar of the accent; a click goes to the next view, a right click to
+// the one before.
+@(private = "file")
+zoom_pill :: proc(app: ^App, t: ^Tab, em: f32) {
+	z := ZOOMS[clamp(t.zoom, 0, len(ZOOMS) - 1)]
+	d := ui.frame_new(Zoom_Draw)
+	d^ = {f32(z.percent) / 100, selection_color(app), ui.color("border")}
+	ui.next({width = ui.px(em * 3.4), height = ui.px(em * 1.5)})
+	b := ui.custom("###zoom", zoom_draw, d, {.Clickable})
+	// (the percent over the bar: a box of its own, drawn after the bar)
+	if ui.parent(b) {
+		ui.next({width = ui.fill(), height = ui.pct(1), text_align = .Center, fg = z.percent > 40 ? draw.hex(0xffffffff) : nil})
+		ui.label(fmt.tprintf("%d%%###pct", z.percent))
+	}
+	sig := ui.signal(b)
+	if sig.clicked { tab_set_zoom(app, t, (t.zoom + 1) % len(ZOOMS)) }
+	if sig.right_clicked { tab_set_zoom(app, t, (t.zoom + len(ZOOMS) - 1) % len(ZOOMS)) }
+	if ui.hovered_for(sig, 0.4) {
+		if ui.tooltip() {
+			ui.next({width = ui.text_size(em * 0.6), height = ui.px(ui.dense(em * 1.8))})
+			ui.label("The view: a click zooms in, a right click out (Ctrl+wheel, Ctrl+= and Ctrl+-)###tip")
+		}
 	}
 }
 
@@ -456,7 +575,6 @@ stat :: proc(app: ^App, id, icon, text, tip: string, em: f32) {
 		if ui.tags("weak") { glyph(app, icon, em * 1.5) }
 		ui.next({width = ui.text_size(em * 0.2), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###v", text))
-		ui.spacer(ui.px(em * 0.4))
 	}
 	if ui.hovered_for(sig, 0.4) {
 		if ui.tooltip() {
@@ -468,10 +586,10 @@ stat :: proc(app: ^App, id, icon, text, tip: string, em: f32) {
 
 @(private = "file")
 filter_field :: proc(app: ^App, t: ^Tab, em: f32) {
-	ui.next({width = ui.px(em * FILTER_EM), height = ui.pct(1)})
-	if ui.row(.Center, {.Draw_Side_Right}, "###filterbox") {
-		ui.spacer(ui.px(em * 0.5))
-		if ui.tags("weak") { glyph(app, lucide.SEARCH, em * 1.6) }
+	ui.next({width = ui.px(em * FILTER_EM), height = ui.px(ui.dense(em * 2.0)), radius = em * 0.35, border = ui.color("border")})
+	if ui.row(.Center, {.Draw_Border}, "###filterbox") {
+		ui.spacer(ui.px(em * 0.4))
+		if ui.tags("weak") { glyph(app, lucide.SEARCH, em * 1.5) }
 		key := ui.key_from_string(ui.parent_box().key, "###filter")
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		res: ui.Edit_Result
@@ -484,15 +602,20 @@ filter_field :: proc(app: ^App, t: ^Tab, em: f32) {
 		folder_set_filter(&t.folder, ui.field_string(&t.filter))
 		if res.focused {
 			// the list's moves from the filter: the keyboard stays in it
-			if ui.key_press(.Down) { list_move(t, 1) }
-			if ui.key_press(.Up) { list_move(t, -1) }
+			if ui.key_press(.Down) { list_move(t, tab_row_items(t)) }
+			if ui.key_press(.Up) { list_move(t, -tab_row_items(t)) }
 		}
 		if res.cancelled {
 			if len(t.filter.buf) > 0 { ui.field_clear(&t.filter) }
 			t.focus_due = .List
 		}
 		if res.committed { act_open(app) }
-		ui.spacer(ui.px(em * 0.3))
+		if len(t.filter.buf) > 0 {
+			if ui.tags("weak") {
+				if icon_action(app, "filter_clear", lucide.X, "Clear the filter (Escape)", em) { ui.field_clear(&t.filter) }
+			}
+		}
+		ui.spacer(ui.px(em * 0.2))
 	}
 }
 

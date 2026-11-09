@@ -29,12 +29,37 @@ Tab :: struct {
 	has_space:    bool,
 	measured:     u64,               // the read whose folders were given to the measures
 	locked:       bool,
-	view:         View_Mode,
+	zoom:         int,               // an index of ZOOMS: the view and the size of its items
 	grid_cols:    int,               // the cards per row of the grid, as last laid out              // a folder opened from it opens in a new tab (the lock of the toolbar)
 	cursor_rect:  ui.Rect,           // the cursor's row as last built (where the Menu key opens the menu)
 }
 
-View_Mode :: enum u8 { Details, Grid }
+// The views, File Pilot's zoom: the details, the names alone, the names in columns, then cards ever larger.
+View_Mode :: enum u8 { Details, List, Columns, Grid }
+
+Zoom :: struct {
+	percent: int,       // what the footer shows
+	mode:    View_Mode,
+	card_em: f32,       // a card's width (Grid)
+}
+
+@(rodata)
+ZOOMS := [?]Zoom{
+	{0, .Details, 0}, {10, .List, 0}, {20, .Columns, 0},
+	{30, .Grid, 8.5}, {50, .Grid, 11.5}, {70, .Grid, 15}, {100, .Grid, 20},
+}
+ZOOM_GRID :: 4   // the grid of Ctrl+2
+
+tab_mode :: proc(t: ^Tab) -> View_Mode { return ZOOMS[clamp(t.zoom, 0, len(ZOOMS) - 1)].mode }
+
+// The items per row of the views that have several (Columns, Grid), 1 for the others.
+tab_row_items :: proc(t: ^Tab) -> int { return tab_mode(t) >= .Columns ? max(t.grid_cols, 1) : 1 }
+
+tab_set_zoom :: proc(app: ^App, t: ^Tab, zoom: int) {
+	t.zoom = clamp(zoom, 0, len(ZOOMS) - 1)
+	app.default_zoom = t.zoom
+	ui.list_select(&t.vl, t.folder.cursor / tab_row_items(t))
+}
 
 // What the next build gives the keyboard to (it knows the boxes' keys).
 Focus_Due :: enum u8 { None, List, Filter, Address }
@@ -51,7 +76,7 @@ tab_new :: proc(app: ^App, path: string) -> ^Tab {
 	t.folder.sort = app.default_sort
 	t.folder.show_hidden = app.show_hidden
 	t.folder.cursor = -1
-	t.view = app.default_view
+	t.zoom = app.default_zoom
 	t.path = fs.clean(path)
 	tab_load(app, t)
 	return t
