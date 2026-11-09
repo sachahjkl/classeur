@@ -174,7 +174,7 @@ crumbs :: proc(app: ^App, t: ^Tab, em: f32) {
 			if sig.middle_clicked { tab_open(app, current_panel(app), c.path, current_panel(app).active + 1) }
 		}
 		ui.spacer(ui.fill())
-		if ui.signal(frame).clicked { act_goto(app) }
+		if ui.signal(frame).clicked { act_goto_popup(app) }
 	}
 }
 

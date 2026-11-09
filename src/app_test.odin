@@ -13,6 +13,7 @@ import "core:strings"
 import "core:testing"
 import "gt:png"
 import "gt:testkit"
+import "gt:ui"
 import "gt:testkit/session"
 import "fs"
 
@@ -621,4 +622,41 @@ test_session :: proc(t: ^testing.T) {
 		testing.expect_value(t, app.focus, 1)
 		testing.expect_value(t, len(app.bookmarks), 1)
 	}
+}
+
+@(test)
+test_goto :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	_ = os.make_directory_all(fs.join(dir, "Projects/classeur/src", context.temp_allocator))
+	s, app := start(t, {dir})
+	tab := current_tab(app)
+
+	// a path: the folders in it, found by the letters after the last separator; Tab completes, Enter goes
+	session.key(s, .G, {.Ctrl})
+	testing.expect(t, app.goto.open)
+	session.type_text(s, fmt.tprintf("%s/proj", dir))
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return len((^App)(s.user).goto.names) > 0 }, "the folder read")
+	session.frames(s, 2)
+	session.key(s, .Tab)
+	session.frames(s, 2)
+	testing.expect_value(t, ui.field_string(&app.goto.field), fmt.tprintf("%s/Projects/", dir))
+	session.type_text(s, "cla")
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return strings.has_suffix((^App)(s.user).goto.dir, "Projects") }, "Projects read")
+	session.frames(s, 2)
+	session.key(s, .Return)
+	wait_read(s)
+	testing.expect(t, !app.goto.open)
+	testing.expect_value(t, tab.path, fs.join(dir, "Projects/classeur", context.temp_allocator))
+
+	// words: a recent folder by a few letters of its path
+	context.allocator = runtime.heap_allocator()
+	tab_go(app, tab, dir)
+	wait_read(s)
+	session.key(s, .G, {.Ctrl})
+	session.type_text(s, "jectsclas")
+	session.frames(s, 2)
+	session.key(s, .Return)
+	wait_read(s)
+	testing.expect_value(t, tab.path, fs.join(dir, "Projects/classeur", context.temp_allocator))
 }
