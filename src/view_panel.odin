@@ -66,6 +66,11 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 		}
 		t := panel_tab(p)
 		if t == nil { return box.rect }
+		// the mouse's side buttons: back and forward in the panel under it
+		if ui.hot_within(box.key) {
+			if ui.mouse_pressed(.Back) { tab_back(app, t) }
+			if ui.mouse_pressed(.Forward) { tab_forward(app, t) }
+		}
 		room := box.rect.max.x - box.rect.min.x
 		if app.inspector.open && focused { room -= app.inspector.width_px * ui.scale() }
 		wide := details_columns(room, em)
@@ -610,7 +615,11 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 				for e in f.listing.entries { if e.kind == .Directory { folders += 1 } else { files += 1 } }
 				for i in f.shown { if f.listing.entries[i].kind == .Directory { folders_shown += 1 } else { files_shown += 1 } }
 				if t.walk != nil { stat(app, "walk", lucide.LOADER, fmt.tprintf("%s…", count_text(i64(tab_walked(t)))), "Entries read so far", em) }
-				if f.count > 0 { stat(app, "sel", lucide.LAYERS_2, fmt.tprintf("%d", f.count), "Selected", em) }
+				if f.count > 0 {
+					bytes: i64
+					for e in folder_targets(f) { if e.kind != .Directory && e.size > 0 { bytes += e.size } }
+					stat(app, "sel", lucide.LAYERS_2, bytes > 0 ? fmt.tprintf("%d · %s", f.count, size_text(bytes)) : fmt.tprintf("%d", f.count), "Selected, and the size of their files", em)
+				}
 				stat(app, "fol", lucide.FOLDER, fmt.tprintf("%d/%s", folders_shown, count_text(i64(folders))), "Folders shown, of all", em)
 				stat(app, "fil", lucide.FILE, fmt.tprintf("%d/%s", files_shown, count_text(i64(files))), "Files shown, of all", em)
 				if t.has_space && t.space.total > 0 {

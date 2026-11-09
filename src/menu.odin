@@ -5,7 +5,10 @@ package classeur
 // are shown beside it.
 
 import "core:fmt"
+import "core:strings"
+import "gt:desktop"
 import "gt:ui"
+import "fs"
 
 MENU_WIDTH_EM :: 17
 
@@ -46,6 +49,7 @@ entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 		menu_command(app, "open_new_tab", enabled = folder)
 		menu_command(app, "open_other_panel", enabled = folder)
 		menu_command(app, "open_system")
+		if e != nil && !folder { open_with_menu(app, fs.join(t.path, e.name, context.temp_allocator)) }
 		ui.menu_separator()
 		menu_command(app, "cut")
 		menu_command(app, "copy")
@@ -57,9 +61,13 @@ entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 		ui.menu_separator()
 	} else {
 		menu_command(app, "paste")
+		menu_command(app, "undo", enabled = len(app.undo) > 0)
+		menu_command(app, "redo", enabled = len(app.redo) > 0)
 		ui.menu_separator()
 	}
 	menu_command(app, "new_folder")
+	menu_command(app, "new_file")
+	menu_command(app, "terminal")
 	menu_command(app, "select_all")
 	menu_command(app, "refresh")
 	ui.menu_separator()
@@ -82,6 +90,38 @@ Panel_Menus :: struct {
 	history_key: ui.Key,
 	history_tab: u64,
 	panel_key:   ui.Key,
+	tab_key:     ui.Key,
+}
+
+// A tab's menu (a right click on it): what to do with it and the tabs beside it.
+tab_menu_open :: proc(app: ^App) {
+	m := &app.panel_menus
+	if m.tab_key == 0 { m.tab_key = ui.key_from_string(0, "classeur_tab_menu") }
+	ui.ctx_menu_open(m.tab_key, ui.mouse_pos())
+}
+
+@(private = "file")
+tab_menu_build :: proc(app: ^App, em: f32) {
+	m := &app.panel_menus
+	if m.tab_key == 0 { return }
+	if ui.ctx_menu(m.tab_key, em * MENU_WIDTH_EM) {
+		p := current_panel(app)
+		t := current_tab(app)
+		if t == nil { ui.ctx_menu_close(); return }
+		menu_command(app, "tab_new")
+		menu_command(app, "tab_duplicate")
+		menu_command(app, "lock", checked = t.locked)
+		menu_command(app, "bookmark")
+		ui.menu_separator()
+		menu_command(app, "tab_close")
+		menu_command(app, "tab_close_others", enabled = len(p.tabs) > 1)
+		menu_command(app, "tab_close_left", enabled = p.active > 0)
+		menu_command(app, "tab_close_right", enabled = p.active < len(p.tabs) - 1)
+		menu_command(app, "tab_reopen", enabled = len(app.closed_tabs) > 0)
+		ui.menu_separator()
+		menu_command(app, "terminal")
+		menu_command(app, "copy_path")
+	}
 }
 
 history_menu_open :: proc(app: ^App, t: ^Tab, at: ui.Rect) {
@@ -100,6 +140,7 @@ panel_menu_open :: proc(app: ^App, pos: ui.Vec2) {
 panel_menus_build :: proc(app: ^App, em: f32) {
 	history_menu_build(app, em)
 	panel_menu_build(app, em)
+	tab_menu_build(app, em)
 }
 
 @(private = "file")
@@ -127,8 +168,10 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 		t := current_tab(app)
 		if t == nil { ui.ctx_menu_close(); return }
 		menu_command(app, "new_folder")
+		menu_command(app, "new_file")
 		menu_command(app, "refresh")
-		menu_command(app, "goto")
+		menu_command(app, "goto_popup")
+		menu_command(app, "terminal")
 		ui.menu_separator()
 		if ui.menu_submenu("Sort by") {
 			s := t.folder.sort
@@ -143,5 +186,24 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 		ui.menu_separator()
 		menu_command(app, "panel_split")
 		menu_command(app, "panel_close", enabled = len(app.panels) > 1)
+	}
+}
+
+// "Open with": the applications the system knows for the file, its default first.
+@(private = "file")
+open_with_menu :: proc(app: ^App, path: string) {
+	if ui.menu_submenu("Open with") {
+		hs := desktop.handlers_for_file(path, context.temp_allocator)
+		if len(hs) == 0 { _ = ui.menu_item("No application", enabled = false) }
+		for h, i in hs {
+			label := h.default ? fmt.tprintf("%s (default)###ow%d", shown_text(h.name), i) : fmt.tprintf("%s###ow%d", shown_text(h.name), i)
+			if ui.menu_item(label).clicked {
+				if app.headless {
+					append(&app.opened, strings.concatenate({h.id, ":", path}))
+				} else if !desktop.open_with(path, h.id) {
+					say(app, "%s cannot start.", h.name)
+				}
+			}
+		}
 	}
 }

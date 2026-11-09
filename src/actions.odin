@@ -5,6 +5,7 @@ package classeur
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import "gt:desktop"
 import "gt:platform"
 import "gt:ui"
 import "fs"
@@ -115,6 +116,20 @@ act_tab_close :: proc(app: ^App) {
 	p := current_panel(app)
 	tab_close(app, p, p.active)
 }
+
+// Closes the tabs of the current panel whose index `keep` refuses.
+@(private = "file")
+tabs_close_where :: proc(app: ^App, close: proc(i, active: int) -> bool) {
+	p := current_panel(app)
+	active := p.active
+	for i := len(p.tabs) - 1; i >= 0; i -= 1 {
+		if close(i, active) { tab_close(app, p, i) }
+	}
+}
+
+act_tab_close_others :: proc(app: ^App) { tabs_close_where(app, proc(i, a: int) -> bool { return i != a }) }
+act_tab_close_left :: proc(app: ^App) { tabs_close_where(app, proc(i, a: int) -> bool { return i < a }) }
+act_tab_close_right :: proc(app: ^App) { tabs_close_where(app, proc(i, a: int) -> bool { return i > a }) }
 
 act_tab_reopen :: proc(app: ^App) {
 	if len(app.closed_tabs) == 0 { return }
@@ -227,8 +242,8 @@ rename_commit :: proc(app: ^App) {
 		say(app, "%s cannot be renamed: %v.", r.name, err)
 		return
 	}
-	// (a folder just made and named: its step says where it is now)
-	if n := len(app.undo); n > 0 && app.undo[n - 1].kind == .New_Folder && app.undo[n - 1].pairs[0][1] == from_path {
+	// (a folder or a file just made and named: its step says where it is now)
+	if n := len(app.undo); n > 0 && (app.undo[n - 1].kind == .New_Folder || app.undo[n - 1].kind == .New_File) && app.undo[n - 1].pairs[0][1] == from_path {
 		delete(app.undo[n - 1].pairs[0][1])
 		app.undo[n - 1].pairs[0][1] = strings.clone(to_path)
 	} else {
@@ -256,6 +271,34 @@ act_new_folder :: proc(app: ^App) {
 	t.reveal_name = strings.clone(name)
 	tab_load(app, t)
 	rename_begin(app, t, name)
+}
+
+// An empty file, then named in place.
+act_new_file :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	name := "New file.txt"
+	for n := 2; ; n += 1 {
+		if !fs.exists(fs.join(t.path, name, context.temp_allocator)) { break }
+		name = fmt.tprintf("New file %d.txt", n)
+	}
+	path := fs.join(t.path, name, context.temp_allocator)
+	if err := os.write_entire_file(path, []u8{}); err != nil {
+		say(app, "The file cannot be made here: %v.", err)
+		return
+	}
+	undo_push(app, .New_File, {{"", path}})
+	delete(t.reveal_name)
+	t.reveal_name = strings.clone(name)
+	tab_load(app, t)
+	rename_begin(app, t, name)
+}
+
+act_terminal :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	if app.headless { append(&app.opened, strings.concatenate({"terminal:", t.path})); return }
+	if !desktop.open_terminal(t.path) { say(app, "No terminal was found: set $TERMINAL.") }
 }
 
 act_copy_path :: proc(app: ^App) {

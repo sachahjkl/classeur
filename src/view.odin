@@ -202,6 +202,10 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 			}
 			if sig.pressed { p.active = i; app.focus = index }
 			if sig.middle_clicked { close = i }
+			if sig.right_clicked {
+				p.active, app.focus = i, index
+				tab_menu_open(app)
+			}
 		}
 		ui.spacer(ui.px(em * 0.3))
 		if icon_action(app, fmt.tprintf("newtab%d", index), lucide.PLUS, command_tip("tab_new"), em) {

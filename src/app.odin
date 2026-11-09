@@ -42,6 +42,7 @@ App :: struct {
 	recents:     [dynamic]string,   // owned: the folders visited, the last first (the sidebar)
 	bookmarks:   [dynamic]string,   // owned
 	undo:        [dynamic]Undo_Step,   // what was done to files, the last at the end (undo.odin)
+	redo:        [dynamic]Undo_Step,   // what was undone, to do again (the last undone at the end)
 	side_open:   [Side_Section]bool,   // the sections of the sidebar that are open
 	side_filter: ui.Text_Field,
 	volume_space: [dynamic]fs.Space,   // of each volume, read with the places

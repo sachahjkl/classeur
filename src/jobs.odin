@@ -35,6 +35,7 @@ Job :: struct {
 	targets: []string,     // owned: when set, each source's own target path (Copy, Move), not dest/<its name>
 	policy:  Conflict,     // for every conflict; Ask: the person says, then maybe for all
 	undoing: bool,         // an undo's job: what it does is not undone in turn
+	redoing: bool,         // a redo's job: its step goes back on the undo stack, what can be done again stays
 
 	// written by the jobs' thread, read by the interface
 	state:       Job_State,   // atomic

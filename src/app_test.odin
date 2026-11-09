@@ -660,3 +660,42 @@ test_goto :: proc(t: ^testing.T) {
 	wait_read(s)
 	testing.expect_value(t, tab.path, fs.join(dir, "Projects/classeur", context.temp_allocator))
 }
+
+@(test)
+test_more_actions :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir})
+	tab := current_tab(app)
+
+	// a new file, named in place; undone, redone
+	session.key(s, .N, {.Ctrl, .Alt})
+	wait_read(s)
+	testing.expect(t, app.rename.active)
+	session.type_text(s, "draft")
+	session.key(s, .Return)
+	wait_read(s)
+	testing.expect(t, fs.exists(fs.join(dir, "draft.txt", context.temp_allocator)), "the new file named (its extension kept)")
+	session.key(s, .Z, {.Ctrl})
+	wait_read(s)
+	testing.expect(t, !fs.exists(fs.join(dir, "draft.txt", context.temp_allocator)), "undone")
+	session.key(s, .Y, {.Ctrl})
+	wait_read(s)
+	testing.expect(t, fs.exists(fs.join(dir, "draft.txt", context.temp_allocator)), "redone")
+	testing.expect_value(t, len(app.redo), 0)
+
+	// a terminal here (headless: noted, not started)
+	session.key(s, .F4)
+	testing.expect(t, len(app.opened) > 0 && strings.has_prefix(app.opened[len(app.opened) - 1], "terminal:"))
+
+	// tabs: three, the others closed
+	context.allocator = runtime.heap_allocator()
+	p := current_panel(app)
+	tab_open(app, p, fs.join(dir, "Documents", context.temp_allocator), p.active + 1)
+	tab_open(app, p, fs.join(dir, "Photos", context.temp_allocator), p.active + 1)
+	testing.expect_value(t, len(p.tabs), 3)
+	act_tab_close_others(app)
+	testing.expect_value(t, len(p.tabs), 1)
+	testing.expect_value(t, current_tab(app).path, fs.join(dir, "Photos", context.temp_allocator))
+	_ = tab
+}
