@@ -37,6 +37,7 @@ COMMANDS := [?]Command{
 	{id = "filter", title = "Filter this folder", icon = lucide.FILTER, keys = {{.F, {.Ctrl}}, {}}, in_text = true, run = act_filter},
 	{id = "flat", title = "Search every folder below (flatten)", icon = lucide.FOLDER_TREE, keys = {{.F, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_flat},
 	{id = "options", title = "Options", icon = lucide.SETTINGS, keys = {{.Comma, {.Ctrl}}, {}}, in_text = true, run = act_options},
+	{id = "inspector", title = "Inspector: what the cursor is on, beside the list", icon = lucide.EYE, keys = {{.Space, {}}, {.I, {.Ctrl, .Shift}}}, run = act_inspector},
 	{id = "palette", title = "Command palette", icon = lucide.COMMAND, keys = {{.P, {.Ctrl, .Shift}}, {.F1, {}}}, in_text = true, run = act_palette},
 
 	{id = "tab_new", title = "New tab", icon = lucide.PLUS, keys = {{.T, {.Ctrl}}, {}}, in_text = true, run = act_tab_new},

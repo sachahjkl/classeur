@@ -336,6 +336,38 @@ test_options :: proc(t: ^testing.T) {
 	testing.expect(t, session.find_text(s, "notes") != nil, "notes.txt shows as notes")
 }
 
+@(test)
+test_inspector :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	write_pictures(fs.join(dir, "Photos", context.temp_allocator), {"lake.png"})
+	s, app := start(t, {dir})
+	tab := current_tab(app)
+	inspected :: proc(s: ^session.Session) -> bool { return (^App)(s.user).inspector.ready }
+	// a text file: its beginning
+	point_at(t, tab, "notes.txt")
+	session.key(s, .Space)
+	testing.expect(t, app.inspector.open)
+	session.wait_until(s, inspected, "the inspector")
+	testing.expect_value(t, app.inspector.kind, Inspect_Kind.Text)
+	testing.expect_value(t, app.inspector.text, "the file notes.txt\n")
+	// a folder: its content
+	point_at(t, tab, "Documents")
+	session.frames(s, 1)
+	session.wait_until(s, inspected, "the inspector")
+	testing.expect_value(t, app.inspector.kind, Inspect_Kind.Folder)
+	testing.expect_value(t, len(app.inspector.listing.entries), 2)
+	// a picture
+	point_at(t, tab, "Photos")
+	session.key(s, .Return)
+	wait_read(s)
+	session.wait_until(s, inspected, "the inspector")
+	testing.expect_value(t, app.inspector.kind, Inspect_Kind.Picture)
+	testing.expect_value(t, app.inspector.size, [2]int{480, 320})
+	session.key(s, .Space)
+	testing.expect(t, !app.inspector.open)
+}
+
 // The pictures of the README (classeurtool shots): a home folder of made-up files; the grid of the pictures beside the
 // details of the home folder; the palette.
 @(test)
@@ -377,6 +409,18 @@ test_shots :: proc(t: ^testing.T) {
 	session.frames(s, 2)
 	session.save_png(s, "palette.png")
 	session.key(s, .Escape)
+	// the inspector on a picture, one panel
+	for len(app.panels) > 1 { session.key(s, .W, {.Ctrl, .Shift}) }
+	tab_go(app, current_tab(app), fs.join(dir, "Pictures", context.temp_allocator))
+	current_tab(app).zoom = 0
+	wait_read(s)
+	point_at(t, current_tab(app), "lake.png")
+	session.key(s, .Space)
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return (^App)(s.user).inspector.ready }, "the inspector")
+	session.frames(s, 3)
+	session.save_png(s, "inspector.png")
+	session.key(s, .Space)
+
 	session.key(s, .Comma, {.Ctrl})
 	session.key(s, .Down, repeat = 3)
 	session.frames(s, 2)

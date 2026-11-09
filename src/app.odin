@@ -75,7 +75,8 @@ App :: struct {
 	prefs:       config.Prefs,      // the preferences (prefs.odin)
 	settings:    Settings,          // their values as the program reads them
 	theme_names: []string,          // the choices of look.theme
-	options:     Options,           // the options' list (options.odin)
+	options:     Options,
+	inspector:   Inspector,         // the pane of Space (inspector.odin)           // the options' list (options.odin)
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
 }
@@ -161,7 +162,8 @@ app_close :: proc(app: ^App) {
 	sync.atomic_add(&app.measure_gen, 1)          // (the measures running end at their next folder)
 	pool_stop(&app.measure_pool, proc(data: rawptr) {})
 	pool_stop(&app.thumb_pool, proc(data: rawptr) {})
-	thumbs_free(app)   // (before the renderer goes: the textures are its)
+	thumbs_free(app)
+	inspector_free(app)   // (before the renderer goes: the textures are its)
 	devtools.stop(app.devtools)
 	host.host_close(&app.main)
 	app_free(app)

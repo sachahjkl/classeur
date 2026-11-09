@@ -28,8 +28,25 @@ ROW_INSET_EM :: 0.5
 // The ring of the cursor (sRGB).
 CURSOR_DARK  :: 0x1aa3d9ff
 CURSOR_LIGHT :: 0x0a7cadff
-// Under this width (ems), the date column is left out.
-WIDE_EM :: 62
+// The name's least width, and what a row holds besides its columns (insets, box, icon), in ems.
+NAME_MIN_EM   :: 14
+ROW_FIXED_EM  :: 7
+
+// The columns after the name: as many as the panel's width holds, the size first, then the type, the counts, the date
+// (File Pilot drops them in the same order when a panel narrows).
+Column :: enum u8 { Size, Type, Counts, Modified }
+Columns :: bit_set[Column]
+
+details_columns :: proc(room, em: f32) -> (cols: Columns) {
+	left := room / max(em, 1) - NAME_MIN_EM - ROW_FIXED_EM
+	widths := [Column]f32{.Size = COL_SIZE_EM, .Type = COL_TYPE_EM, .Counts = 2 * COL_COUNT_EM, .Modified = COL_MODIFIED_EM}
+	for c in Column {
+		if left < widths[c] { break }
+		left -= widths[c]
+		cols += {c}
+	}
+	return
+}
 // The filter's width in the footer, in ems.
 FILTER_EM :: 18
 
@@ -46,21 +63,31 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 		}
 		t := panel_tab(p)
 		if t == nil { return box.rect }
-		wide := (box.rect.max.x - box.rect.min.x) > em * WIDE_EM
+		room := box.rect.max.x - box.rect.min.x
+		if app.inspector.open && focused { room -= app.inspector.width_px * ui.scale() }
+		wide := details_columns(room, em)
 		toolbar(app, p, t, index, em)
-		// (the contents of a panel without the keyboard, dimmed: the one that has it stands out)
-		dim := focused || len(app.panels) == 1 ? 0 : 1 - app.settings.inactive_opacity
-		switch tab_mode(t) {
-		case .Details:
-			header(app, t, wide, em)
-			ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
-			folder_list(app, t, focused, wide, false, em)
-		case .List:
-			ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
-			folder_list(app, t, focused, false, true, em)
-		case .Columns, .Grid:
-			ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
-			grid_list(app, t, focused, em)
+		// the list, and beside it the inspector in the panel that has the keyboard
+		ui.next({width = ui.fill(), height = ui.fill()})
+		if ui.row(.Start, {}, "###body") {
+			ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
+			if ui.column(.Start, {}, "###content") {
+				// (the contents of a panel without the keyboard, dimmed: the one that has it stands out)
+				dim := focused || len(app.panels) == 1 ? 0 : 1 - app.settings.inactive_opacity
+				switch tab_mode(t) {
+				case .Details:
+					header(app, t, wide, em)
+					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
+					folder_list(app, t, focused, wide, false, em)
+				case .List:
+					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
+					folder_list(app, t, focused, {}, true, em)
+				case .Columns, .Grid:
+					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
+					grid_list(app, t, focused, em)
+				}
+			}
+			if app.inspector.open && focused { inspector_build(app, t, em) }
 		}
 		footer(app, t, focused, em)
 	}
@@ -201,7 +228,7 @@ list_move :: proc(t: ^Tab, by: int) {
 // The columns
 
 @(private = "file")
-header :: proc(app: ^App, t: ^Tab, wide: bool, em: f32) {
+header :: proc(app: ^App, t: ^Tab, wide: Columns, em: f32) {
 	f := &t.folder
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * HEADER_EM))})
 	if ui.row(.Center, {}, "###header") {
@@ -213,11 +240,13 @@ header :: proc(app: ^App, t: ^Tab, wide: bool, em: f32) {
 		}
 		if ui.tags("weak") {
 			column_head(app, t, .Name, "Name", ui.fill(), .Left, em)
-			if wide { column_head(app, t, .Modified, "Modified", ui.px(em * COL_MODIFIED_EM), .Left, em) }
-			column_head(app, t, .Type, "Type", ui.px(em * COL_TYPE_EM), .Left, em)
-			plain_head("Folders", em * COL_COUNT_EM, em)
-			plain_head("Files", em * COL_COUNT_EM, em)
-			column_head(app, t, .Size, "Size", ui.px(em * COL_SIZE_EM), .Right, em)
+			if .Modified in wide { column_head(app, t, .Modified, "Modified", ui.px(em * COL_MODIFIED_EM), .Left, em) }
+			if .Type in wide { column_head(app, t, .Type, "Type", ui.px(em * COL_TYPE_EM), .Left, em) }
+			if .Counts in wide {
+				plain_head("Folders", em * COL_COUNT_EM, em)
+				plain_head("Files", em * COL_COUNT_EM, em)
+			}
+			if .Size in wide { column_head(app, t, .Size, "Size", ui.px(em * COL_SIZE_EM), .Right, em) }
 		}
 		ui.spacer(ui.px(em * (ROW_INSET_EM + 0.5)))
 	}
@@ -317,7 +346,7 @@ empty_state :: proc(app: ^App, t: ^Tab, em: f32) -> bool {
 }
 
 @(private = "file")
-folder_list :: proc(app: ^App, t: ^Tab, focused, wide, names_only: bool, em: f32) {
+folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only: bool, em: f32) {
 	f := &t.folder
 	if empty_state(app, t, em) { return }
 	// the cursor and the list's active row are the same row
@@ -433,7 +462,7 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 // The cells of a row: its box, its icon, its name (or the field that renames it), its date, its type, its counts and its
 // size. `names_only`: the icon and the name. True: its box was clicked.
 @(private = "file")
-entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected, wide, names_only: bool, em: f32) -> (check: bool) {
+entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, wide: Columns, names_only: bool, em: f32) -> (check: bool) {
 	ui.spacer(ui.px(em * ROW_INSET_EM))
 	if names_only {
 		ui.spacer(ui.px(em * 0.4))
@@ -453,24 +482,30 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected, wide, na
 	if folder { m, measured = measure_of(app, t, e^) }
 	if !selected { ui.push_tags("weak") }
 	if ui.style({font_size = em * 0.92}) {
-		if wide {
+		if .Modified in wide {
 			ui.next({width = ui.px(em * COL_MODIFIED_EM), height = ui.pct(1)})
 			ui.label(fmt.tprintf("%s###m", date_text(app, e.mtime)))
 		}
-		ui.next({width = ui.px(em * COL_TYPE_EM), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###k", type_text(e^)))
-		count := proc(n: i64, measured: bool) -> string {
-			if !measured || n == 0 { return "--" }
-			return count_text(n)
+		if .Type in wide {
+			ui.next({width = ui.px(em * COL_TYPE_EM), height = ui.pct(1)})
+			ui.label(fmt.tprintf("%s###k", type_text(e^)))
 		}
-		ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###fo", folder ? count(m.folders, measured) : "--"))
-		ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###fi", folder ? count(m.files, measured) : "--"))
-		size := "--"
-		if e.size >= 0 { size = size_text(e.size) } else if measured && m.bytes > 0 { size = size_text(m.bytes) }
-		ui.next({width = ui.px(em * COL_SIZE_EM), height = ui.pct(1), text_align = .Right})
-		ui.label(fmt.tprintf("%s###s", size))
+		if .Counts in wide {
+			count := proc(n: i64, measured: bool) -> string {
+				if !measured || n == 0 { return "--" }
+				return count_text(n)
+			}
+			ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1)})
+			ui.label(fmt.tprintf("%s###fo", folder ? count(m.folders, measured) : "--"))
+			ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1)})
+			ui.label(fmt.tprintf("%s###fi", folder ? count(m.files, measured) : "--"))
+		}
+		if .Size in wide {
+			size := "--"
+			if e.size >= 0 { size = size_text(e.size) } else if measured && m.bytes > 0 { size = size_text(m.bytes) }
+			ui.next({width = ui.px(em * COL_SIZE_EM), height = ui.pct(1), text_align = .Right})
+			ui.label(fmt.tprintf("%s###s", size))
+		}
 	}
 	if !selected { ui.pop_tags() }
 	ui.spacer(ui.px(em * (ROW_INSET_EM + 0.5)))
