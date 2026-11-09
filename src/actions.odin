@@ -379,11 +379,13 @@ bookmark_toggle :: proc(app: ^App, path: string) {
 		if p == path {
 			delete(p)
 			ordered_remove(&app.bookmarks, i)
+			session_save(app)
 			say(app, "Bookmark removed.")
 			return
 		}
 	}
 	append(&app.bookmarks, strings.clone(path))
+	session_save(app)
 	say(app, "%s is bookmarked.", fs.base(path))
 }
 

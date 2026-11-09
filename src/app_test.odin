@@ -584,3 +584,41 @@ test_undo_names :: proc(t: ^testing.T) {
 	testing.expect(t, !fs.exists(fs.join(dir, "Fresh", context.temp_allocator)), "undo: the new folder gone")
 	testing.expect_value(t, len(app.undo), 0)
 }
+
+@(test)
+test_session :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	file := fs.join(dir, ".session", context.temp_allocator)
+	documents := fs.join(dir, "Documents", context.temp_allocator)
+	{
+		context.allocator = runtime.heap_allocator()
+		app := app_open({folders = {dir}, headless = true, session = file})
+		testing.expect(t, app != nil)
+		// two panels: the folder and Documents in a tab, zoomed, locked; Photos bookmarked
+		tab_open(app, app.panels[0], documents)
+		current_tab(app).zoom = ZOOM_GRID
+		current_tab(app).locked = true
+		panel_open(app, fs.join(dir, "Projects", context.temp_allocator))
+		bookmark_toggle(app, fs.join(dir, "Photos", context.temp_allocator))
+		app_close(app)
+	}
+	testing.expect(t, fs.exists(file), "the session is written")
+	// the folder Projects goes: its tab opens at its parent
+	testing.expect(t, fs.remove(fs.join(dir, "Projects", context.temp_allocator)) == .None)
+	{
+		context.allocator = runtime.heap_allocator()
+		app := app_open({headless = true, session = file})
+		defer app_close(app)
+		testing.expect_value(t, len(app.panels), 2)
+		testing.expect_value(t, len(app.panels[0].tabs), 2)
+		testing.expect_value(t, app.panels[0].active, 1)
+		t1 := app.panels[0].tabs[1]
+		testing.expect_value(t, t1.path, documents)
+		testing.expect_value(t, t1.zoom, ZOOM_GRID)
+		testing.expect(t, t1.locked)
+		testing.expect_value(t, app.panels[1].tabs[0].path, dir)
+		testing.expect_value(t, app.focus, 1)
+		testing.expect_value(t, len(app.bookmarks), 1)
+	}
+}

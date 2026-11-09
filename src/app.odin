@@ -79,6 +79,7 @@ App :: struct {
 	options:     Options,
 	inspector:   Inspector,         // the pane of Space (inspector.odin)           // the options' list (options.odin)
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
+	session_path: string,           // owned: the tests' session file ("": the person's, none when headless)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
 }
 
@@ -89,6 +90,7 @@ Open_Options :: struct {
 	headless: bool,       // no window of the system: offscreen, the software renderer, the fonts compiled in (the tests)
 	size:     [2]int,     // 0: WINDOW_SIZE
 	home:     string,     // "": the person's (the tests give theirs)
+	session:  string,     // the session file ("": the person's; headless: none)
 }
 
 app_run :: proc(folders: []string) -> int {
@@ -107,6 +109,7 @@ app_run :: proc(folders: []string) -> int {
 app_open :: proc(o: Open_Options) -> ^App {
 	app := new(App)
 	app.headless = o.headless
+	app.session_path = strings.clone(o.session)
 	app.home = o.home != "" ? fs.clean(o.home) : fs.home()
 	app.sidebar = true
 	app.sidebar_px = 210
@@ -140,6 +143,8 @@ app_open :: proc(o: Open_Options) -> ^App {
 	jobs_start(app)
 	watcher_start(app)
 	places_load(app)
+	// (folders given: they alone are shown; the bookmarks and recents still come back)
+	if session_load(app, len(o.folders) == 0) { return app }
 	first := new(Panel)
 	append(&app.panels, first)
 	if len(o.folders) == 0 {
@@ -156,6 +161,7 @@ app_frame :: proc(app: ^App) {
 }
 
 app_close :: proc(app: ^App) {
+	session_save(app)
 	watcher_stop(app)
 	jobs_stop(app)
 	pool_stop(&app.pool, proc(data: rawptr) {})   // (a read left waiting: its memory goes with the process)
@@ -184,6 +190,7 @@ app_free :: proc(app: ^App) {
 	options_free(&app.options)
 	prefs_close(app)
 	delete(app.home)
+	delete(app.session_path)
 	delete(app.status)
 	delete(app.text_keys)
 	measures_free(app)
