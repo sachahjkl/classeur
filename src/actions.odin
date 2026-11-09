@@ -315,9 +315,7 @@ clipboard_put :: proc(app: ^App, cut: bool) {
 	if t == nil { return }
 	paths := target_paths(t)
 	if len(paths) == 0 { return }
-	platform.clipboard_set(app.main.win, {files = paths, text = strings.join(paths, "\n", context.temp_allocator)})
-	// (the clipboard says nothing of a cut to this program: it remembers which content it cut)
-	app.clip_cut, app.clip_seq = cut, platform.clipboard_sequence()
+	platform.clipboard_set(app.main.win, {files = paths, files_cut = cut, text = strings.join(paths, "\n", context.temp_allocator)})
 	say(app, "%d item%s %s.", len(paths), len(paths) == 1 ? "" : "s", cut ? "cut: paste them to move them" : "copied")
 }
 
@@ -334,9 +332,10 @@ act_paste :: proc(app: ^App) {
 		say(app, "The clipboard holds no files.")
 		return
 	}
-	cut := app.clip_cut && platform.clipboard_sequence() == app.clip_seq
+	// (a cut, here or in another file manager, moves; once moved, the files are no longer where the clipboard says)
+	cut := platform.clipboard_files_cut(app.main.win)
 	job_add(app, cut ? .Move : .Copy, paths, t.path)
-	if cut { app.clip_cut = false }
+	if cut { platform.clipboard_set(app.main.win, {}) }
 }
 
 @(private = "file")

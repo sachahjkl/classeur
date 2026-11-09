@@ -48,6 +48,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	palette_build(app)
 	dialogs_build(app, em)
 	jobs_tidy(app)
+	watcher_update(app)
 }
 
 // A text field built this frame: while it has the keyboard, the keys of the list are its own.

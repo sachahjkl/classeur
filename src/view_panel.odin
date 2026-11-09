@@ -65,7 +65,7 @@ tab_strip :: proc(app: ^App, p: ^Panel, index: int, focused: bool, em: f32) {
 			if ui.row(.Center, flags, fmt.tprintf("###tab%d", t.id)) {
 				sig = ui.signal(ui.parent_box())
 				ui.spacer(ui.px(em * 0.5))
-				glyph(app, t.loading ? lucide.LOADER : lucide.FOLDER, em * 1.5, on ? ui.color("accent") : nil)
+				glyph(app, t.loading && t.folder.listing.path != t.path ? lucide.LOADER : lucide.FOLDER, em * 1.5, on ? ui.color("accent") : nil)
 				ui.next({width = ui.text_size(em * 0.2), height = ui.pct(1)})
 				if !on { ui.push_tags("weak") }
 				title := tab_title(app, t)

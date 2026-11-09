@@ -319,3 +319,19 @@ test_jobs :: proc(t: ^testing.T) {
 	testing.expect(t, !fs.exists(fs.join(dir, "notes.txt", context.temp_allocator)), "deleted")
 	testing.expect(t, !slice.contains(shown_names(tab), "notes.txt"))
 }
+
+@(test)
+test_watch :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir})
+	tab := current_tab(app)
+	// another program makes a file and removes one: the list follows, no key pressed
+	_ = os.write_entire_file(fs.join(dir, "from elsewhere.txt", context.temp_allocator), transmute([]u8)string("hello"))
+	_ = os.remove(fs.join(dir, "archive.zip", context.temp_allocator))
+	session.wait_until(s, proc(s: ^session.Session) -> bool {
+		names := shown_names(current_tab((^App)(s.user)))
+		return slice.contains(names, "from elsewhere.txt") && !slice.contains(names, "archive.zip")
+	}, "the folder read again")
+	testing.expect_value(t, len(tab.folder.shown), 7)
+}
