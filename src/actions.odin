@@ -394,3 +394,13 @@ act_view_details :: proc(app: ^App) { if t := current_tab(app); t != nil { tab_s
 act_view_grid :: proc(app: ^App) { if t := current_tab(app); t != nil { tab_set_zoom(app, t, ZOOM_GRID) } }
 act_zoom_in :: proc(app: ^App) { if t := current_tab(app); t != nil { tab_set_zoom(app, t, t.zoom + 1) } }
 act_zoom_out :: proc(app: ^App) { if t := current_tab(app); t != nil { tab_set_zoom(app, t, t.zoom - 1) } }
+
+// The search of File Pilot: the folder flattened (every entry under it), filtered by the footer's field; again, back to
+// the folder alone.
+act_flat :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	t.flat = !t.flat
+	tab_load(app, t)
+	if t.flat { t.focus_due = .Filter }
+}

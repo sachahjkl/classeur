@@ -91,7 +91,7 @@ test_browse :: proc(t: ^testing.T) {
 	// the filter keeps the names with its letters
 	session.key(s, .F, {.Ctrl})
 	session.type_text(s, "rep")
-	testing.expect_value(t, fmt.tprint(shown_names(tab)), `["report 2.pdf", "report 10.pdf"]`)
+	testing.expect_value(t, fmt.tprint(shown_names(tab)[:2]), `["report 2.pdf", "report 10.pdf"]`)   // (best matched first)
 	// Enter in the filter opens the first row it keeps (a file: the system's application)
 	session.key(s, .Return)
 	testing.expect_value(t, len(app.opened), 1)
@@ -283,6 +283,34 @@ test_grid :: proc(t: ^testing.T) {
 	testing.expect_value(t, tab_mode(tab), View_Mode.Details)
 }
 
+@(test)
+test_search :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	_ = os.make_directory_all(fs.join(dir, "Projects/site/notes", context.temp_allocator))
+	_ = os.write_entire_file(fs.join(dir, "Projects/site/notes/letter draft.txt", context.temp_allocator), transmute([]u8)string("x"))
+	s, app := start(t, {dir})
+	tab := current_tab(app)
+	// the folder flattened: every entry under it, named by its path
+	session.key(s, .F, {.Ctrl, .Shift})
+	wait_read(s)
+	testing.expect(t, tab.folder.flat)
+	testing.expect(t, slice.contains(shown_names(tab), "Documents/letter.odt"), "what is in the folders below")
+	// the filter's letters, in order, anywhere in the path
+	session.type_text(s, "lettr")
+	names := shown_names(tab)
+	testing.expect_value(t, len(names), 2)
+	testing.expect(t, slice.contains(names, "Documents/letter.odt") && slice.contains(names, "Projects/site/notes/letter draft.txt"))
+	session.key(s, .Return)
+	testing.expect_value(t, len(app.opened), 1)
+	testing.expect_value(t, app.opened[0], fs.join(dir, names[0], context.temp_allocator))
+	// the toggle again: the folder alone
+	session.key(s, .F, {.Ctrl, .Shift})
+	wait_read(s)
+	testing.expect(t, !tab.folder.flat)
+	testing.expect(t, !slice.contains(shown_names(tab), "Documents/letter.odt"))
+}
+
 // The pictures of the README (classeurtool shots): a home folder of made-up files; the grid of the pictures beside the
 // details of the home folder; the palette.
 @(test)
@@ -324,6 +352,19 @@ test_shots :: proc(t: ^testing.T) {
 	session.frames(s, 2)
 	session.save_png(s, "palette.png")
 	session.key(s, .Escape)
+
+	// the search: the home folder flattened, "not" typed in the filter
+	session.key(s, .W, {.Ctrl, .Shift})
+	app.focus = 0
+	tab_go(app, panel_tab(app.panels[0]), dir)
+	panel_tab(app.panels[0]).zoom = 0
+	wait_read(s)
+	session.key(s, .F, {.Ctrl, .Shift})
+	wait_read(s)
+	session.type_text(s, "not")
+	session.key(s, .Down)
+	session.frames(s, 4)
+	session.save_png(s, "search.png")
 }
 
 // Frames until every job has ended and its folders are read again.

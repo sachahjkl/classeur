@@ -99,6 +99,8 @@ entry_less :: proc(a, b: Entry, s: Sort) -> bool {
 	case .Modified: c = a.mtime < b.mtime ? -1 : a.mtime > b.mtime ? 1 : 0
 	case .Type:     c = name_compare(extension(a.name), extension(b.name))
 	}
+	// (a flat listing's names are paths: the file's own name first, then where it is)
+	if c == 0 { c = name_compare(base(a.name), base(b.name)) }
 	if c == 0 { c = name_compare(a.name, b.name) }
 	return s.descending ? c > 0 : c < 0
 }

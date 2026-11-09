@@ -35,7 +35,7 @@ measures_free :: proc(app: ^App) {
 
 // Asks the measures of the folders shown in `t` that are not known (or whose date changed).
 measure_tab :: proc(app: ^App, t: ^Tab) {
-	if !t.folder.loaded { return }
+	if !t.folder.loaded || t.folder.flat { return }   // (a flat listing holds its folders' content already)
 	for i in t.folder.shown {
 		e := t.folder.listing.entries[i]
 		if e.kind != .Directory || .Link in e.flags { continue }

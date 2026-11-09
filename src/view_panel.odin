@@ -31,7 +31,7 @@ CURSOR_LIGHT :: 0x0a7cadff
 // Under this width (ems), the date column is left out.
 WIDE_EM :: 62
 // The filter's width in the footer, in ems.
-FILTER_EM :: 15
+FILTER_EM :: 18
 
 panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 	focused := index == app.focus
@@ -483,11 +483,53 @@ entry_name :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, em: f32) {
 		if res.cancelled { rename_end(app) }
 		return
 	}
-	ui.next({width = ui.fill(), height = ui.pct(1)})
 	hidden := .Hidden in e.flags && !selected
-	if hidden { ui.push_tags("weak") }
-	ui.label(fmt.tprintf("%s###n", shown_text(e.name)))
-	if hidden { ui.pop_tags() }
+	needle := t.folder.filter
+	if !t.folder.flat && needle == "" {
+		ui.next({width = ui.fill(), height = ui.pct(1)})
+		if hidden { ui.push_tags("weak") }
+		ui.label(fmt.tprintf("%s###n", shown_text(e.name)))
+		if hidden { ui.pop_tags() }
+		return
+	}
+	// a flat result: its name, then where it is; the letters of the filter in the accent's colour (File Pilot's search)
+	ui.next({width = ui.fill(), height = ui.pct(1)})
+	if ui.row(.Center, {.Clip}, "###n") {
+		name := fs.base(e.name)
+		ranges, _ := ui.fuzzy_find(needle, e.name)
+		if hidden { ui.push_tags("weak") }
+		match_text(e.name[len(e.name) - len(name):], ranges, len(e.name) - len(name), selected)
+		if hidden { ui.pop_tags() }
+		if dir := fs.parent(e.name); dir != "" && dir != e.name {
+			if ui.tags("weak") { glyph(app, lucide.CHEVRON_RIGHT, em * 1.3) }
+			if !selected { ui.push_tags("weak") }
+			match_text(dir, ranges, 0, selected)
+			if !selected { ui.pop_tags() }
+		}
+	}
+}
+
+// `text` (a part of what `ranges` were found in, from `offset`) in pieces: the matched ones in the accent's colour.
+@(private = "file")
+match_text :: proc(text: string, ranges: []ui.Fuzzy_Range, offset: int, selected: bool) {
+	accent := selected ? draw.hex(0xffffffff) : draw.hex(CURSOR_DARK)
+	at := 0
+	piece :: proc(s: string, lit: bool, accent: ui.Color, n: int) {
+		if s == "" { return }
+		ui.next({width = ui.text_size(0), height = ui.pct(1), text_pad = 0, fg = lit ? accent : nil})
+		ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###p%d", shown_text(s), n))
+	}
+	n := 0
+	for r in ranges {
+		lo, hi := r[0] - offset, r[1] - offset
+		if hi <= 0 || lo >= len(text) { continue }
+		lo, hi = max(lo, 0), min(hi, len(text))
+		if lo > at { piece(text[at:lo], false, accent, n); n += 1 }
+		piece(text[lo:hi], true, accent, n)
+		n += 1
+		at = hi
+	}
+	piece(text[at:], false, accent, n)
 }
 
 ////////////////////////////////
@@ -510,6 +552,7 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 				folders, files, folders_shown, files_shown: int
 				for e in f.listing.entries { if e.kind == .Directory { folders += 1 } else { files += 1 } }
 				for i in f.shown { if f.listing.entries[i].kind == .Directory { folders_shown += 1 } else { files_shown += 1 } }
+				if t.walk != nil { stat(app, "walk", lucide.LOADER, fmt.tprintf("%s…", count_text(i64(tab_walked(t)))), "Entries read so far", em) }
 				if f.count > 0 { stat(app, "sel", lucide.LAYERS_2, fmt.tprintf("%d", f.count), "Selected", em) }
 				stat(app, "fol", lucide.FOLDER, fmt.tprintf("%d/%s", folders_shown, count_text(i64(folders))), "Folders shown, of all", em)
 				stat(app, "fil", lucide.FILE, fmt.tprintf("%d/%s", files_shown, count_text(i64(files))), "Files shown, of all", em)
@@ -586,7 +629,7 @@ stat :: proc(app: ^App, id, icon, text, tip: string, em: f32) {
 
 @(private = "file")
 filter_field :: proc(app: ^App, t: ^Tab, em: f32) {
-	ui.next({width = ui.px(em * FILTER_EM), height = ui.px(ui.dense(em * 2.0)), radius = em * 0.35, border = ui.color("border")})
+	ui.next({width = ui.px(em * FILTER_EM), height = ui.px(ui.dense(em * 2.0)), radius = em * 0.35, border = t.flat ? ui.color("accent") : ui.color("border")})
 	if ui.row(.Center, {.Draw_Border}, "###filterbox") {
 		ui.spacer(ui.px(em * 0.4))
 		if ui.tags("weak") { glyph(app, lucide.SEARCH, em * 1.5) }
@@ -610,9 +653,17 @@ filter_field :: proc(app: ^App, t: ^Tab, em: f32) {
 			t.focus_due = .List
 		}
 		if res.committed { act_open(app) }
-		if len(t.filter.buf) > 0 {
-			if ui.tags("weak") {
-				if icon_action(app, "filter_clear", lucide.X, "Clear the filter (Escape)", em) { ui.field_clear(&t.filter) }
+		if ui.tags("weak") {
+			if icon_action(app, "flat", lucide.FOLDER_TREE, command_tip("flat"), em, on = t.flat) {
+				t.flat = !t.flat
+				tab_load(app, t)
+				t.focus_due = .Filter
+			}
+			if len(t.filter.buf) > 0 || t.flat {
+				if icon_action(app, "filter_clear", lucide.X, "Clear the filter, leave the search (Escape)", em) {
+					ui.field_clear(&t.filter)
+					if t.flat { t.flat = false; tab_load(app, t) }
+				}
 			}
 		}
 		ui.spacer(ui.px(em * 0.2))

@@ -5,6 +5,7 @@ package classeur
 // (pool.odin): the tab asks, the answer comes back through ui.post, and only the last answer asked counts.
 
 import "core:strings"
+import "core:sync"
 import "core:time"
 import "gt:ui"
 import "fs"
@@ -29,6 +30,8 @@ Tab :: struct {
 	has_space:    bool,
 	measured:     u64,               // the read whose folders were given to the measures
 	locked:       bool,
+	flat:         bool,              // the search of File Pilot: every entry under the folder, flattened
+	walk:         ^Load_Job,         // the flat read the tab waits for (its progress), nil: none
 	zoom:         int,               // an index of ZOOMS: the view and the size of its items
 	grid_cols:    int,               // the cards per row of the grid, as last laid out              // a folder opened from it opens in a new tab (the lock of the toolbar)
 	cursor_rect:  ui.Rect,           // the cursor's row as last built (where the Menu key opens the menu)
@@ -83,6 +86,7 @@ tab_new :: proc(app: ^App, path: string) -> ^Tab {
 }
 
 tab_destroy :: proc(t: ^Tab) {
+	if t.walk != nil { sync.atomic_store(&t.walk.cancel, true) }   // (load_done frees it; no tab will take it)
 	delete(t.path)
 	folder_destroy(&t.folder)
 	for p in t.back { delete(p) }
@@ -123,6 +127,7 @@ tab_go :: proc(app: ^App, t: ^Tab, path: string, history := true) {
 	old := history ? t.back[len(t.back) - 1] : ""
 	if old != "" && fs.parent(old) == clean { t.reveal_name = strings.clone(fs.base(old)) }
 	t.path = clean
+	t.flat = false
 	measure_forget_asked(app)
 	ui.field_clear(&t.filter)
 	t.filter_open = false
@@ -156,12 +161,14 @@ tab_forward :: proc(app: ^App, t: ^Tab) {
 ////////////////////////////////
 // Reading the folder
 
-@(private = "file")
 Load_Job :: struct {
 	app:     ^App,
 	tab:     u64,
 	serial:  u64,
 	path:    string,
+	flat:    bool,   // every entry under the folder (fs.walk), not its own
+	count:   int,    // atomic: the entries read so far (a flat read's progress)
+	cancel:  bool,   // atomic: the tab no longer waits for it
 	listing: fs.Listing,
 	ms:      f64,
 	space:   fs.Space,
@@ -172,16 +179,25 @@ Load_Job :: struct {
 tab_load :: proc(app: ^App, t: ^Tab) {
 	t.serial += 1
 	t.loading = true
+	if t.walk != nil { sync.atomic_store(&t.walk.cancel, true) }   // (a long walk the tab no longer waits for)
 	job := new(Load_Job)
-	job^ = {app = app, tab = t.id, serial = t.serial, path = strings.clone(t.path)}
+	job^ = {app = app, tab = t.id, serial = t.serial, path = strings.clone(t.path), flat = t.flat}
+	t.walk = t.flat ? job : nil
 	pool_submit(&app.pool, load_run, job)
 }
+
+// The entries a flat read has read so far.
+tab_walked :: proc(t: ^Tab) -> int { return t.walk != nil ? sync.atomic_load(&t.walk.count) : 0 }
 
 @(private = "file")
 load_run :: proc(data: rawptr) {
 	job := (^Load_Job)(data)
 	start := time.tick_now()
-	fs.list(&job.listing, job.path)
+	if job.flat {
+		fs.walk(&job.listing, job.path, &job.count, proc(user: rawptr) -> bool { return sync.atomic_load(&(^Load_Job)(user).cancel) }, job)
+	} else {
+		fs.list(&job.listing, job.path)
+	}
 	job.ms = time.duration_milliseconds(time.tick_since(start))
 	job.space, job.has_space = fs.space(job.path)
 	if !ui.post(&job.app.main.state, load_done, job) { load_free(job) }
@@ -201,15 +217,17 @@ load_done :: proc(data: rawptr, word: u64) {
 	job := (^Load_Job)(data)
 	defer load_free(job)
 	t := find_tab(job.app, job.tab)
+	if t != nil && t.walk == job { t.walk = nil }
 	if t == nil || t.serial != job.serial { return }
 	t.loading = false
 	t.load_ms = job.ms
 	t.space, t.has_space = job.space, job.has_space
-	same_place := t.folder.loaded && t.folder.listing.path == job.listing.path
+	same_place := t.folder.loaded && t.folder.listing.path == job.listing.path && t.folder.flat == job.flat
+	t.folder.flat = job.flat
 	if !same_place {
 		folder_select_none(&t.folder)
 		t.folder.cursor = -1
-		if job.listing.error == .None { recent_add(job.app, job.listing.path) }
+		if job.listing.error == .None && !job.flat { recent_add(job.app, job.listing.path) }
 	}
 	folder_set_listing(&t.folder, &job.listing)
 	// the row asked for (made, renamed, the folder we came up from) has the cursor and the selection

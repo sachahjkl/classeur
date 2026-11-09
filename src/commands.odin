@@ -35,6 +35,7 @@ COMMANDS := [?]Command{
 	{id = "refresh", title = "Refresh", icon = lucide.REFRESH_CW, keys = {{.F5, {}}, {.R, {.Ctrl}}}, in_text = true, run = act_refresh},
 	{id = "goto", title = "Go to a path", icon = lucide.TEXT_CURSOR_INPUT, keys = {{.L, {.Ctrl}}, {.D, {.Alt}}}, in_text = true, run = act_goto},
 	{id = "filter", title = "Filter this folder", icon = lucide.FILTER, keys = {{.F, {.Ctrl}}, {}}, in_text = true, run = act_filter},
+	{id = "flat", title = "Search every folder below (flatten)", icon = lucide.FOLDER_TREE, keys = {{.F, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_flat},
 	{id = "palette", title = "Command palette", icon = lucide.COMMAND, keys = {{.P, {.Ctrl, .Shift}}, {.F1, {}}}, in_text = true, run = act_palette},
 
 	{id = "tab_new", title = "New tab", icon = lucide.PLUS, keys = {{.T, {.Ctrl}}, {}}, in_text = true, run = act_tab_new},

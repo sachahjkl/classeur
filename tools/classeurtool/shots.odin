@@ -11,7 +11,7 @@ import toolbox "gt:toolbox"
 
 SHOTS_OUT   :: "docs/screenshots"
 SHOTS_FROM  :: "build/session/test_shots"
-SHOTS_NAMES :: [?]string{"main", "panels", "palette"}
+SHOTS_NAMES :: [?]string{"main", "panels", "palette", "search"}
 
 run_shots :: proc(args: []string) -> int {
 	out := SHOTS_OUT

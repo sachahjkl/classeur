@@ -134,7 +134,7 @@ card_body :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, width, heigh
 	}
 	ui.spacer(ui.fill())
 	ui.next({width = ui.fill(), height = ui.px(em * 1.5), text_align = .Center})
-	ui.label(fmt.tprintf("%s###n", shown_text(e.name)))
+	ui.label(fmt.tprintf("%s###n", shown_text(fs.base(e.name))))
 	size := ""
 	if e.size >= 0 { size = size_text(e.size) } else if m, ok := measure_of(app, t, e^); ok { size = size_text(m.bytes) }
 	if !selected { ui.push_tags("weak") }

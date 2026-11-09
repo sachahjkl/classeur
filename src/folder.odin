@@ -8,12 +8,16 @@ package classeur
 // `cursor` is the active row (in `shown`), `anchor` the row a Shift range starts from.
 
 import "core:hash"
+import "core:slice"
 import "core:strings"
+import "core:unicode/utf8"
+import "gt:ui"
 import "fs"
 
 Folder :: struct {
 	listing:     fs.Listing,
 	loaded:      bool,              // a listing came (it may be an error)
+	flat:        bool,              // the listing is a flat read: its names are paths from the folder
 	sort:        fs.Sort,
 	show_hidden: bool,
 	filter:      string,            // owned; lower case; "" shows every row
@@ -100,7 +104,13 @@ folder_set_filter :: proc(f: ^Folder, text: string) {
 	delete(f.filter)
 	f.filter = strings.clone(lower)
 	folder_refilter(f)
-	if name != "" { folder_cursor_to_name(f, name) }
+	// typing: the best match has the cursor (Enter opens it); the filter cleared: the cursor goes back to its row
+	if f.filter != "" {
+		f.cursor = len(f.shown) > 0 ? 0 : -1
+		f.anchor = f.cursor
+	} else if name != "" {
+		folder_cursor_to_name(f, name)
+	}
 	if f.cursor < 0 && len(f.shown) > 0 { f.cursor = 0 }
 }
 
@@ -114,7 +124,8 @@ folder_set_show_hidden :: proc(f: ^Folder, show: bool) {
 	if f.cursor < 0 && len(f.shown) > 0 { f.cursor = 0 }
 }
 
-// The rows again from `order`: every word of the filter must be in the name. A row that leaves the view leaves the
+// The rows again from `order`: the letters of the filter must be in the name in their order (fuzzy, File Pilot's: "rp10"
+// keeps "report 10.pdf"; a space is no letter). A row that leaves the view leaves the
 // selection too (what is selected is what the person sees).
 folder_refilter :: proc(f: ^Folder) {
 	entries := f.listing.entries[:]
@@ -123,15 +134,31 @@ folder_refilter :: proc(f: ^Folder) {
 		clear(&f.lowered)
 		for e in entries { append(&f.lowered, strings.to_lower(e.name)) }
 	}
-	words := strings.fields(f.filter, context.temp_allocator)
 	clear(&f.shown)
 	clear(&f.ids)
-	outer: for i in f.order {
+	// with a filter, the rows best matched first (letters side by side, at the start of a word: ui.fuzzy_score); the
+	// order of the sort between equals
+	scores := make([dynamic]int, context.temp_allocator)
+	for i in f.order {
 		e := entries[i]
 		if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { continue }
-		for w in words { if !strings.contains(f.lowered[i], w) { continue outer } }
+		if f.filter != "" {
+			if !fuzzy_holds(f.lowered[i], f.filter) { continue }
+			score, _, _ := ui.fuzzy_score(f.filter, fs.base(e.name))
+			append(&scores, score)
+		}
 		append(&f.shown, i)
 		append(&f.ids, hash.fnv64a(transmute([]u8)e.name))
+	}
+	if f.filter != "" {
+		Ranked :: struct { i: u32, score: int }
+		ranked := make([]Ranked, len(f.shown), context.temp_allocator)
+		for i, k in f.shown { ranked[k] = {i, scores[k]} }
+		slice.stable_sort_by(ranked, proc(a, b: Ranked) -> bool { return a.score > b.score })
+		for r, k in ranked {
+			f.shown[k] = r.i
+			f.ids[k] = hash.fnv64a(transmute([]u8)entries[r.i].name)
+		}
 	}
 	visible := make([]bool, len(entries), context.temp_allocator)
 	for i in f.shown { visible[i] = true }
@@ -232,4 +259,20 @@ folder_selection_size :: proc(f: ^Folder) -> (bytes: i64, files: int) {
 		files += 1
 	}
 	return
+}
+
+// Whether the letters of `needle` are in `hay` in that order (both in lower case; spaces in the needle ignored).
+fuzzy_holds :: proc(hay, needle: string) -> bool {
+	at := 0
+	for r in needle {
+		if r == ' ' { continue }
+		found := false
+		for at < len(hay) {
+			c, w := utf8.decode_rune_in_string(hay[at:])
+			at += w
+			if c == r { found = true; break }
+		}
+		if !found { return false }
+	}
+	return true
 }
