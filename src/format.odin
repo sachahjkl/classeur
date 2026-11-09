@@ -36,14 +36,14 @@ date_text :: proc(app: ^App, ns: i64, allocator := context.temp_allocator) -> st
 
 type_text :: proc(e: fs.Entry, allocator := context.temp_allocator) -> string {
 	switch e.kind {
-	case .Directory:   return .Link in e.flags ? "Folder link" : "Folder"
+	case .Directory:   return .Link in e.flags ? "Folder link" : "File folder"
 	case .Broken_Link: return "Broken link"
 	case .Other:       return "Special"
 	case .File:
 	}
 	ext := fs.extension(e.name)
 	if ext == "" { return .Executable in e.flags ? "Program" : "File" }
-	return strings.to_lower(ext, allocator)
+	return strings.concatenate({strings.to_upper(ext, context.temp_allocator), " File"}, allocator)
 }
 
 @(private = "file")
@@ -88,4 +88,14 @@ cut_text :: proc(text: string, max_runes: int, allocator := context.temp_allocat
 		n += 1
 	}
 	return text
+}
+
+// "984", "7.3K", "12K", "1.2M": a count in a narrow column.
+count_text :: proc(n: i64, allocator := context.temp_allocator) -> string {
+	switch {
+	case n < 1000:      return fmt.aprintf("%d", n, allocator = allocator)
+	case n < 10_000:    return fmt.aprintf("%.1fK", f64(n) / 1000, allocator = allocator)
+	case n < 1_000_000: return fmt.aprintf("%dK", n / 1000, allocator = allocator)
+	}
+	return fmt.aprintf("%.1fM", f64(n) / 1_000_000, allocator = allocator)
 }

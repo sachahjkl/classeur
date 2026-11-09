@@ -7,7 +7,7 @@ package classeur
 import "core:sync"
 import "core:thread"
 
-POOL_THREADS :: 3
+POOL_THREADS :: 3   // the workers that read folders (the measures have their own: MEASURE_THREADS)
 
 Task :: struct {
 	run:  proc(data: rawptr),
@@ -18,14 +18,12 @@ Pool :: struct {
 	mutex:   sync.Mutex,
 	cond:    sync.Cond,
 	tasks:   [dynamic]Task,
-	threads: [POOL_THREADS]^thread.Thread,
+	threads: [dynamic]^thread.Thread,
 	quit:    bool,
 }
 
-pool_start :: proc(p: ^Pool) {
-	for &t in p.threads {
-		t = thread.create_and_start_with_data(p, pool_work)
-	}
+pool_start :: proc(p: ^Pool, threads := POOL_THREADS) {
+	for _ in 0 ..< threads { append(&p.threads, thread.create_and_start_with_data(p, pool_work)) }
 }
 
 pool_submit :: proc(p: ^Pool, run: proc(data: rawptr), data: rawptr) {
@@ -49,6 +47,7 @@ pool_stop :: proc(p: ^Pool, drop: proc(data: rawptr) = nil) {
 	}
 	if drop != nil { for task in left { drop(task.data) } }
 	delete(p.tasks)
+	delete(p.threads)
 	p^ = {}
 }
 

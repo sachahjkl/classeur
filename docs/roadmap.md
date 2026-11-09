@@ -46,9 +46,14 @@ with one line on how it is made, and update [architecture.md](architecture.md).
   a `.trashinfo` taken with O_EXCL); Windows: the Recycle Bin. Shift+Delete deletes for good after a confirmation.
 - The folders of every tab are watched (`fs.Watch`: inotify, change notifications on Windows; changes close together
   come as one) and read again with the cursor and the selection kept.
-- The look: the Graphite theme (neutral greys whose steps all read, both versions), the machined finish, square corners
-  (`ROUNDING`), compact rows (`DENSITY`), bars with their lines, a tab strip with the shown tab lit by the accent when its
-  panel has the keyboard, the columns' edges, striped rows (`ZEBRA_MIX`).
+- The look: File Pilot's, faithfully. One row at the top (the sidebar's head, each panel's tabs over it, the window's
+  buttons); the sidebar with its filter and its sections (Recents, Bookmarks, Storage with a bar of how full each volume
+  is, Places with coloured icons); a toolbar (back, forward, up, the history, the lock, the bookmark, the path as words,
+  the panel's menu); a box per row, filled icons (drawn yellow folders, coloured kinds, white pages); the columns Name,
+  Modified (wide panels), Type, Folders, Files, Size; the selection solid blue; a footer per panel (the filter, the
+  selected, the folders and files shown of all, how full the volume is). No status bar: messages are toasts.
+- Folder measures (`src/measure.odin`): the folders shown are measured all the way down on a pool of their own (2
+  threads): their folders, files and bytes, kept by path and date; a navigation drops the measures not started.
 
 ## Next
 
@@ -62,10 +67,15 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 1. **The inspector** (File Pilot's Space and Ctrl+I): a pane at the right of the panel. A text file: its first 64 KB in
    the monospaced font; an image: decoded on a worker (PNG, JPEG, BMP by `core:image`; later WebP, AVIF), fitted; a
    folder: its listing; other files: their size, dates, type, permissions.
-2. **Folder sizes**: measured on the workers for the folders shown (an option: always, on demand with a command), the
-   column shows them as they come; a bar in the size column (TreeSize's view) as an option.
-3. **The grid view** with thumbnails (Ctrl+1 details, Ctrl+2 list, Ctrl+3 grid), the thumbnails made on the workers and
+2. **Sort by the measures** (Size, Folders, Files on folders) and a bar in the size column (TreeSize's view) as an option.
+3. **The grid view** (File Pilot's left panel in its pictures) with thumbnails (Ctrl+1 details, Ctrl+2 list, Ctrl+3 grid), the thumbnails made on the workers and
    kept in a cache on the disk (`$XDG_CACHE_HOME/classeur`).
+
+### File Pilot's details still missing
+
+- The context menu's search field at its top ("Select a system command...") and its icons; several keys per item.
+- The tabs dragged to reorder them and to another panel; the panels split below as well as beside.
+- Bookmarks and recents saved (layer 5).
 
 ### Layer 4: find
 
@@ -96,7 +106,5 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 
 - The sessions of papier and classeur both have a shots command; papier's runs a headless sway, classeur's runs
   headless in a test. If papier moves to the headless test, nothing is left to share.
-- gui_toolkit: classeur points to local commits of the toolkit, not pushed: `a848e83` (lucide: the icons classeur draws)
-  and `81a0040` (clipboard: files cut). Push them and tag a release, then point the submodule to the tag.
 - Windows: the code compiles (`odin check src/fs -target:windows_amd64`) but has not run on Windows yet. Run the tests
   there first.

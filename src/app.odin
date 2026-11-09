@@ -5,9 +5,11 @@ package classeur
 
 import "core:fmt"
 import "core:strings"
+import "core:sync"
 import "core:time/datetime"
 import "core:time/timezone"
 import "gt:devtools"
+import "gt:draw"
 import "gt:font"
 import "gt:host"
 import lucide "gt:lucide"
@@ -27,6 +29,15 @@ App :: struct {
 	devtools:    ^devtools.Server,  // TOOLKIT_DEVTOOLS=<port>: driven and captured over the Chrome DevTools Protocol
 	theme_shown: ui.Theme_Shown,
 	pool:        Pool,
+	measure_pool: Pool,             // the measures of folders (measure.odin)
+	measures:    map[string]Measure,   // by path (the keys owned)
+	measure_gen: u64,               // atomic: a measure asked in an older generation is dropped
+	recents:     [dynamic]string,   // owned: the folders visited, the last first (the sidebar)
+	bookmarks:   [dynamic]string,   // owned
+	side_open:   [Side_Section]bool,   // the sections of the sidebar that are open
+	side_filter: ui.Text_Field,
+	volume_space: [dynamic]fs.Space,   // of each volume, read with the places
+	panel_rects: [dynamic]ui.Rect,  // each panel's box as last laid out (the tabs above are as wide)
 	tz:          ^datetime.TZ_Region,   // the local time zone (nil: UTC)
 
 	panels:      [dynamic]^Panel,
@@ -50,6 +61,7 @@ App :: struct {
 	text_keys:   [dynamic]ui.Key,   // the text fields built in this frame (view.odin: the keys of the list are not theirs)
 	text_keys_before: [dynamic]ui.Key,   // and in the last one
 	menu:        Entry_Menu,        // the entries' menu (menu.odin)
+	panel_menus: Panel_Menus,       // the history and the panel's menu (menu.odin)
 	watch:       Folder_Watch,      // the folders of the tabs, watched (watcher.odin)
 	jobs:        Jobs,              // copies, moves, the trash (jobs.odin)
 	confirm:     Confirm,           // delete for good? (dialogs.odin)
@@ -109,6 +121,8 @@ app_open :: proc(o: Open_Options) -> ^App {
 	h.before_input = proc(h: ^host.Host) { app := (^App)(h.user); devtools.service(app.devtools, &h.state, &app.shared.r) }
 
 	pool_start(&app.pool)
+	pool_start(&app.measure_pool, MEASURE_THREADS)
+	app.side_open = {.Recents = false, .Bookmarks = true, .Storage = true, .Places = true}
 	jobs_start(app)
 	watcher_start(app)
 	places_load(app)
@@ -131,6 +145,8 @@ app_close :: proc(app: ^App) {
 	watcher_stop(app)
 	jobs_stop(app)
 	pool_stop(&app.pool, proc(data: rawptr) {})   // (a read left waiting: its memory goes with the process)
+	sync.atomic_add(&app.measure_gen, 1)          // (the measures running end at their next folder)
+	pool_stop(&app.measure_pool, proc(data: rawptr) {})
 	devtools.stop(app.devtools)
 	host.host_close(&app.main)
 	app_free(app)
@@ -151,6 +167,14 @@ app_free :: proc(app: ^App) {
 	delete(app.home)
 	delete(app.status)
 	delete(app.text_keys)
+	measures_free(app)
+	for p in app.recents { delete(p) }
+	delete(app.recents)
+	for p in app.bookmarks { delete(p) }
+	delete(app.bookmarks)
+	ui.field_destroy(&app.side_filter)
+	delete(app.volume_space)
+	delete(app.panel_rects)
 	delete(app.text_keys_before)
 	for p in app.opened { delete(p) }
 	delete(app.opened)
@@ -161,11 +185,11 @@ app_free :: proc(app: ^App) {
 @(private = "file")
 app_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 	app := (^App)(h.user)
-	choice := ui.Theme_Choice{name = "Graphite", mode = .System, finish = .Machined, glow = 0.6}
+	choice := ui.Theme_Choice{name = "Graphite", mode = .System, finish = .Flat}
 	if ui.theme_show(&app.shared.theme, themes(), choice, &app.theme_shown, render.blend_space(&app.shared.r)) {
 		platform.set_dark_title(h.win, !app.theme_shown.light)
 	}
-	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(26)}, font = app.shared.font, font_size = 13, text_pad = 5, cursor = .Arrow}
+	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(26)}, font = app.shared.font, font_size = 13.5, text_pad = 5, cursor = .Arrow}
 }
 
 // More frames: something changed outside of an input (a worker's result).
@@ -178,23 +202,31 @@ say :: proc(app: ^App, format: string, args: ..any) {
 	delete(app.status)
 	app.status = fmt.aprintf(format, ..args)
 	app.status_until = ui.now_ms() + STATUS_SHOWN_MS
-	ui.wake_within(&app.main.state, STATUS_SHOWN_MS + 1)
+	if !app.headless { ui.toast(.Info, "%s", app.status) }
 }
 
 STATUS_SHOWN_MS :: 4000
 
-// classeur's own theme, first of the list: graphite. Neutral greys far enough apart that every surface reads (the
-// bars, the list, the wells, the lines), a clear blue for the selection; a light version of the same steps.
+// classeur's own theme, first of the list, File Pilot's colours: a near-black grey for every surface, the bars a step
+// darker, thin lines, a strong blue for the selection; a light version of the same steps.
 THEME_CLASSEUR :: ui.Theme_Def{"Graphite",
-	{{0x0f1012ff, 0x18191cff, 0x222429ff, 0x1c1d21ff, 0x2e3137ff, 0x3b3f47ff}, {0x5d626cff, 0x959ba6ff, 0xdfe2e7ff, 0xffffffff},
-		{0x4f9de8ff, 0x60a5faff, 0xa78bfaff, 0x5dc48aff, 0xe8b84eff, 0xe9605fff, 0x4cc2ffff, 0xe476a8ff}},
-	{{0xffffffff, 0xf7f8f9ff, 0xe4e6eaff, 0xeef0f2ff, 0xfbfbfcff, 0xbfc4cbff}, {0xa1a7b0ff, 0x5c636dff, 0x1a1d21ff, 0x000000ff},
-		{0x1f6fd1ff, 0x2563ebff, 0x7c3aedff, 0x2f8f46ff, 0xb7820cff, 0xd23c3cff, 0x0e7490ff, 0xc2477aff}},
+	{{0x161616ff, 0x1f1f1fff, 0x1a1a1aff, 0x232323ff, 0x2b2b2bff, 0x2f2f2fff}, {0x5c5c5cff, 0x8c8c8cff, 0xd6d6d6ff, 0xffffffff},
+		{0x1e78c2ff, 0x4f9de8ff, 0xa78bfaff, 0x5dc48aff, 0xe8b84eff, 0xe9605fff, 0x4cc2ffff, 0xe476a8ff}},
+	{{0xffffffff, 0xfbfbfbff, 0xf0f0f0ff, 0xf5f5f5ff, 0xffffffff, 0xd9d9d9ff}, {0xa6a6a6ff, 0x6b6b6bff, 0x1b1b1bff, 0x000000ff},
+		{0x1a6fc0ff, 0x2563ebff, 0x7c3aedff, 0x2f8f46ff, 0xb7820cff, 0xd23c3cff, 0x0e7490ff, 0xc2477aff}},
 	.Both, nil, false, 0}
 
-// How square the corners are (1: the toolkit's) and how dense the rows (1: comfortable).
-ROUNDING :: 0.3
-DENSITY  :: 0.82
+// How square the corners are (1: the toolkit's) and how dense the rows (1: the toolkit's).
+ROUNDING :: 0.15
+DENSITY  :: 1.0
+
+// The selection's fill, solid as File Pilot's (the theme's own is a tint).
+SELECTION_DARK  :: 0x1d5f96ff
+SELECTION_LIGHT :: 0xcce4f7ff
+
+selection_color :: proc(app: ^App) -> ui.Color {
+	return draw.hex(app.theme_shown.light ? SELECTION_LIGHT : SELECTION_DARK)
+}
 
 // The themes the window can show: classeur's, then the toolkit's (gui_toolkit docs/themes.md).
 themes :: proc() -> []ui.Theme_Def {

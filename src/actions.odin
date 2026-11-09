@@ -23,7 +23,7 @@ act_open :: proc(app: ^App) {
 	for e in targets {
 		path := fs.join(t.path, e.name, context.temp_allocator)
 		if e.kind == .Directory {
-			if folders == 1 {
+			if folders == 1 && !t.locked {
 				tab_go(app, t, path)
 				return
 			}
@@ -370,3 +370,22 @@ act_delete :: proc(app: ^App) {
 act_jobs_cancel :: proc(app: ^App) {
 	for job in app.jobs.list { job_cancel(job) }
 }
+
+////////////////////////////////
+// Bookmarks and the lock
+
+bookmark_toggle :: proc(app: ^App, path: string) {
+	for p, i in app.bookmarks {
+		if p == path {
+			delete(p)
+			ordered_remove(&app.bookmarks, i)
+			say(app, "Bookmark removed.")
+			return
+		}
+	}
+	append(&app.bookmarks, strings.clone(path))
+	say(app, "%s is bookmarked.", fs.base(path))
+}
+
+act_bookmark :: proc(app: ^App) { if t := current_tab(app); t != nil { bookmark_toggle(app, t.path) } }
+act_lock :: proc(app: ^App) { if t := current_tab(app); t != nil { t.locked = !t.locked } }

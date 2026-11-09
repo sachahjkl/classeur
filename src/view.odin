@@ -1,7 +1,8 @@
 package classeur
 
-// The window: the title bar (the program's own), the sidebar of places, the panels side by side (view_panel.odin), the
-// status bar. The keys of the commands are read before anything is built (commands.odin).
+// The window, File Pilot's: one row at the top (over the sidebar its head, over each panel its tabs, then the window's
+// buttons), the sidebar, the panels side by side (view_panel.odin). No status bar: each panel has its footer. The keys
+// of the commands are read before anything is built (commands.odin).
 
 import "core:fmt"
 import "core:slice"
@@ -13,12 +14,14 @@ import "gt:ui"
 import "fs"
 
 // Heights in ems.
-TITLE_EM  :: 2.5
-STATUS_EM :: 1.8
+TOP_EM :: 2.6
 // The sidebar's least and most width, logical pixels; what the panels keep at least.
-SIDEBAR_MIN_PX :: 140
+SIDEBAR_MIN_PX :: 160
 SIDEBAR_MAX_PX :: 420
 PANELS_MIN_PX  :: 320
+// A tab's width, at most and at least, in ems.
+TAB_EM     :: 14
+TAB_MIN_EM :: 5
 
 view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app := (^App)(h.user)
@@ -37,16 +40,17 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	page := ui.build_box({.Draw_Background}, "###page")
 	if ui.parent(page) {
-		build_title(app, em)
+		build_top(app, em)
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.row() { build_body(app, em) }
-		build_status(app, em)
 	}
 	entry_menu_build(app, em)
+	panel_menus_build(app, em)
 	palette_build(app)
 	dialogs_build(app, em)
 	jobs_tidy(app)
 	watcher_update(app)
+	measure_update(app)
 }
 
 // A text field built this frame: while it has the keyboard, the keys of the list are its own.
@@ -58,17 +62,13 @@ glyph :: proc(app: ^App, g: string, width: f32, fg: Maybe(ui.Color) = nil) {
 	ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###g%d", g, ui.parent_box().child_count))
 }
 
-// A small button with a Lucide icon; its tooltip says what it does.
-icon_action :: proc(app: ^App, id, g, tip: string, em: f32, enabled := true, raised := false) -> bool {
-	side := raised ? em * 1.75 : em * 1.9
-	ui.next({width = ui.px(side), height = ui.px(side), font = app.icons, radius = em * 0.3, text_pad = 0})
+// A small flat button with a Lucide icon; its tooltip says what it does. `on`: lit in the accent (a toggle that is on).
+icon_action :: proc(app: ^App, id, g, tip: string, em: f32, enabled := true, on := false) -> bool {
+	side := em * 2.0
+	ui.next({width = ui.px(side), height = ui.px(side), font = app.icons, radius = em * 0.15, text_pad = 0, fg = on ? ui.color("accent") : nil})
 	sig: ui.Signal
 	if ui.disabled(!enabled) {
-		if raised {
-			sig = ui.button(fmt.tprintf("%s###%s", g, id))
-		} else if ui.tags("ghost_button") {
-			sig = ui.button(fmt.tprintf("%s###%s", g, id))
-		}
+		if ui.tags("ghost_button") { sig = ui.button(fmt.tprintf("%s###%s", g, id)) }
 	}
 	if ui.hovered_for(sig, 0.4) {
 		if ui.tooltip() {
@@ -79,6 +79,14 @@ icon_action :: proc(app: ^App, id, g, tip: string, em: f32, enabled := true, rai
 	return enabled && sig.clicked
 }
 
+// A thin vertical line between groups of buttons.
+vrule :: proc(em: f32, height: f32 = 1.3) {
+	ui.spacer(ui.px(em * 0.35))
+	ui.next({width = ui.px(max(1, ui.scale())), height = ui.px(em * height), bg = ui.color("border")})
+	ui.build_box({.Draw_Background}, fmt.tprintf("###rule%d", ui.parent_box().child_count))
+	ui.spacer(ui.px(em * 0.35))
+}
+
 // The tooltip of a command: its title and its first key.
 command_tip :: proc(id: string) -> string {
 	c := command_find(id)
@@ -87,32 +95,93 @@ command_tip :: proc(id: string) -> string {
 	return fmt.tprintf("%s (%s)", c.title, shortcut_text(c.keys[0]))
 }
 
+////////////////////////////////
+// The row at the top
+
 @(private = "file")
-build_title :: proc(app: ^App, em: f32) {
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TITLE_EM))})
+build_top :: proc(app: ^App, em: f32) {
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOP_EM))})
 	ui.push_tags("bar")
 	defer ui.pop_tags()
 	if ui.title_bar("###titlebar", {.Draw_Background, .Draw_Side_Bottom}) {
-		ui.spacer(ui.px(em * 0.5))
-		glyph(app, lucide.FOLDER_OPEN, em * 1.8, ui.color("accent"))
-		ui.next({width = ui.text_size(em * 0.3), height = ui.pct(1)})
-		ui.label("Classeur###apptitle")
-		if t := current_tab(app); t != nil {
-			if ui.tags("weak") {
-				ui.next({width = ui.fill(), height = ui.pct(1)})
-				ui.label(fmt.tprintf("%s###titlepath", shown_text(home_path(app, t.path))))
-			}
-		} else {
+		// each part as wide as what is under it (the boxes of the last frame: the first has no width yet)
+		have := len(app.panel_rects) == len(app.panels) && app.panel_rects[0].max.x > 0
+		head := have ? app.panel_rects[0].min.x : app.sidebar ? app.sidebar_px * ui.scale() : em * 5
+		ui.next({width = ui.px(head), height = ui.pct(1)})
+		if ui.row(.Center, {.Draw_Side_Right}, "###head") {
+			ui.spacer(ui.px(em * 0.6))
+			drawn_icon(.Folder, em * 1.8, ui.color("accent"))
 			ui.spacer(ui.fill())
+			if icon_action(app, "sidebar", app.sidebar ? lucide.PANEL_LEFT : lucide.PANEL_RIGHT, command_tip("sidebar"), em) { act_toggle_sidebar(app) }
+			ui.spacer(ui.px(em * 0.3))
 		}
-		if icon_action(app, "sidebar", lucide.PANEL_LEFT, command_tip("sidebar"), em) { act_toggle_sidebar(app) }
-		if icon_action(app, "split", lucide.COLUMNS_2, command_tip("panel_split"), em) { act_panel_split(app) }
-		if icon_action(app, "hidden", app.show_hidden ? lucide.EYE : lucide.EYE_OFF, command_tip("hidden"), em) { act_toggle_hidden(app) }
-		if icon_action(app, "palette", lucide.COMMAND, command_tip("palette"), em) { palette_open(app) }
-		ui.spacer(ui.px(em * 0.4))
+		for p, i in app.panels {
+			last := i == len(app.panels) - 1
+			w: ui.Size = ui.fill()
+			if have && !last { w = ui.px(app.panel_rects[i].max.x - app.panel_rects[i].min.x) }
+			if have && i > 0 { ui.spacer(ui.px(app.panel_rects[i].min.x - app.panel_rects[i - 1].max.x)) }
+			tab_region(app, p, i, w, have ? app.panel_rects[i].max.x - app.panel_rects[i].min.x : 0, em)
+		}
 		ui.window_buttons()
 	}
 }
+
+// A panel's tabs, at the top of the window over it: as wide as TAB_EM, narrower when they do not fit; the shown one
+// in the list's colour, with a line of the accent along its top when its panel has the keyboard.
+@(private = "file")
+tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, em: f32) {
+	focused := index == app.focus
+	ui.next({width = width, height = ui.pct(1)})
+	if ui.row(.Center, {.Clip}, fmt.tprintf("###tabs%d", index)) {
+		n := len(p.tabs)
+		tab_w := em * TAB_EM
+		if room > 0 && n > 0 { tab_w = clamp((room - em * 4.5) / f32(n), em * TAB_MIN_EM, em * TAB_EM) }
+		close := -1
+		for t, i in p.tabs {
+			on := i == p.active
+			ui.next({width = ui.px(tab_w), height = ui.pct(1), axis = .Y, radius = 0, bg = on ? ui.color("background") : nil})
+			flags := ui.Box_Flags{.Clickable, .Hot_Within, .Middle_Click, .Draw_Side_Right}
+			flags += on ? {.Draw_Background} : {.Draw_Hot_Effects}
+			tab := ui.build_box(flags, fmt.tprintf("###tab%d", t.id))
+			sig := ui.signal(tab)
+			if ui.parent(tab) {
+				line := on && focused ? ui.color("accent") : ui.Color{}
+				ui.next({width = ui.fill(), height = ui.px(max(2, ui.scale() * 2)), bg = line})
+				ui.build_box({.Draw_Background}, "###top")
+				ui.next({width = ui.fill(), height = ui.fill()})
+				if ui.row(.Center) {
+					ui.spacer(ui.px(em * 0.7))
+					drawn_icon(.Folder, em * 1.6)
+					ui.spacer(ui.px(em * 0.4))
+					ui.next({width = ui.fill(), height = ui.pct(1)})
+					if !on { ui.push_tags("weak") }
+					ui.label(fmt.tprintf("%s###title", shown_text(tab_title(app, t))))
+					if !on { ui.pop_tags() }
+					if on || ui.hot_within(tab.key) {
+						ui.next({width = ui.px(em * 1.6), height = ui.px(em * 1.6), font = app.icons, radius = em * 0.15, font_size = em * 0.85, text_pad = 0})
+						if ui.tags("ghost_button") {
+							if ui.button(fmt.tprintf("%s###close", lucide.X)).clicked { close = i }
+						}
+					} else {
+						ui.spacer(ui.px(em * 1.6))
+					}
+					ui.spacer(ui.px(em * 0.4))
+				}
+			}
+			if sig.pressed { p.active = i; app.focus = index }
+			if sig.middle_clicked { close = i }
+		}
+		ui.spacer(ui.px(em * 0.3))
+		if icon_action(app, fmt.tprintf("newtab%d", index), lucide.PLUS, command_tip("tab_new"), em) {
+			app.focus = index
+			act_tab_new(app)
+		}
+		if close >= 0 { tab_close(app, p, close) }
+	}
+}
+
+////////////////////////////////
+// The body
 
 @(private = "file")
 build_body :: proc(app: ^App, em: f32) {
@@ -120,133 +189,18 @@ build_body :: proc(app: ^App, em: f32) {
 	if app.sidebar {
 		app.sidebar_px = clamp(app.sidebar_px, SIDEBAR_MIN_PX, max(min(SIDEBAR_MAX_PX, app.room - PANELS_MIN_PX), SIDEBAR_MIN_PX))
 		ui.next({width = ui.px(app.sidebar_px * scale), height = ui.fill()})
-		build_sidebar(app, em)
-		ui.splitter("###side_split", .X, &app.sidebar_px, SIDEBAR_MIN_PX, SIDEBAR_MAX_PX, {default_size = 210, total = app.room, min_other = PANELS_MIN_PX})
+		sidebar_build(app, em)
+		ui.splitter("###side_split", .X, &app.sidebar_px, SIDEBAR_MIN_PX, SIDEBAR_MAX_PX, {default_size = 240, total = app.room, min_other = PANELS_MIN_PX, thickness = 3})
 	}
+	resize(&app.panel_rects, len(app.panels))
 	for p, i in app.panels {
 		if i > 0 {
-			// (two lines with the page between them: the panels read as two)
-			ui.next({width = ui.px(max(1, scale)), height = ui.fill()})
-			ui.next_merge({bg = ui.color("border")})
+			ui.next({width = ui.px(max(1, scale)), height = ui.fill(), bg = ui.color("border")})
 			ui.build_box({.Draw_Background}, fmt.tprintf("###panel_sep%d", i))
-			ui.spacer(ui.px(max(3, 3 * scale)))
-			ui.next({width = ui.px(max(1, scale)), height = ui.fill()})
-			ui.next_merge({bg = ui.color("border")})
-			ui.build_box({.Draw_Background}, fmt.tprintf("###panel_sep%db", i))
 		}
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
-		panel_build(app, p, i, em)
+		app.panel_rects[i] = panel_build(app, p, i, em)
 	}
-}
-
-////////////////////////////////
-// The sidebar
-
-@(private = "file")
-build_sidebar :: proc(app: ^App, em: f32) {
-	t := current_tab(app)
-	here := t != nil ? t.path : ""
-	ui.push_tags("bar")
-	box := ui.build_box({.Clip, .Draw_Background}, "###sidebar")
-	ui.pop_tags()
-	if ui.parent(box) {
-		ui.next({width = ui.fill(), height = ui.fill()})
-		if ui.scroll_y("###side_scroll") {
-			ui.spacer(ui.px(em * 0.4))
-			side_heading("Places", em)
-			for p, i in app.places {
-				if side_row(app, fmt.tprintf("###place%d", i), p.icon, p.name, p.path == here, em) && t != nil { tab_go(app, t, p.path) }
-			}
-			ui.spacer(ui.px(em * 0.6))
-			side_heading("Volumes", em)
-			for v, i in app.volumes {
-				icon := v.removable ? lucide.USB : lucide.HARD_DRIVE
-				if side_row(app, fmt.tprintf("###vol%d", i), icon, v.label, v.path == here, em) && t != nil { tab_go(app, t, v.path) }
-			}
-			ui.spacer(ui.px(em * 0.6))
-		}
-	}
-}
-
-@(private = "file")
-side_heading :: proc(text: string, em: f32) {
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.7))})
-	if ui.row(.Center) {
-		ui.spacer(ui.px(em * 0.8))
-		if ui.tags("weak") {
-			ui.next({width = ui.text_size(em * 0.2), height = ui.pct(1), font_size = em * 0.78})
-			ui.label(fmt.tprintf("%s###h", strings.to_upper(text, context.temp_allocator)))
-		}
-		ui.next({width = ui.fill(), height = ui.px(1)})
-		ui.next_merge({bg = ui.color("border")})
-		ui.build_box({.Draw_Background}, "###rule")
-		ui.spacer(ui.px(em * 0.6))
-	}
-}
-
-@(private = "file")
-side_row :: proc(app: ^App, id, icon, name: string, here: bool, em: f32) -> bool {
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.75)), radius = 0})
-	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Hot_Within}
-	if here { flags += {.Draw_Background, .Draw_Side_Left} }
-	sig: ui.Signal
-	if here { ui.push_tags("selected") }
-	if ui.row(.Center, flags, id) {
-		sig = ui.signal(ui.parent_box())
-		ui.spacer(ui.px(em * 0.6))
-		glyph(app, icon, em * 1.7, here ? ui.color("accent") : nil)
-		ui.spacer(ui.px(em * 0.2))
-		ui.next({width = ui.fill(), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###n", shown_text(name)))
-	}
-	if here { ui.pop_tags() }
-	return sig.clicked
-}
-
-////////////////////////////////
-// The status bar
-
-@(private = "file")
-build_status :: proc(app: ^App, em: f32) {
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * STATUS_EM))})
-	ui.push_tags("bar")
-	defer ui.pop_tags()
-	if ui.row(.Center, {.Draw_Background, .Draw_Side_Top}, "###statusbar") {
-		ui.spacer(ui.px(em * 0.7))
-		if ui.style({font_size = em * 0.86}) {
-			job_status(app, em)
-			if ui.tags("weak") {
-				ui.next({width = ui.fill(), height = ui.pct(1)})
-				msg := app.status
-				if msg == "" || ui.now_ms() > app.status_until { msg = status_text(app) }
-				ui.label(fmt.tprintf("%s###status", shown_text(msg)))
-				for id in ([]string{"palette", "goto", "filter"}) {
-					c := command_find(id)
-					ui.kbd(shortcut_text(c.keys[0]))
-					ui.next({width = ui.text_size(em * 0.3), height = ui.pct(1)})
-					ui.label(fmt.tprintf("%s###h%s", c.title, id))
-					ui.spacer(ui.px(em * 0.4))
-				}
-			}
-		}
-	}
-}
-
-// What the status bar says of the current tab: its items, its selection, the free space.
-@(private = "file")
-status_text :: proc(app: ^App) -> string {
-	t := current_tab(app)
-	if t == nil { return "" }
-	f := &t.folder
-	if !f.loaded { return "Reading…" }
-	if f.listing.error != .None { return fs.ERROR_TEXT[f.listing.error] }
-	items := len(f.shown) == len(f.listing.entries) ? fmt.tprintf("%d items", len(f.shown)) : fmt.tprintf("%d of %d items", len(f.shown), len(f.listing.entries))
-	if f.count > 0 {
-		bytes, _ := folder_selection_size(f)
-		items = fmt.tprintf("%s · %d selected, %s", items, f.count, size_text(bytes))
-	}
-	if t.has_space { items = fmt.tprintf("%s · %s free of %s", items, size_text(t.space.free), size_text(t.space.total)) }
-	return fmt.tprintf("%s · read in %.0f ms", items, t.load_ms)
 }
 
 ////////////////////////////////
@@ -288,24 +242,22 @@ home_path :: proc(app: ^App, path: string) -> string {
 	return path
 }
 
-// The job that runs, in the status bar: what it does, how far, a cancel.
-@(private = "file")
+// The job that runs: what it does, how far, a cancel (in the footer of the panel that has the keyboard).
 job_status :: proc(app: ^App, em: f32) {
 	for job in app.jobs.list {
 		st := sync.atomic_load(&job.state)
 		if st != .Counting && st != .Running && st != .Asking { continue }
-		glyph(app, lucide.LOADER, em * 1.5, ui.color("accent"))
 		total, done := sync.atomic_load(&job.bytes_total), sync.atomic_load(&job.bytes_done)
 		files, files_done := sync.atomic_load(&job.files_total), sync.atomic_load(&job.files_done)
 		t := total > 0 ? f32(f64(done) / f64(total)) : files > 0 ? f32(files_done) / f32(files) : 0
 		text := st == .Counting ? fmt.tprintf("%s: counting…", JOB_VERB[job.kind]) : fmt.tprintf("%s %d of %d · %s", JOB_VERB[job.kind], min(files_done + 1, files), files, shown_text(job_current(job)))
 		ui.next({width = ui.text_size(em * 0.4), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###job%d", text, job.id))
-		ui.next({width = ui.px(em * 8), height = ui.px(em * 0.5)})
+		ui.next({width = ui.px(em * 7), height = ui.px(em * 0.45)})
 		ui.progress(fmt.tprintf("###jobbar%d", job.id), clamp(t, 0, 1), st == .Counting)
-		ui.spacer(ui.px(em * 0.3))
+		ui.spacer(ui.px(em * 0.2))
 		if icon_action(app, fmt.tprintf("jobcancel%d", job.id), lucide.X, "Cancel", em) { job_cancel(job) }
-		ui.spacer(ui.px(em * 0.6))
+		vrule(em)
 		return
 	}
 }

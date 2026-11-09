@@ -64,6 +64,8 @@ COMMANDS := [?]Command{
 	{id = "copy_path", title = "Copy the path", icon = lucide.CLIPBOARD, keys = {{.C, {.Ctrl, .Shift}}, {}}, run = act_copy_path},
 	{id = "open_system", title = "Open with the system's application", icon = lucide.EXTERNAL_LINK, keys = {{.Return, {.Alt}}, {}}, run = act_open_system},
 
+	{id = "bookmark", title = "Bookmark this folder, or remove its bookmark", icon = lucide.BOOKMARK, keys = {{.D, {.Ctrl}}, {}}, in_text = true, run = act_bookmark},
+	{id = "lock", title = "Lock the tab (folders open in a new tab)", icon = lucide.LOCK, run = act_lock},
 	{id = "hidden", title = "Show or hide the hidden files", icon = lucide.EYE, keys = {{.H, {.Ctrl}}, {.Period, {.Ctrl}}}, in_text = true, run = act_toggle_hidden},
 	{id = "sidebar", title = "Show or hide the sidebar", icon = lucide.PANEL_LEFT, keys = {{.B, {.Ctrl}}, {}}, in_text = true, run = act_toggle_sidebar},
 	{id = "sort_name", title = "Sort by name", icon = lucide.ARROW_UP_DOWN, run = act_sort_name},

@@ -2,6 +2,7 @@ package classeur
 
 // The places of the sidebar: the person's folders (those that exist), then the volumes (fs.volumes).
 
+import "core:os"
 import "core:strings"
 import lucide "gt:lucide"
 import "gt:platform"
@@ -39,7 +40,24 @@ places_load :: proc(app: ^App) {
 		}
 		append(&app.places, Place{name = strings.clone(k.name), path = path, icon = k.icon})
 	}
+	// the root of the system (File Pilot's This PC) and the trash
+	when ODIN_OS != .Windows {
+		append(&app.places, Place{name = strings.clone("Computer"), path = strings.clone("/"), icon = lucide.HARD_DRIVE})
+		data := os.get_env("XDG_DATA_HOME", context.temp_allocator)
+		if data == "" { data = fs.join(app.home, ".local/share", context.temp_allocator) }
+		trash := fs.join(data, "Trash/files")
+		if info, ok := fs.stat(trash); ok && info.kind == .Directory {
+			append(&app.places, Place{name = strings.clone("Trash"), path = trash, icon = lucide.TRASH_2})
+		} else {
+			delete(trash)
+		}
+	}
 	app.volumes = fs.volumes()
+	clear(&app.volume_space)
+	for v in app.volumes {
+		sp, _ := fs.space(v.path)
+		append(&app.volume_space, sp)
+	}
 }
 
 places_free :: proc(app: ^App) {

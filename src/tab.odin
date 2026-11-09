@@ -27,6 +27,8 @@ Tab :: struct {
 	focus_due:    Focus_Due,         // a field to give the keyboard at the next build
 	space:        fs.Space,          // the volume's free and total bytes, read with the folder
 	has_space:    bool,
+	measured:     u64,               // the read whose folders were given to the measures
+	locked:       bool,              // a folder opened from it opens in a new tab (the lock of the toolbar)
 	cursor_rect:  ui.Rect,           // the cursor's row as last built (where the Menu key opens the menu)
 }
 
@@ -91,6 +93,7 @@ tab_go :: proc(app: ^App, t: ^Tab, path: string, history := true) {
 	old := history ? t.back[len(t.back) - 1] : ""
 	if old != "" && fs.parent(old) == clean { t.reveal_name = strings.clone(fs.base(old)) }
 	t.path = clean
+	measure_forget_asked(app)
 	ui.field_clear(&t.filter)
 	t.filter_open = false
 	folder_set_filter(&t.folder, "")
@@ -176,6 +179,7 @@ load_done :: proc(data: rawptr, word: u64) {
 	if !same_place {
 		folder_select_none(&t.folder)
 		t.folder.cursor = -1
+		if job.listing.error == .None { recent_add(job.app, job.listing.path) }
 	}
 	folder_set_listing(&t.folder, &job.listing)
 	// the row asked for (made, renamed, the folder we came up from) has the cursor and the selection
@@ -260,4 +264,27 @@ panel_close :: proc(app: ^App, p: ^Panel) {
 		if app.focus >= len(app.panels) { app.focus = len(app.panels) - 1 }
 		return
 	}
+}
+
+RECENTS_MAX :: 12
+
+// The folder visited goes first in the recent ones.
+recent_add :: proc(app: ^App, path: string) {
+	for p, i in app.recents {
+		if p == path {
+			ordered_remove(&app.recents, i)
+			inject_at(&app.recents, 0, p)
+			return
+		}
+	}
+	inject_at(&app.recents, 0, strings.clone(path))
+	if len(app.recents) > RECENTS_MAX { delete(pop(&app.recents)) }
+}
+
+// One step back with no read (several steps of the history menu: the last one reads).
+tab_back_quiet :: proc(t: ^Tab) {
+	if len(t.back) == 0 { return }
+	to := pop(&t.back)
+	append(&t.forward, t.path)
+	t.path = to
 }

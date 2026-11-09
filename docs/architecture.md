@@ -18,8 +18,11 @@ is immediate-mode); the data changes only on the interface's thread.
 | `src/actions.odin` | What the commands do, and the rename in place. |
 | `src/palette.odin` | The command palette: fuzzy search over the titles, the keys shown. |
 | `src/menu.odin` | The menu of a row or of the folder (right click, Menu key). |
-| `src/view.odin` | The window: title bar, sidebar, panels side by side, status bar; the keys of the commands and of the selection. |
-| `src/view_panel.odin` | A panel: tab strip, toolbar (back, forward, up, the crumbs or the typed path, the filter), the columns' header, the virtual list, the footer. |
+| `src/view.odin` | The window: the top row (the sidebar's head, each panel's tabs as wide as the panel under them, from the last frame's boxes; the window's buttons), the body; the keys of the commands and of the selection. |
+| `src/view_panel.odin` | A panel: toolbar (back, forward, up, history, lock, bookmark, the crumbs or the typed path, the panel's menu), the columns' header, the virtual list (a box per row, the measures of folders), the footer (the filter, the counts). |
+| `src/sidebar.odin` | The sidebar: its filter, its sections (Recents, Bookmarks, Storage, Places). |
+| `src/icons.odin` | The entries' icons: drawn folders and pages, Lucide icons coloured by kind. |
+| `src/measure.odin` | Folder measures (folders, files, bytes all the way down) on a pool of their own. |
 | `src/places.odin` | The sidebar's places (the person's folders) and volumes. |
 | `src/format.odin` | Sizes, dates (local time zone), types and icons of entries. |
 | `src/app.odin` | The App, its window (`app_open`, `app_frame`, `app_close`: the tests drive the same procedures), the theme. |
