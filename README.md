@@ -66,5 +66,5 @@ Every step of the project is a command of `tools/classeurtool`: see [docs/develo
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). Icons: [Lucide](https://lucide.dev), ISC; [Phosphor](https://phosphoricons.com), MIT
-([assets/fonts/PHOSPHOR-LICENSE.txt](assets/fonts/PHOSPHOR-LICENSE.txt)).
+MIT, see [LICENSE](LICENSE). The icons of files are the system's (the icon theme on Linux, the shell's on Windows); the
+buttons' icons are [Lucide](https://lucide.dev)'s, ISC.

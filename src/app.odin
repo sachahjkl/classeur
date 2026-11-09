@@ -26,7 +26,6 @@ App :: struct {
 	shared:      host.Shared,
 	main:        host.Host,
 	icons:       font.Font_Id,      // Lucide: the thin icons of the bars' buttons
-	filled:      font.Font_Id,      // Phosphor's filled icons: the files', the places' (phosphor.odin)
 	mono:        font.Font_Id,
 	devtools:    ^devtools.Server,  // TOOLKIT_DEVTOOLS=<port>: driven and captured over the Chrome DevTools Protocol
 	theme_shown: ui.Theme_Shown,
@@ -34,6 +33,7 @@ App :: struct {
 	measure_pool: Pool,
 	thumb_pool:  Pool,              // the thumbnails of the grid (thumbs.odin)
 	thumbs:      map[string]Thumb,  // by path (the keys owned)
+	icons_cache: map[string]Sys_Icon,   // the system's icons by key and size (icons.odin)
 	frame:       u64,               // the frames built (what a thumbnail was last used in)
 	default_zoom: int,             // the measures of folders (measure.odin)
 	measures:    map[string]Measure,   // by path (the keys owned)
@@ -121,7 +121,6 @@ app_open :: proc(o: Open_Options) -> ^App {
 	h := &app.main
 	win := h.win
 	app.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
-	app.filled, _ = font.load_embedded(&app.shared.fonts, PHOSPHOR_DATA)
 	app.mono, _ = font.load_embedded(&app.shared.fonts, font.FALLBACK_MONO_DATA)
 	h.state.icon_font, _ = font.load_embedded(&app.shared.fonts, ui.ICON_FONT_DATA)
 	h.after_input = FRAMES_AFTER_INPUT

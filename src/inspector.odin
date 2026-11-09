@@ -99,11 +99,11 @@ inspector_ask :: proc(app: ^App, path: string, e: fs.Entry) {
 // A name whose content reads as text (the content decides at last: a zero byte, or no valid UTF-8, is no text).
 @(private = "file")
 looks_textual :: proc(name: string, flags: fs.Flags) -> bool {
-	if g, _, ok := file_look(name); ok {
-		switch g {
-		case PH_FILE_IMAGE, PH_FILE_AUDIO, PH_FILE_VIDEO, PH_FILE_ZIP, PH_FILE_PDF, PH_FILE_DOC, PH_FILE_XLS: return false
-		}
-	}
+	binary := [?]string{"png", "jpg", "jpeg", "gif", "webp", "bmp", "ico", "avif", "heic", "tif", "tiff", "mp3", "flac", "wav", "ogg",
+		"m4a", "opus", "mp4", "mkv", "webm", "mov", "avi", "zip", "tar", "gz", "xz", "bz2", "7z", "rar", "zst", "iso", "pdf", "doc",
+		"docx", "odt", "xls", "xlsx", "ods", "ppt", "pptx", "exe", "dll", "so", "o", "a", "bin", "class", "jar", "ttf", "otf", "woff2"}
+	ext := strings.to_lower(fs.extension(name), context.temp_allocator)
+	for b in binary { if b == ext { return false } }
 	return true
 }
 
@@ -187,7 +187,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 3.2))})
 		if ui.row(.Center, {.Draw_Side_Bottom}, "###insp_head") {
 			ui.spacer(ui.px(em * 0.6))
-			entry_glyph(app, e^, em * 2.4)
+			entry_glyph(app, t.path, e^, em * 2.4)
 			ui.spacer(ui.px(em * 0.4))
 			ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
 			if ui.column() {
@@ -244,7 +244,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 					ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0))})
 					if ui.row(.Center, {}, fmt.tprintf("###insp_e%d", i)) {
 						ui.spacer(ui.px(em * 0.8))
-						entry_glyph(app, x, em * 1.8)
+						entry_glyph(app, insp.path, x, em * 1.8)
 						ui.spacer(ui.px(em * 0.4))
 						ui.next({width = ui.fill(), height = ui.pct(1)})
 						ui.label(fmt.tprintf("%s###n", shown_text(x.name)))

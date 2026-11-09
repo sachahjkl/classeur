@@ -1,16 +1,11 @@
 package classeur
 
-// Depth: a raised surface is lighter at its top than at its bottom, has a line of light along its top edge and a border
-// of its own colour. The selection, the shown tab, the cards, the boxes of the footer are raised; the lists and the bars
-// lie flat under them, each surface a step from the next.
+// Depth: a raised surface is a step lighter than what it lies on, in one flat colour, with a border of its own colour.
+// The selection, the shown tab, the cards, the boxes of the footer are raised; the lists and the bars lie flat under
+// them, each surface a step from the next.
 
 import "gt:draw"
 import "gt:ui"
-
-// How much lighter the top and darker the bottom of a raised surface are, and the light along its top.
-RAISE_LIGHT :: 0.10
-RAISE_DARK  :: 0.12
-RAISE_LINE  :: 0.14
 
 // The surfaces' colours (sRGB), dark and light: the window's top, the sidebar and the footers, the lists, the headers,
 // the cards and the boxes.
@@ -25,19 +20,11 @@ Raised :: struct {
 	edge:   ui.Color,
 	radii:  [4]f32,   // top-left, bottom-left, top-right, bottom-right
 	inset:  [2]f32,   // from the box's sides and its top and bottom
-	no_top: bool,     // no line of light (a surface that is not raised, only bordered)
 }
 
-// Paints `r` raised: the gradient, the line of light, the border.
+// Paints `r` raised: its colour, its border.
 paint_raised :: proc(dc: ^draw.Context, r: ui.Rect, d: Raised) {
-	top := draw.mix(d.base, {1, 1, 1, d.base.a}, RAISE_LIGHT)
-	bottom := draw.mix(d.base, {0, 0, 0, d.base.a}, RAISE_DARK)
-	draw.rect_corners(dc, r, {top, bottom, top, bottom}, d.radii)
-	if !d.no_top {
-		w := r.max.x - r.min.x
-		k := min(d.radii[0], w * 0.5)
-		draw.rect(dc, {{r.min.x + k, r.min.y}, {r.max.x - min(d.radii[2], w * 0.5), r.min.y + 1}}, {1, 1, 1, RAISE_LINE * d.base.a})
-	}
+	draw.rect_corners(dc, r, {d.base, d.base, d.base, d.base}, d.radii)
 	if d.edge.a > 0 { draw.rect_corners(dc, r, {d.edge, d.edge, d.edge, d.edge}, d.radii, 1) }
 }
 

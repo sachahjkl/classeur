@@ -9,21 +9,20 @@ import "fs"
 
 Place :: struct {
 	name, path: string,   // owned
-	icon:       string,
 }
 
 @(private = "file")
-Known :: struct { folder: platform.Known_Folder, name, icon: string }
+Known :: struct { folder: platform.Known_Folder, name: string }
 
 @(private = "file")
 KNOWN :: [?]Known{
-	{.Home, "Home", PH_HOUSE},
-	{.Desktop, "Desktop", PH_DESKTOP},
-	{.Documents, "Documents", PH_FILE_TEXT},
-	{.Downloads, "Downloads", PH_DOWNLOAD_SIMPLE},
-	{.Pictures, "Pictures", PH_IMAGE},
-	{.Music, "Music", PH_MUSIC_NOTES},
-	{.Videos, "Videos", PH_FILM_STRIP},
+	{.Home, "Home"},
+	{.Desktop, "Desktop"},
+	{.Documents, "Documents"},
+	{.Downloads, "Downloads"},
+	{.Pictures, "Pictures"},
+	{.Music, "Music"},
+	{.Videos, "Videos"},
 }
 
 places_load :: proc(app: ^App) {
@@ -37,16 +36,16 @@ places_load :: proc(app: ^App) {
 			delete(path)
 			continue
 		}
-		append(&app.places, Place{name = strings.clone(k.name), path = path, icon = k.icon})
+		append(&app.places, Place{name = strings.clone(k.name), path = path})
 	}
 	// the root of the system (File Pilot's This PC) and the trash
 	when ODIN_OS != .Windows {
-		append(&app.places, Place{name = strings.clone("Computer"), path = strings.clone("/"), icon = PH_HARD_DRIVES})
+		append(&app.places, Place{name = strings.clone("Computer"), path = strings.clone("/")})
 		data := os.get_env("XDG_DATA_HOME", context.temp_allocator)
 		if data == "" { data = fs.join(app.home, ".local/share", context.temp_allocator) }
 		trash := fs.join(data, "Trash/files")
 		if info, ok := fs.stat(trash); ok && info.kind == .Directory {
-			append(&app.places, Place{name = strings.clone("Trash"), path = trash, icon = PH_TRASH})
+			append(&app.places, Place{name = strings.clone("Trash"), path = trash})
 		} else {
 			delete(trash)
 		}

@@ -16,24 +16,8 @@ Side_Section :: enum u8 { Recents, Bookmarks, Storage, Places }
 @(private = "file", rodata)
 SECTION_TITLES := [Side_Section]string{.Recents = "Recents", .Bookmarks = "Bookmarks", .Storage = "Storage", .Places = "Places"}
 @(private = "file", rodata)
-SECTION_ICONS := [Side_Section]string{.Recents = PH_CLOCK_BACK, .Bookmarks = PH_BOOKMARK_SIMPLE, .Storage = PH_HARD_DRIVES, .Places = PH_FOLDER}
+SECTION_ICONS := [Side_Section]string{.Recents = lucide.HISTORY, .Bookmarks = lucide.BOOKMARK, .Storage = lucide.HARD_DRIVE, .Places = lucide.FOLDER}
 
-// The colours of the places' icons (sRGB).
-@(private = "file")
-place_color :: proc(icon: string) -> u32 {
-	switch icon {
-	case PH_HOUSE:           return 0xf4c542ff
-	case PH_DESKTOP:         return 0x35b1e0ff
-	case PH_FILE_TEXT:       return 0xc9cdd3ff
-	case PH_DOWNLOAD_SIMPLE: return 0x4fc48aff
-	case PH_IMAGE:           return 0x4f9de8ff
-	case PH_MUSIC_NOTES:     return 0xf2853cff
-	case PH_FILM_STRIP:      return 0xa774f2ff
-	case PH_HARD_DRIVES:     return 0x8fa3b8ff
-	case PH_TRASH:           return 0x9aa3adff
-	}
-	return 0xf4c542ff
-}
 
 // How full a volume is: its bar under its name.
 VOLUME_BAR      :: 0x2f7fd0ff
@@ -82,7 +66,7 @@ sidebar_build :: proc(app: ^App, em: f32) {
 			if section(app, .Places, em) {
 				for p, i in app.places {
 					if !keeps(query, p.name) { continue }
-					sig := side_row(app, fmt.tprintf("###place%d", i), p.icon, draw.hex(place_color(p.icon)), p.name, p.path == here, em)
+					sig := side_row(app, fmt.tprintf("###place%d", i), p.path, p.name, p.path == here, em)
 					go_from(app, t, sig, p.path)
 				}
 			}
@@ -127,7 +111,7 @@ section :: proc(app: ^App, s: Side_Section, em: f32) -> bool {
 	if ui.row(.Center, {.Clickable, .Draw_Hot_Effects, .Hot_Within}, fmt.tprintf("###sec_%s", SECTION_TITLES[s])) {
 		sig = ui.signal(ui.parent_box())
 		ui.spacer(ui.px(em * 0.6))
-		if ui.tags("weak") { filled(app, SECTION_ICONS[s], em * 1.6) }
+		if ui.tags("weak") { glyph(app, SECTION_ICONS[s], em * 1.6) }
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###t", SECTION_TITLES[s]))
@@ -149,7 +133,7 @@ side_folder :: proc(app: ^App, t: ^Tab, id, path, name: string, here: string, em
 	if ui.row(.Center, flags, id) {
 		sig = ui.signal(ui.parent_box())
 		ui.spacer(ui.px(em * 2.4))
-		drawn_icon(.Folder, em * 1.6)
+		path_icon(app, path, true, em * 1.7)
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###n", shown_text(name)))
@@ -158,14 +142,14 @@ side_folder :: proc(app: ^App, t: ^Tab, id, path, name: string, here: string, em
 }
 
 @(private = "file")
-side_row :: proc(app: ^App, id, icon: string, color: ui.Color, name: string, here: bool, em: f32) -> (sig: ui.Signal) {
+side_row :: proc(app: ^App, id, path: string, name: string, here: bool, em: f32) -> (sig: ui.Signal) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.2)), radius = 0, bg = here ? ui.color("border") : nil})
 	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Hot_Within, .Middle_Click}
 	if here { flags += {.Draw_Background} }
 	if ui.row(.Center, flags, id) {
 		sig = ui.signal(ui.parent_box())
 		ui.spacer(ui.px(em * 2.4))
-		filled(app, icon, em * 1.6, color)
+		path_icon(app, path, true, em * 1.7)
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###n", shown_text(name)))
@@ -195,7 +179,7 @@ side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, e
 	if ui.row(.Center, flags, fmt.tprintf("###vol%d", i)) {
 		sig = ui.signal(ui.parent_box())
 		ui.spacer(ui.px(em * 2.4))
-		filled(app, v.removable ? PH_USB : PH_HARD_DRIVE, em * 1.6, draw.hex(0x9fb0c2ff))
+		path_icon(app, v.path, true, em * 1.7)
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
 		if ui.column() {

@@ -479,7 +479,7 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, wi
 		check = check_box(app, fmt.tprintf("check%d", row), selected, false, em)
 	}
 	folder := e.kind == .Directory
-	entry_glyph(app, e^, em * 1.9)
+	entry_glyph(app, t.path, e^, em * 1.9)
 	ui.spacer(ui.px(em * 0.5))
 	entry_name(app, t, e, selected, em)
 	if names_only {
@@ -689,7 +689,7 @@ filter_field :: proc(app: ^App, t: ^Tab, em: f32) {
 	ui.next({width = ui.px(em * FILTER_EM), height = ui.px(ui.dense(em * 2.0))})
 	if ui.row(.Center, {}, "###filterbox") {
 		// (a well: darker than the footer, its border the accent's while it searches every folder below)
-		raise(ui.parent_box(), {base = draw.hex(surfaces(app).top), edge = t.flat ? ui.color("accent") : draw.hex(surfaces(app).edge), radii = radii_all(em * 0.35), no_top = true})
+		raise(ui.parent_box(), {base = draw.hex(surfaces(app).top), edge = t.flat ? ui.color("accent") : draw.hex(surfaces(app).edge), radii = radii_all(em * 0.35)})
 		ui.spacer(ui.px(em * 0.4))
 		if ui.tags("weak") { glyph(app, lucide.SEARCH, em * 1.5) }
 		key := ui.key_from_string(ui.parent_box().key, "###filter")

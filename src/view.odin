@@ -55,6 +55,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	watcher_update(app)
 	measure_update(app)
 	thumbs_tidy(app)
+	icons_tidy(app)
 }
 
 // A text field built this frame: while it has the keyboard, the keys of the list are its own.
@@ -114,7 +115,7 @@ build_top :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.px(head), height = ui.pct(1)})
 		if ui.row(.Center, {}, "###head") {
 			ui.spacer(ui.px(em * 0.6))
-			drawn_icon(.Folder, em * 1.8, ui.color("accent"))
+			logo_icon(em * 1.8)
 			ui.spacer(ui.fill())
 			if icon_action(app, "sidebar", app.sidebar ? lucide.PANEL_LEFT : lucide.PANEL_RIGHT, command_tip("sidebar"), em) { act_toggle_sidebar(app) }
 			ui.spacer(ui.px(em * 0.3))
@@ -162,7 +163,7 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 				ui.next({width = ui.fill(), height = ui.fill()})
 				if ui.row(.Center) {
 					ui.spacer(ui.px(em * 0.7))
-					drawn_icon(.Folder, em * 1.6)
+					path_icon(app, t.path, true, em * 1.6)
 					ui.spacer(ui.px(em * 0.4))
 					ui.next({width = ui.fill(), height = ui.pct(1)})
 					if !on { ui.push_tags("weak") }

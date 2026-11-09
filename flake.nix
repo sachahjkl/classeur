@@ -56,6 +56,9 @@
       fontconfig
       freetype
       dbus
+      librsvg # the SVG icons of the icon theme (gui_toolkit's desktop.file_icon)
+      cairo
+      glib
     ];
 
     # APP_VERSION of src/main.odin
@@ -125,7 +128,6 @@
         done
         install -Dm644 -t $out/share/doc/classeur LICENSE README.md CHANGELOG.md
         install -Dm644 ext/gui_toolkit/src/lucide/LICENSE.txt $out/share/doc/classeur/LUCIDE-LICENSE.txt
-        install -Dm644 assets/fonts/PHOSPHOR-LICENSE.txt $out/share/doc/classeur/PHOSPHOR-LICENSE.txt
         runHook postInstall
       '';
 

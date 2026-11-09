@@ -86,7 +86,7 @@ item :: proc(app: ^App, t: ^Tab, row: int, look: ^Row_Look, line: bool, width, h
 	if ui.parent(b) {
 		if line {
 			ui.spacer(ui.px(em * 0.4))
-			entry_glyph(app, e^, em * 1.9)
+			entry_glyph(app, t.path, e^, em * 1.9)
 			ui.spacer(ui.px(em * 0.5))
 			entry_name(app, t, e, selected, em)
 		} else {
@@ -126,10 +126,10 @@ card_body :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, width, heigh
 				ui.next({width = ui.fill(), height = ui.pct(1)})
 				ui.custom("###thumb", picture_draw, d)
 			} else {
-				big_icon(app, e^, pic)
+				big_icon(app, t.path, e^, pic)
 			}
 		} else {
-			big_icon(app, e^, pic)
+			big_icon(app, t.path, e^, pic)
 		}
 		ui.spacer(ui.px(em * 0.5))
 	}
@@ -147,9 +147,9 @@ card_body :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, width, heigh
 
 // The icon of an entry, `size` large.
 @(private = "file")
-big_icon :: proc(app: ^App, e: fs.Entry, size: f32) {
+big_icon :: proc(app: ^App, dir: string, e: fs.Entry, size: f32) {
 	ui.spacer(ui.fill())
-	if ui.style({font_size = size * 0.45}) { entry_glyph(app, e, size) }
+	entry_glyph(app, dir, e, size)
 	ui.spacer(ui.fill())
 }
 
