@@ -420,8 +420,9 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 			return
 		}
 	}
+	band_update(app, t, clicked)
 	// a move of the list's own keys (Up, Down, Page Up, Home, type-ahead): the cursor's row alone is selected
-	if t.vl.changed && !clicked && t.vl.sel >= 0 { folder_pick(f, t.vl.sel) }
+	if t.vl.changed && !clicked && !app.band.active && t.vl.sel >= 0 { folder_pick(f, t.vl.sel) }
 	if t.vl.activated && !clicked { act_open(app) }
 }
 

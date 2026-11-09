@@ -816,3 +816,28 @@ test_drag_and_drop :: proc(t: ^testing.T) {
 	testing.expect_value(t, drop_effect_for_test(app, {here}, dir), Maybe(platform.Drop_Effect)(nil))
 	testing.expect_value(t, drop_effect_for_test(app, {fs.join(dir, "Documents", context.temp_allocator)}, fs.join(dir, "Documents/Sub", context.temp_allocator)), Maybe(platform.Drop_Effect)(nil))
 }
+
+@(test)
+test_band :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1000, 700})
+	tab := current_tab(app)
+	session.frames(s, 2)
+	lb := ui.box_from_key(tab.vl.key)
+	testing.expect(t, lb != nil)
+	// from the empty part under the rows, up over the last three
+	n := len(tab.folder.shown)
+	bottom := lb.rect.min.y + tab.vl.offsets[n] - lb.view_off.y
+	from := [2]f32{lb.rect.min.x + 200, bottom + 40}
+	to := [2]f32{lb.rect.min.x + 250, lb.rect.min.y + tab.vl.offsets[n - 3] - lb.view_off.y + 5}
+	session.press(s, from)
+	session.move(s, from + {0, -10})
+	session.move(s, to)
+	session.frames(s, 1)
+	testing.expect_value(t, tab.folder.count, 3)
+	session.release(s, to)
+	session.frames(s, 2)
+	testing.expect_value(t, tab.folder.count, 3)
+	testing.expect(t, !app.band.active)
+}
