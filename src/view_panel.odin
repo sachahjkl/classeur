@@ -12,14 +12,16 @@ import "gt:ui"
 import "fs"
 
 // Heights in ems.
-TABS_EM    :: 2.3
-TOOLBAR_EM :: 2.5
-HEADER_EM  :: 1.9
-ROW_EM     :: 1.85
+TABS_EM    :: 2.2
+TOOLBAR_EM :: 2.4
+HEADER_EM  :: 1.75
+ROW_EM     :: 1.6
 // The widths of the columns after the name, in ems.
 COL_MODIFIED_EM :: 9.5
 COL_TYPE_EM     :: 6.5
 COL_SIZE_EM     :: 6.0
+// How far the stripes of the list go from its colour towards the bars'.
+ZEBRA_MIX :: 0.55
 // A tab's most width, in ems.
 TAB_MAX_EM :: 14
 
@@ -38,7 +40,6 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) {
 		t := panel_tab(p)
 		if t == nil { return }
 		toolbar(app, t, em)
-		ui.hline(ui.fill())
 		header(app, t, em)
 		ui.next({width = ui.fill(), height = ui.fill()})
 		folder_list(app, t, focused, em)
@@ -49,42 +50,50 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) {
 ////////////////////////////////
 // Tabs
 
+// The tabs on a dark strip: the shown one has the bars' colour, sides, and a line of the accent along its top when the
+// panel has the keyboard; the others are separated by a line.
 @(private = "file")
 tab_strip :: proc(app: ^App, p: ^Panel, index: int, focused: bool, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TABS_EM))})
-	if ui.row(.Center, id = "###tabs") {
-		ui.spacer(ui.px(em * 0.3))
+	ui.push_tags("well")
+	strip := ui.row_box({.Draw_Background, .Draw_Side_Bottom}, "###tabs")
+	ui.pop_tags()
+	if ui.parent(strip) {
 		close := -1
 		for t, i in p.tabs {
 			on := i == p.active
-			ui.next({width = ui.children_sum(), height = ui.px(ui.dense(em * 1.85)), radius = em * 0.45})
-			flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Hot_Within, .Middle_Click}
-			if on { flags += {.Draw_Background} }
-			if on { ui.push_tags(focused ? "selected" : "weak_selected") }
-			sig: ui.Signal
-			if ui.row(.Center, flags, fmt.tprintf("###tab%d", t.id)) {
-				sig = ui.signal(ui.parent_box())
-				ui.spacer(ui.px(em * 0.5))
-				glyph(app, t.loading && t.folder.listing.path != t.path ? lucide.LOADER : lucide.FOLDER, em * 1.5, on ? ui.color("accent") : nil)
-				ui.next({width = ui.text_size(em * 0.2), height = ui.pct(1)})
-				if !on { ui.push_tags("weak") }
-				title := tab_title(app, t)
-				title = cut_text(title, TAB_MAX_EM * 2)
-				ui.label(fmt.tprintf("%s###title", shown_text(title)))
-				if !on { ui.pop_tags() }
-				if len(p.tabs) > 1 || len(app.panels) > 1 {
-					ui.next({width = ui.px(em * 1.5), height = ui.px(em * 1.5), font = app.icons, radius = em * 0.3, font_size = em * 0.85})
-					if ui.tags("ghost_button") {
-						if ui.button(fmt.tprintf("%s###close", lucide.X)).clicked { close = i }
-					}
-				}
-				ui.spacer(ui.px(em * 0.3))
-			}
+			ui.next({width = ui.children_sum(), height = ui.pct(1), axis = .Y, radius = 0})
+			flags := ui.Box_Flags{.Clickable, .Hot_Within, .Middle_Click, .Draw_Side_Right}
+			flags += on ? {.Draw_Background, .Draw_Side_Left} : {.Draw_Hot_Effects}
+			if on { ui.push_tags("bar") }
+			tab := ui.build_box(flags, fmt.tprintf("###tab%d", t.id))
 			if on { ui.pop_tags() }
+			sig := ui.signal(tab)
+			if ui.parent(tab) {
+				line := on ? (focused ? ui.color("accent") : ui.color("border")) : ui.Color{}
+				ui.next({width = ui.fill(), height = ui.px(max(2, ui.scale() * 2)), bg = line})
+				ui.build_box(on ? {.Draw_Background} : {}, "###top")
+				ui.next({width = ui.children_sum(), height = ui.fill()})
+				if ui.row(.Center) {
+					ui.spacer(ui.px(em * 0.6))
+					glyph(app, t.loading && t.folder.listing.path != t.path ? lucide.LOADER : lucide.FOLDER, em * 1.4, on ? ui.color("accent") : nil)
+					ui.next({width = ui.text_size(em * 0.2), height = ui.pct(1)})
+					if !on { ui.push_tags("weak") }
+					ui.label(fmt.tprintf("%s###title", shown_text(cut_text(tab_title(app, t), TAB_MAX_EM * 2))))
+					if !on { ui.pop_tags() }
+					if len(p.tabs) > 1 || len(app.panels) > 1 {
+						ui.next({width = ui.px(em * 1.4), height = ui.px(em * 1.4), font = app.icons, radius = em * 0.2, font_size = em * 0.8})
+						if ui.tags("ghost_button") {
+							if ui.button(fmt.tprintf("%s###close", lucide.X)).clicked { close = i }
+						}
+					}
+					ui.spacer(ui.px(em * 0.4))
+				}
+			}
 			if sig.pressed { p.active = i; app.focus = index }
 			if sig.middle_clicked { close = i }
-			ui.spacer(ui.px(em * 0.2))
 		}
+		ui.spacer(ui.px(em * 0.2))
 		if icon_action(app, fmt.tprintf("newtab%d", index), lucide.PLUS, command_tip("tab_new"), em) {
 			app.focus = index
 			act_tab_new(app)
@@ -107,12 +116,17 @@ tab_strip :: proc(app: ^App, p: ^Panel, index: int, focused: bool, em: f32) {
 @(private = "file")
 toolbar :: proc(app: ^App, t: ^Tab, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOOLBAR_EM))})
-	if ui.row(.Center, id = "###toolbar") {
+	ui.push_tags("bar")
+	defer ui.pop_tags()
+	if ui.row(.Center, {.Draw_Background, .Draw_Side_Bottom}, "###toolbar") {
 		ui.spacer(ui.px(em * 0.3))
-		if icon_action(app, "back", lucide.ARROW_LEFT, command_tip("back"), em, len(t.back) > 0) { tab_back(app, t) }
-		if icon_action(app, "forward", lucide.ARROW_RIGHT, command_tip("forward"), em, len(t.forward) > 0) { tab_forward(app, t) }
-		if icon_action(app, "up", lucide.ARROW_UP, command_tip("up"), em, fs.parent(t.path) != "") { tab_up(app, t) }
-		if icon_action(app, "refresh", lucide.REFRESH_CW, command_tip("refresh"), em) { tab_load(app, t) }
+		if icon_action(app, "back", lucide.ARROW_LEFT, command_tip("back"), em, len(t.back) > 0, raised = true) { tab_back(app, t) }
+		ui.spacer(ui.px(em * 0.2))
+		if icon_action(app, "forward", lucide.ARROW_RIGHT, command_tip("forward"), em, len(t.forward) > 0, raised = true) { tab_forward(app, t) }
+		ui.spacer(ui.px(em * 0.2))
+		if icon_action(app, "up", lucide.ARROW_UP, command_tip("up"), em, fs.parent(t.path) != "", raised = true) { tab_up(app, t) }
+		ui.spacer(ui.px(em * 0.2))
+		if icon_action(app, "refresh", lucide.REFRESH_CW, command_tip("refresh"), em, raised = true) { tab_load(app, t) }
 		ui.spacer(ui.px(em * 0.3))
 		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.9)), radius = em * 0.45})
 		if t.address_open {
@@ -254,25 +268,29 @@ list_move :: proc(t: ^Tab, by: int) {
 @(private = "file")
 header :: proc(app: ^App, t: ^Tab, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * HEADER_EM))})
-	if ui.row(.Center, id = "###header") {
+	ui.push_tags("bar")
+	defer ui.pop_tags()
+	if ui.row(.Center, {.Draw_Background, .Draw_Side_Bottom}, "###header") {
 		if ui.style({font_size = em * 0.86}) {
 			ui.spacer(ui.px(em * 0.4))
 			column_head(app, t, .Name, "Name", ui.fill(), .Left, em)
 			column_head(app, t, .Modified, "Modified", ui.px(em * COL_MODIFIED_EM), .Left, em)
 			column_head(app, t, .Type, "Type", ui.px(em * COL_TYPE_EM), .Left, em)
-			column_head(app, t, .Size, "Size", ui.px(em * COL_SIZE_EM), .Right, em)
+			column_head(app, t, .Size, "Size", ui.px(em * COL_SIZE_EM), .Right, em, last = true)
 			ui.spacer(ui.px(em * 0.9))
 		}
 	}
 }
 
 @(private = "file")
-column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: ui.Size, align: ui.Text_Align, em: f32) {
+column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: ui.Size, align: ui.Text_Align, em: f32, last := false) {
 	s := t.folder.sort
 	on := s.key == key
-	ui.next({width = width, height = ui.pct(1), radius = em * 0.3})
+	ui.next({width = width, height = ui.pct(1), radius = 0})
 	sig: ui.Signal
-	if ui.row(.Center, {.Clickable, .Draw_Hot_Effects}, fmt.tprintf("###col_%s", title)) {
+	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects}
+	if !last { flags += {.Draw_Side_Right} }   // (the columns' edges, as a table draws them)
+	if ui.row(.Center, flags, fmt.tprintf("###col_%s", title)) {
 		sig = ui.signal(ui.parent_box())
 		if align == .Right { ui.spacer(ui.fill()) }
 		ui.spacer(ui.px(em * 0.4))
@@ -327,13 +345,21 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 		t.focus_due = .None
 	}
 	clicked := false
+	// (the stripes: a step from the list's colour towards the bars', seen on a dark theme as on a light one)
+	zebra := ui.color("background")
+	if ui.tags("bar") { zebra = zebra * (1 - ZEBRA_MIX) + ui.color("background") * ZEBRA_MIX }
 	for row in rows.first ..< rows.last {
 		e := &f.listing.entries[f.shown[row]]
+		// the selected rows in the selection's colour (the cursor's row is the list's own), the others striped
 		selected := f.selected[f.shown[row]]
-		if selected && row != t.vl.sel { ui.push_tags(focused ? "weak_selected" : "weak_selected") }
-		ui.next({height = ui.px(ui.dense(em * ROW_EM)), flags = selected && row != t.vl.sel ? {.Draw_Background} : {}})
+		tint := ""
+		if row != t.vl.sel {
+			if selected { tint = focused ? "selected" : "weak_selected" } else if row & 1 == 1 { tint = "zebra" }
+		}
+		if tint != "" { ui.push_tags(tint) }
+		ui.next({height = ui.px(ui.dense(em * ROW_EM)), radius = 0, flags = tint != "" ? {.Draw_Background} : {}, bg = tint == "zebra" ? zebra : nil})
 		sig := ui.list_row(&t.vl, row, e.name)
-		if selected && row != t.vl.sel { ui.pop_tags() }
+		if tint != "" { ui.pop_tags() }
 		if ui.parent(sig.box) { entry_row(app, t, e, em) }
 		if row == t.vl.sel { t.cursor_rect = sig.box.rect }
 		if sig.pressed {
@@ -407,8 +433,10 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, em: f32) {
 @(private = "file")
 footer :: proc(app: ^App, t: ^Tab, em: f32) {
 	f := &t.folder
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.7))})
-	if ui.row(.Center, id = "###footer") {
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.6))})
+	ui.push_tags("bar")
+	defer ui.pop_tags()
+	if ui.row(.Center, {.Draw_Background, .Draw_Side_Top}, "###footer") {
 		ui.spacer(ui.px(em * 0.7))
 		if ui.tags("weak") {
 			if ui.style({font_size = em * 0.82}) {

@@ -31,23 +31,31 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 - The free space of the volume, the time a read took.
 - Tests of the whole program with no window of the system (`src/app_test.odin`), the README's pictures from a test.
 
+### Layer 2: change files (done but undo)
+
+- A queue of jobs (`src/jobs.odin`): copy, move, trash, delete, one at a time on a thread of their own; progress in
+  atomics shown in the status bar (files, bytes, the current name, a bar, a cancel). A copy counts first, then copies
+  (`fs.copy_file`: `copy_file_range` on Linux, `CopyFileExW` on Windows; mode and times kept; a cancelled copy leaves
+  nothing). A move is a rename on its volume, else a copy then the source removed. A folder onto a folder merges.
+- A name taken asks (`src/dialogs.odin`): replace, skip, keep both ("name 2.ext"), the same for the next ones; the job
+  waits on a semaphore for the answer. Pasted into the folder it comes from, a copy keeps both without asking.
+- The clipboard of files: Ctrl+C, Ctrl+X, Ctrl+V; a cut is a move for every file manager (gui_toolkit's
+  `files_cut` / `clipboard_files_cut`: `x-special/gnome-copied-files`, `application/x-kde-cutselection`, Windows'
+  `Preferred DropEffect`). Copy and move to the other panel (palette).
+- The trash: Delete. Linux: the freedesktop.org specification (home trash on its volume, else `<top>/.Trash-<uid>`,
+  a `.trashinfo` taken with O_EXCL); Windows: the Recycle Bin. Shift+Delete deletes for good after a confirmation.
+- The folders of every tab are watched (`fs.Watch`: inotify, change notifications on Windows; changes close together
+  come as one) and read again with the cursor and the selection kept.
+- The look: the Graphite theme (neutral greys whose steps all read, both versions), the machined finish, square corners
+  (`ROUNDING`), compact rows (`DENSITY`), bars with their lines, a tab strip with the shown tab lit by the accent when its
+  panel has the keyboard, the columns' edges, striped rows (`ZEBRA_MIX`).
+
 ## Next
 
-### Layer 2: change files
+### Layer 2: what is left
 
-1. **A queue of jobs** (`src/jobs.odin`): copy, move, delete, on a thread of their own, one at a time, with their
-   progress (bytes, files, the current name), a pause and a cancel; shown in the status bar and in a popover of the
-   jobs. A job reads what it must do (the sources, the destination) when it starts, and asks the interface (a post) when
-   a name is already there: replace, skip, keep both ("name (2).ext"), the same for every next conflict.
-2. **The clipboard of files**: Ctrl+C and Ctrl+X put the selection on the system's clipboard
-   (`platform.clipboard_set_files`; a cut is marked for the file managers: `x-special/gnome-copied-files`, Windows'
-   `Preferred DropEffect`), Ctrl+V pastes what is there into the folder (a copy, or a move after a cut).
-3. **Delete**: Delete sends to the trash (Linux: the freedesktop.org trash specification, `$XDG_DATA_HOME/Trash` or the
-   volume's `.Trash-$uid`, with its `.trashinfo`; Windows: `IFileOperation` with `FOFX_RECYCLEONDELETE`); Shift+Delete
-   deletes for good after a confirmation dialog.
-4. **Undo** (Ctrl+Z) of the last rename, move, new folder and trash.
-5. **Watch the folders shown** (inotify on Linux, `ReadDirectoryChangesW` on Windows, on a thread): a change in a
-   folder shown reads it again (at most every 200 ms), and keeps the cursor and the selection.
+1. **Undo** (Ctrl+Z) of the last rename, move, new folder and trash: a stack of what was done, each with its inverse.
+2. **A popover of the jobs** (a click on the status bar): every job, its errors, a retry.
 
 ### Layer 3: see inside
 
@@ -88,5 +96,7 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 
 - The sessions of papier and classeur both have a shots command; papier's runs a headless sway, classeur's runs
   headless in a test. If papier moves to the headless test, nothing is left to share.
-- gui_toolkit: classeur points to a local commit of the toolkit (`lucide`: the icons classeur draws). Push it and tag a
-  release, then point the submodule to the tag.
+- gui_toolkit: classeur points to local commits of the toolkit, not pushed: `a848e83` (lucide: the icons classeur draws)
+  and `81a0040` (clipboard: files cut). Push them and tag a release, then point the submodule to the tag.
+- Windows: the code compiles (`odin check src/fs -target:windows_amd64`) but has not run on Windows yet. Run the tests
+  there first.

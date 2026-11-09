@@ -101,6 +101,8 @@ app_open :: proc(o: Open_Options) -> ^App {
 	app.mono, _ = font.load_embedded(&app.shared.fonts, font.FALLBACK_MONO_DATA)
 	h.state.icon_font, _ = font.load_embedded(&app.shared.fonts, ui.ICON_FONT_DATA)
 	h.after_input = FRAMES_AFTER_INPUT
+	ui.set_rounding(&h.state, ROUNDING)
+	ui.set_density(&h.state, DENSITY)
 	h.partial_redraw = true
 	h.params = app_params
 	app.devtools = devtools.start_from_env(win, APP_NAME)
@@ -159,11 +161,11 @@ app_free :: proc(app: ^App) {
 @(private = "file")
 app_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 	app := (^App)(h.user)
-	choice := ui.Theme_Choice{name = "Classeur", mode = .System}
+	choice := ui.Theme_Choice{name = "Graphite", mode = .System, finish = .Machined, glow = 0.6}
 	if ui.theme_show(&app.shared.theme, themes(), choice, &app.theme_shown, render.blend_space(&app.shared.r)) {
 		platform.set_dark_title(h.win, !app.theme_shown.light)
 	}
-	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(26)}, font = app.shared.font, font_size = 13.5, text_pad = 6, cursor = .Arrow}
+	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(26)}, font = app.shared.font, font_size = 13, text_pad = 5, cursor = .Arrow}
 }
 
 // More frames: something changed outside of an input (a worker's result).
@@ -181,22 +183,34 @@ say :: proc(app: ^App, format: string, args: ..any) {
 
 STATUS_SHOWN_MS :: 4000
 
-// classeur's own theme, first of the list: a deep blue night, the folder's blue as the accent (the colours of the logo).
-THEME_CLASSEUR :: ui.Theme_Def{"Classeur",
-	{{0x0d1117ff, 0x11161dff, 0x161c24ff, 0x161c24ff, 0x1e2630ff, 0x27303cff}, {0x56606dff, 0x8b95a3ff, 0xe6eaf0ff, 0xffffffff},
-		{0x5aa2ecff, 0x8fa9c9ff, 0xa99bc4ff, 0x46a758ff, 0xf5a524ff, 0xe5484dff, 0x6cc4c8ff, 0xc9a0b4ff}},
-	{{0xe9edf2ff, 0xf4f6f9ff, 0xffffffff, 0xffffffff, 0xeef1f5ff, 0xdfe4eaff}, {0x9aa3afff, 0x67707cff, 0x1a1f26ff, 0x000000ff},
-		{0x2f6fb8ff, 0x3d6a9eff, 0x6b56a3ff, 0x2f8f46ff, 0xc98a10ff, 0xd93d42ff, 0x2f7c86ff, 0xa64a72ff}},
+// classeur's own theme, first of the list: graphite. Neutral greys far enough apart that every surface reads (the
+// bars, the list, the wells, the lines), a clear blue for the selection; a light version of the same steps.
+THEME_CLASSEUR :: ui.Theme_Def{"Graphite",
+	{{0x0f1012ff, 0x18191cff, 0x222429ff, 0x1c1d21ff, 0x2e3137ff, 0x3b3f47ff}, {0x5d626cff, 0x959ba6ff, 0xdfe2e7ff, 0xffffffff},
+		{0x4f9de8ff, 0x60a5faff, 0xa78bfaff, 0x5dc48aff, 0xe8b84eff, 0xe9605fff, 0x4cc2ffff, 0xe476a8ff}},
+	{{0xffffffff, 0xf7f8f9ff, 0xe4e6eaff, 0xeef0f2ff, 0xfbfbfcff, 0xbfc4cbff}, {0xa1a7b0ff, 0x5c636dff, 0x1a1d21ff, 0x000000ff},
+		{0x1f6fd1ff, 0x2563ebff, 0x7c3aedff, 0x2f8f46ff, 0xb7820cff, 0xd23c3cff, 0x0e7490ff, 0xc2477aff}},
 	.Both, nil, false, 0}
+
+// How square the corners are (1: the toolkit's) and how dense the rows (1: comfortable).
+ROUNDING :: 0.3
+DENSITY  :: 0.82
 
 // The themes the window can show: classeur's, then the toolkit's (gui_toolkit docs/themes.md).
 themes :: proc() -> []ui.Theme_Def {
 	@(static) list: [len(ui.THEMES) + 1]ui.Theme_Def
-	if list[0].name == "" {
+	@(static) n: int
+	if n == 0 {
+		// (the toolkit's own Graphite gives way to classeur's: one name, one theme)
 		list[0] = THEME_CLASSEUR
-		copy(list[1:], ui.THEMES[:])
+		n = 1
+		for t in ui.THEMES {
+			if t.name == THEME_CLASSEUR.name { continue }
+			list[n] = t
+			n += 1
+		}
 	}
-	return list[:]
+	return list[:n]
 }
 
 // Text to show as it is: a "##" in it would end the shown part of a box's id string (ui's key rules), so a zero-width

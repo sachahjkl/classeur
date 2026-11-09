@@ -38,10 +38,8 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	page := ui.build_box({.Draw_Background}, "###page")
 	if ui.parent(page) {
 		build_title(app, em)
-		ui.hline(ui.fill())
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.row() { build_body(app, em) }
-		ui.hline(ui.fill())
 		build_status(app, em)
 	}
 	entry_menu_build(app, em)
@@ -61,11 +59,16 @@ glyph :: proc(app: ^App, g: string, width: f32, fg: Maybe(ui.Color) = nil) {
 }
 
 // A small button with a Lucide icon; its tooltip says what it does.
-icon_action :: proc(app: ^App, id, g, tip: string, em: f32, enabled := true) -> bool {
-	ui.next({width = ui.px(em * 2), height = ui.px(em * 2), font = app.icons, radius = em * 0.4})
+icon_action :: proc(app: ^App, id, g, tip: string, em: f32, enabled := true, raised := false) -> bool {
+	side := raised ? em * 1.75 : em * 1.9
+	ui.next({width = ui.px(side), height = ui.px(side), font = app.icons, radius = em * 0.3, text_pad = 0})
 	sig: ui.Signal
 	if ui.disabled(!enabled) {
-		if ui.tags("ghost_button") { sig = ui.button(fmt.tprintf("%s###%s", g, id)) }
+		if raised {
+			sig = ui.button(fmt.tprintf("%s###%s", g, id))
+		} else if ui.tags("ghost_button") {
+			sig = ui.button(fmt.tprintf("%s###%s", g, id))
+		}
 	}
 	if ui.hovered_for(sig, 0.4) {
 		if ui.tooltip() {
@@ -87,7 +90,9 @@ command_tip :: proc(id: string) -> string {
 @(private = "file")
 build_title :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TITLE_EM))})
-	if ui.title_bar("###titlebar") {
+	ui.push_tags("bar")
+	defer ui.pop_tags()
+	if ui.title_bar("###titlebar", {.Draw_Background, .Draw_Side_Bottom}) {
 		ui.spacer(ui.px(em * 0.5))
 		glyph(app, lucide.FOLDER_OPEN, em * 1.8, ui.color("accent"))
 		ui.next({width = ui.text_size(em * 0.3), height = ui.pct(1)})
@@ -120,8 +125,14 @@ build_body :: proc(app: ^App, em: f32) {
 	}
 	for p, i in app.panels {
 		if i > 0 {
+			// (two lines with the page between them: the panels read as two)
 			ui.next({width = ui.px(max(1, scale)), height = ui.fill()})
-			if ui.tags("separator") { ui.build_box({.Draw_Background}, fmt.tprintf("###panel_sep%d", i)) }
+			ui.next_merge({bg = ui.color("border")})
+			ui.build_box({.Draw_Background}, fmt.tprintf("###panel_sep%d", i))
+			ui.spacer(ui.px(max(3, 3 * scale)))
+			ui.next({width = ui.px(max(1, scale)), height = ui.fill()})
+			ui.next_merge({bg = ui.color("border")})
+			ui.build_box({.Draw_Background}, fmt.tprintf("###panel_sep%db", i))
 		}
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 		panel_build(app, p, i, em)
@@ -135,7 +146,9 @@ build_body :: proc(app: ^App, em: f32) {
 build_sidebar :: proc(app: ^App, em: f32) {
 	t := current_tab(app)
 	here := t != nil ? t.path : ""
-	box := ui.build_box({.Clip}, "###sidebar")
+	ui.push_tags("bar")
+	box := ui.build_box({.Clip, .Draw_Background}, "###sidebar")
+	ui.pop_tags()
 	if ui.parent(box) {
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###side_scroll") {
@@ -159,21 +172,25 @@ build_sidebar :: proc(app: ^App, em: f32) {
 side_heading :: proc(text: string, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.7))})
 	if ui.row(.Center) {
-		ui.spacer(ui.px(em * 0.9))
+		ui.spacer(ui.px(em * 0.8))
 		if ui.tags("weak") {
-			ui.next({width = ui.fill(), height = ui.pct(1), font_size = em * 0.82})
-			ui.label(fmt.tprintf("%s###h", text))
+			ui.next({width = ui.text_size(em * 0.2), height = ui.pct(1), font_size = em * 0.78})
+			ui.label(fmt.tprintf("%s###h", strings.to_upper(text, context.temp_allocator)))
 		}
+		ui.next({width = ui.fill(), height = ui.px(1)})
+		ui.next_merge({bg = ui.color("border")})
+		ui.build_box({.Draw_Background}, "###rule")
+		ui.spacer(ui.px(em * 0.6))
 	}
 }
 
 @(private = "file")
 side_row :: proc(app: ^App, id, icon, name: string, here: bool, em: f32) -> bool {
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.95)), radius = em * 0.4})
-	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects}
-	if here { flags += {.Draw_Background} }
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.75)), radius = 0})
+	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Hot_Within}
+	if here { flags += {.Draw_Background, .Draw_Side_Left} }
 	sig: ui.Signal
-	if here { ui.push_tags("weak_selected") }
+	if here { ui.push_tags("selected") }
 	if ui.row(.Center, flags, id) {
 		sig = ui.signal(ui.parent_box())
 		ui.spacer(ui.px(em * 0.6))
@@ -192,7 +209,9 @@ side_row :: proc(app: ^App, id, icon, name: string, here: bool, em: f32) -> bool
 @(private = "file")
 build_status :: proc(app: ^App, em: f32) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * STATUS_EM))})
-	if ui.row(.Center) {
+	ui.push_tags("bar")
+	defer ui.pop_tags()
+	if ui.row(.Center, {.Draw_Background, .Draw_Side_Top}, "###statusbar") {
 		ui.spacer(ui.px(em * 0.7))
 		if ui.style({font_size = em * 0.86}) {
 			job_status(app, em)

@@ -7,10 +7,13 @@ is immediate-mode); the data changes only on the interface's thread.
 
 | Where | What |
 |---|---|
-| `src/fs/` | The file system, the same interface on every system. `list` reads a folder into a `Listing` (one array of `Entry`, the names in one arena). Linux: `getdents64` into 64 KB, then one `statx` per entry relative to the folder's descriptor. Windows: `FindFirstFileExW` with the basic level and large fetches (no call per file). `stat`, `space`, `volumes`, the paths (`clean`, `join`, `parent`, `base`, `crumbs`) and the natural sort (`name_compare`: digits by value, case and Latin accents ignored; `sort_order`: a stable merge sort of indices). |
+| `src/fs/` | The file system, the same interface on every system. `list` reads a folder into a `Listing` (one array of `Entry`, the names in one arena). Linux: `getdents64` into 64 KB, then one `statx` per entry relative to the folder's descriptor. Windows: `FindFirstFileExW` with the basic level and large fetches (no call per file). `stat`, `space`, `volumes`, the operations (`copy_file`, `copy_link`, `rename` that never replaces, `make_folder`, `remove`, `trash`, `free_name`), `Watch`, the paths (`clean`, `join`, `parent`, `base`, `crumbs`) and the natural sort (`name_compare`: digits by value, case and Latin accents ignored; `sort_order`: a stable merge sort of indices). |
 | `src/folder.odin` | A folder as a panel shows it: the listing, its order, the rows shown (filter, hidden files), the selection (a flag per entry, so that it survives a sort or a filter), the cursor and the anchor of Shift ranges. No interface. |
 | `src/tab.odin` | Tabs (a path, its history, a `Folder`, the fields of the toolbar) and panels (tabs, one active). Reading a folder: `tab_load` gives a task to the workers; `load_done` (through `ui.post`) gives the listing to the tab only if it is the read the tab waits for (`serial`). |
 | `src/pool.odin` | The workers: three threads, a queue of tasks. |
+| `src/jobs.odin` | Copy, move, trash, delete: one thread, one job at a time, progress in atomics, a question through `ui.post` and a semaphore. |
+| `src/dialogs.odin` | The name-taken question and the delete-for-good confirmation. |
+| `src/watcher.odin` | The folders of the tabs, watched on a thread (`fs.Watch`); a change reads the tab again. |
 | `src/commands.odin` | The table of every command: id, title, icon, keys, whether its keys work while a text field has the keyboard. The keyboard (`commands_keys`), the palette and the menus read it. |
 | `src/actions.odin` | What the commands do, and the rename in place. |
 | `src/palette.odin` | The command palette: fuzzy search over the titles, the keys shown. |
