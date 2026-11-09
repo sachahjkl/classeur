@@ -311,6 +311,31 @@ test_search :: proc(t: ^testing.T) {
 	testing.expect(t, !slice.contains(shown_names(tab), "Documents/letter.odt"))
 }
 
+@(test)
+test_options :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir})
+	tab := current_tab(app)
+	session.key(s, .Comma, {.Ctrl})
+	testing.expect(t, app.options.open)
+	// typed words find the option; Enter flips it
+	session.type_text(s, "hidden")
+	session.key(s, .Return)
+	testing.expect(t, app.show_hidden)
+	testing.expect(t, slice.contains(shown_names(tab), ".hidden"))
+	session.key(s, .Escape)
+	testing.expect(t, !app.options.open)
+	// the extensions left out of the names shown
+	session.key(s, .Comma, {.Ctrl})
+	session.type_text(s, "extension")
+	session.key(s, .Return)
+	session.key(s, .Escape)
+	testing.expect(t, !app.settings.show_extensions)
+	session.frames(s, 2)
+	testing.expect(t, session.find_text(s, "notes") != nil, "notes.txt shows as notes")
+}
+
 // The pictures of the README (classeurtool shots): a home folder of made-up files; the grid of the pictures beside the
 // details of the home folder; the palette.
 @(test)
@@ -351,6 +376,11 @@ test_shots :: proc(t: ^testing.T) {
 	session.type_text(s, "tab")
 	session.frames(s, 2)
 	session.save_png(s, "palette.png")
+	session.key(s, .Escape)
+	session.key(s, .Comma, {.Ctrl})
+	session.key(s, .Down, repeat = 3)
+	session.frames(s, 2)
+	session.save_png(s, "options.png")
 	session.key(s, .Escape)
 
 	// the search: the home folder flattened, "not" typed in the filter

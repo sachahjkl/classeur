@@ -268,8 +268,7 @@ act_copy_path :: proc(app: ^App) {
 // The view
 
 act_toggle_hidden :: proc(app: ^App) {
-	app.show_hidden = !app.show_hidden
-	for p in app.panels { for t in p.tabs { folder_set_show_hidden(&t.folder, app.show_hidden) } }
+	pref_set_bool(app, "files.show_hidden", !app.show_hidden)
 	say(app, app.show_hidden ? "Hidden files are shown." : "Hidden files are hidden.")
 }
 
@@ -288,14 +287,7 @@ act_sort_modified :: proc(app: ^App) { sort_by(app, .Modified) }
 act_sort_size :: proc(app: ^App) { sort_by(app, .Size) }
 act_sort_type :: proc(app: ^App) { sort_by(app, .Type) }
 
-act_folders_mixed :: proc(app: ^App) {
-	t := current_tab(app)
-	if t == nil { return }
-	s := t.folder.sort
-	s.mixed = !s.mixed
-	folder_set_sort(&t.folder, s)
-	app.default_sort = s
-}
+act_folders_mixed :: proc(app: ^App) { pref_set_bool(app, "files.folders_first", app.default_sort.mixed) }
 
 ////////////////////////////////
 // Copy, move, trash

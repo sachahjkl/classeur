@@ -6,7 +6,6 @@ import "core:fmt"
 import "core:strings"
 import "core:time"
 import "core:time/timezone"
-import lucide "gt:lucide"
 import "fs"
 
 // "512 B", "12.4 KB", "3.1 MB", "1.2 GB" (powers of 1024, as the systems' file managers count).
@@ -46,39 +45,6 @@ type_text :: proc(e: fs.Entry, allocator := context.temp_allocator) -> string {
 	return strings.concatenate({strings.to_upper(ext, context.temp_allocator), " File"}, allocator)
 }
 
-@(private = "file")
-Ext_Icon :: struct { exts: []string, icon: string }
-
-@(private = "file", rodata)
-EXT_ICONS := [?]Ext_Icon{
-	{{"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico", "avif", "heic", "tif", "tiff", "jxl", "psd", "xcf", "kra"}, lucide.FILE_IMAGE},
-	{{"mp3", "flac", "wav", "ogg", "m4a", "opus", "aac", "wma", "aiff", "mid"}, lucide.FILE_MUSIC},
-	{{"mp4", "mkv", "webm", "mov", "avi", "m4v", "wmv", "flv", "mpg", "mpeg"}, lucide.FILE_VIDEO_2},
-	{{"zip", "tar", "gz", "xz", "bz2", "7z", "rar", "zst", "tgz", "lz4", "cab", "iso", "dmg", "deb", "rpm"}, lucide.FILE_ARCHIVE},
-	{{"csv", "tsv", "xls", "xlsx", "ods", "numbers"}, lucide.FILE_SPREADSHEET},
-	{{"exe", "msi", "appimage", "bat", "cmd", "com", "ps1"}, lucide.PACKAGE},
-	{{"odin", "c", "h", "cc", "cpp", "hpp", "rs", "go", "py", "js", "mjs", "ts", "tsx", "jsx", "java", "kt", "swift", "rb", "sh", "fish",
-	  "nix", "lua", "zig", "json", "toml", "yaml", "yml", "xml", "html", "htm", "css", "scss", "sql", "cs", "php", "wgsl", "glsl", "hlsl"}, lucide.FILE_CODE},
-	{{"txt", "md", "rst", "log", "pdf", "doc", "docx", "odt", "rtf", "tex", "epub", "org", "ini", "cfg", "conf"}, lucide.FILE_TEXT},
-}
-
-entry_icon :: proc(e: fs.Entry) -> string {
-	switch e.kind {
-	case .Directory:   return .Link in e.flags ? lucide.FOLDER_SYMLINK : lucide.FOLDER
-	case .Broken_Link: return lucide.FILE_SYMLINK
-	case .Other:       return lucide.FILE
-	case .File:
-	}
-	if .Link in e.flags { return lucide.FILE_SYMLINK }
-	ext := fs.extension(e.name)
-	if ext == "" { return lucide.FILE }
-	buf: [16]u8
-	if len(ext) > len(buf) { return lucide.FILE }
-	for i in 0 ..< len(ext) { c := ext[i]; buf[i] = c >= 'A' && c <= 'Z' ? c + 32 : c }
-	lower := string(buf[:len(ext)])
-	for group in EXT_ICONS { for x in group.exts { if x == lower { return group.icon } } }
-	return lucide.FILE
-}
 
 // The text cut after `max_runes` characters, with an ellipsis.
 cut_text :: proc(text: string, max_runes: int, allocator := context.temp_allocator) -> string {

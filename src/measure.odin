@@ -63,6 +63,7 @@ measure_forget_asked :: proc(app: ^App) {
 
 // Each frame: the measures of the tabs shown, once per read of their folder.
 measure_update :: proc(app: ^App) {
+	if !app.settings.measure_folders { return }
 	for p in app.panels {
 		t := panel_tab(p)
 		if t == nil || t.loading || !t.folder.loaded || t.measured == t.serial { continue }

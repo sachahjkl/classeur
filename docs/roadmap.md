@@ -79,6 +79,10 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 
 ### File Pilot's details still missing
 
+- The search's type filter: a popup of the types found, with their counts and boxes to tick (its button in the
+  filter's box).
+- A progressive search: the results shown as the walk reads them; the walk on several threads.
+
 - The context menu's search field at its top ("Select a system command...") and its icons; several keys per item.
 - The tabs dragged to reorder them and to another panel; the panels split below as well as beside.
 - Bookmarks and recents saved (layer 5).

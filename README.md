@@ -14,20 +14,24 @@ you type, the path typed or clicked. It is one native program, written in [Odin]
 
 - **Fast**: a folder is read on worker threads with the system's fastest calls, and only the rows in view are built. The
   window never waits for the disk.
-- **Tabs and panels**: tabs in each panel, panels side by side; open a folder in a new tab, in the other panel.
-- **Command palette** (Ctrl+Shift+P): every action, found by a few letters, with its keys.
-- **Filter** (Ctrl+F): the names that hold every word typed.
-- **Natural order**: "photo 2" before "photo 10"; the case and the accents do not separate names.
-- **Selection** with the mouse and the keyboard, kept through a sort, a filter and a refresh.
-- **Rename in place** (F2), new folder (Ctrl+Shift+N), copy the paths (Ctrl+Shift+C).
+- **Tabs and panels**: each panel's tabs at the top of the window, panels side by side.
+- **Zoom** (Ctrl+wheel): the details, the names alone, the names in columns, then cards with thumbnails, ever larger.
+- **Search** (Ctrl+Shift+F): every file under a folder, flattened, filtered by a few letters in order (fuzzy), the best
+  matches first, the letters found lit.
+- **Folder sizes**: what each folder holds all the way down, its folders, files and bytes, measured as you look.
+- **Command palette** (Ctrl+Shift+P) and **options** (Ctrl+,): every action and every option, found by typing.
+- **Copy, cut, paste, trash** in a queue of jobs with their progress; a cut is a move for the other file managers too.
+- **The sidebar**: recent folders, bookmarks (Ctrl+D), the volumes and how full they are, the places.
+- **Watched folders**: a change made by any program shows at once.
 
 | | |
 |---|---|
-| ![Two panels](docs/screenshots/panels.png) | ![The palette](docs/screenshots/palette.png) |
-| Two panels | The command palette |
+| ![Two panels](docs/screenshots/panels.png) | ![The search](docs/screenshots/search.png) |
+| The grid beside the details | The search of a whole folder |
+| ![The palette](docs/screenshots/palette.png) | ![The options](docs/screenshots/options.png) |
+| The command palette | The options |
 
-What comes next is in [docs/roadmap.md](docs/roadmap.md): copy, move and the trash with a queue of jobs, the inspector,
-folder sizes, thumbnails, GoTo, the search of a whole volume.
+What comes next is in [docs/roadmap.md](docs/roadmap.md).
 
 ## Keys
 
@@ -38,6 +42,10 @@ folder sizes, thumbnails, GoTo, the search of a whole volume.
 | Alt+Left, Alt+Right | back, forward |
 | Ctrl+L | type a path |
 | Ctrl+F | filter |
+| Ctrl+Shift+F | search every folder below |
+| Ctrl+wheel, Ctrl+=, Ctrl+- | zoom: details, names, columns, cards |
+| Ctrl+, | options |
+| Ctrl+D | bookmark the folder |
 | Ctrl+T, Ctrl+W, Ctrl+Shift+T | new tab, close it, open it again |
 | Ctrl+Enter | the folder in a new tab |
 | Ctrl+Shift+D, F6 | a new panel, the next panel |
@@ -58,4 +66,5 @@ Every step of the project is a command of `tools/classeurtool`: see [docs/develo
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). Icons: [Lucide](https://lucide.dev), ISC.
+MIT, see [LICENSE](LICENSE). Icons: [Lucide](https://lucide.dev), ISC; [Phosphor](https://phosphoricons.com), MIT
+([assets/fonts/PHOSPHOR-LICENSE.txt](assets/fonts/PHOSPHOR-LICENSE.txt)).

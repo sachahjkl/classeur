@@ -4,7 +4,6 @@ package classeur
 
 import "core:os"
 import "core:strings"
-import lucide "gt:lucide"
 import "gt:platform"
 import "fs"
 
@@ -18,13 +17,13 @@ Known :: struct { folder: platform.Known_Folder, name, icon: string }
 
 @(private = "file")
 KNOWN :: [?]Known{
-	{.Home, "Home", lucide.HOME},
-	{.Desktop, "Desktop", lucide.MONITOR},
-	{.Documents, "Documents", lucide.FILE_TEXT},
-	{.Downloads, "Downloads", lucide.DOWNLOAD},
-	{.Pictures, "Pictures", lucide.IMAGE},
-	{.Music, "Music", lucide.MUSIC},
-	{.Videos, "Videos", lucide.FILM},
+	{.Home, "Home", PH_HOUSE},
+	{.Desktop, "Desktop", PH_DESKTOP},
+	{.Documents, "Documents", PH_FILE_TEXT},
+	{.Downloads, "Downloads", PH_DOWNLOAD_SIMPLE},
+	{.Pictures, "Pictures", PH_IMAGE},
+	{.Music, "Music", PH_MUSIC_NOTES},
+	{.Videos, "Videos", PH_FILM_STRIP},
 }
 
 places_load :: proc(app: ^App) {
@@ -42,12 +41,12 @@ places_load :: proc(app: ^App) {
 	}
 	// the root of the system (File Pilot's This PC) and the trash
 	when ODIN_OS != .Windows {
-		append(&app.places, Place{name = strings.clone("Computer"), path = strings.clone("/"), icon = lucide.HARD_DRIVE})
+		append(&app.places, Place{name = strings.clone("Computer"), path = strings.clone("/"), icon = PH_HARD_DRIVES})
 		data := os.get_env("XDG_DATA_HOME", context.temp_allocator)
 		if data == "" { data = fs.join(app.home, ".local/share", context.temp_allocator) }
 		trash := fs.join(data, "Trash/files")
 		if info, ok := fs.stat(trash); ok && info.kind == .Directory {
-			append(&app.places, Place{name = strings.clone("Trash"), path = trash, icon = lucide.TRASH_2})
+			append(&app.places, Place{name = strings.clone("Trash"), path = trash, icon = PH_TRASH})
 		} else {
 			delete(trash)
 		}

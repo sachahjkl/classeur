@@ -48,16 +48,18 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 		if t == nil { return box.rect }
 		wide := (box.rect.max.x - box.rect.min.x) > em * WIDE_EM
 		toolbar(app, p, t, index, em)
+		// (the contents of a panel without the keyboard, dimmed: the one that has it stands out)
+		dim := focused || len(app.panels) == 1 ? 0 : 1 - app.settings.inactive_opacity
 		switch tab_mode(t) {
 		case .Details:
 			header(app, t, wide, em)
-			ui.next({width = ui.fill(), height = ui.fill()})
+			ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
 			folder_list(app, t, focused, wide, false, em)
 		case .List:
-			ui.next({width = ui.fill(), height = ui.fill()})
+			ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
 			folder_list(app, t, focused, false, true, em)
 		case .Columns, .Grid:
-			ui.next({width = ui.fill(), height = ui.fill()})
+			ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
 			grid_list(app, t, focused, em)
 		}
 		footer(app, t, focused, em)
@@ -338,13 +340,17 @@ folder_list :: proc(app: ^App, t: ^Tab, focused, wide, names_only: bool, em: f32
 		if selected && focused { ui.push_tags("selected") }
 		sig := ui.list_row(&t.vl, row, e.name)
 		if selected && focused { ui.pop_tags() }
-		row_paint(sig.box, look, selected, row == f.cursor && (!selected || f.count > 1))
+		row_paint(sig.box, look, selected, row == f.cursor && (!selected || f.count > 1), row & 1 == 1)
 		check := false
 		if ui.parent(sig.box) { check = entry_row(app, t, e, row, selected, wide, names_only, em) }
 		if row == t.vl.sel { t.cursor_rect = sig.box.rect }
 		if check {
 			clicked = true
 			folder_pick(f, row, toggle = true)
+		} else if app.settings.single_click && sig.clicked && sig.mods == {} {
+			folder_pick(f, row)
+			act_open(app)
+			return
 		} else if sig.pressed {
 			clicked = true
 			folder_pick(f, row, extend = .Shift in sig.mods, toggle = .Ctrl in sig.mods)
@@ -372,6 +378,8 @@ folder_list :: proc(app: ^App, t: ^Tab, focused, wide, names_only: bool, em: f32
 // How the rows of a list are painted, File Pilot's way: a line under each, the selection a pill a little in from the
 // sides (solid while the panel has the keyboard), the cursor a ring of the accent.
 Row_Look :: struct {
+	stripes: bool,      // every other row a shade lighter (the option)
+	stripe:  ui.Color,
 	inset:   f32,
 	radius:  f32,
 	line:    ui.Color,
@@ -385,6 +393,7 @@ Row_Paint :: struct {
 	look:     ^Row_Look,
 	selected: bool,
 	cursor:   bool,
+	odd:      bool,
 }
 
 row_look :: proc(app: ^App, focused: bool, em: f32) -> ^Row_Look {
@@ -396,14 +405,16 @@ row_look :: proc(app: ^App, focused: bool, em: f32) -> ^Row_Look {
 		fill = focused ? sel : sel * {1, 1, 1, 0.35},
 		ring = draw.hex(app.theme_shown.light ? CURSOR_LIGHT : CURSOR_DARK),
 		focused = focused,
+		stripes = app.settings.alternating_rows,
+		stripe = ui.color("text") * {1, 1, 1, 0.035},
 	}
 	return look
 }
 
 // The box `b` (a row, a card) draws its pill and its ring under what it holds.
-row_paint :: proc(b: ^ui.Box, look: ^Row_Look, selected, cursor: bool) {
+row_paint :: proc(b: ^ui.Box, look: ^Row_Look, selected, cursor: bool, odd := false) {
 	d := ui.frame_new(Row_Paint)
-	d^ = {look, selected, cursor && look.focused}
+	d^ = {look, selected, cursor && look.focused, odd}
 	b.custom, b.custom_user = row_draw, d
 }
 
@@ -413,6 +424,7 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	l := d.look
 	r := b.rect
 	inner := ui.Rect{{r.min.x + l.inset, r.min.y + 1}, {r.max.x - l.inset, r.max.y - 1}}
+	if l.stripes && d.odd { draw.rect(dc, inner, l.stripe, radius = l.radius) }
 	draw.rect(dc, {{inner.min.x, r.max.y - 1}, {inner.max.x, r.max.y}}, l.line)
 	if d.selected { draw.rect(dc, inner, l.fill, radius = l.radius) }
 	if d.cursor { draw.rect(dc, inner, l.ring, radius = l.radius, border = 1) }
@@ -488,7 +500,7 @@ entry_name :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, em: f32) {
 	if !t.folder.flat && needle == "" {
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		if hidden { ui.push_tags("weak") }
-		ui.label(fmt.tprintf("%s###n", shown_text(e.name)))
+		ui.label(fmt.tprintf("%s###n", shown_text(shown_name(app, e^))))
 		if hidden { ui.pop_tags() }
 		return
 	}
@@ -678,4 +690,11 @@ home_crumbs :: proc(app: ^App, path: string) -> []fs.Crumb {
 	out := parts[len(home) - 1:]
 	out[0].name = "Home"
 	return out
+}
+
+// The name as the options show it: the extension of a file left out when they say so.
+shown_name :: proc(app: ^App, e: fs.Entry) -> string {
+	if app.settings.show_extensions || e.kind == .Directory { return e.name }
+	ext := fs.extension(e.name)
+	return ext == "" ? e.name : e.name[:len(e.name) - len(ext) - 1]
 }

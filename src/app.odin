@@ -8,6 +8,7 @@ import "core:strings"
 import "core:sync"
 import "core:time/datetime"
 import "core:time/timezone"
+import config "gt:config"
 import "gt:devtools"
 import "gt:draw"
 import "gt:font"
@@ -24,7 +25,8 @@ FRAMES_AFTER_INPUT :: 3
 App :: struct {
 	shared:      host.Shared,
 	main:        host.Host,
-	icons:       font.Font_Id,      // Lucide
+	icons:       font.Font_Id,      // Lucide: the thin icons of the bars' buttons
+	filled:      font.Font_Id,      // Phosphor's filled icons: the files', the places' (phosphor.odin)
 	mono:        font.Font_Id,
 	devtools:    ^devtools.Server,  // TOOLKIT_DEVTOOLS=<port>: driven and captured over the Chrome DevTools Protocol
 	theme_shown: ui.Theme_Shown,
@@ -70,6 +72,10 @@ App :: struct {
 	jobs:        Jobs,              // copies, moves, the trash (jobs.odin)
 	confirm:     Confirm,           // delete for good? (dialogs.odin)
 	conflict:    Conflict_View,     // a name taken: what to do (dialogs.odin)
+	prefs:       config.Prefs,      // the preferences (prefs.odin)
+	settings:    Settings,          // their values as the program reads them
+	theme_names: []string,          // the choices of look.theme
+	options:     Options,           // the options' list (options.odin)
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
 }
@@ -114,11 +120,12 @@ app_open :: proc(o: Open_Options) -> ^App {
 	h := &app.main
 	win := h.win
 	app.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
+	app.filled, _ = font.load_embedded(&app.shared.fonts, PHOSPHOR_DATA)
 	app.mono, _ = font.load_embedded(&app.shared.fonts, font.FALLBACK_MONO_DATA)
 	h.state.icon_font, _ = font.load_embedded(&app.shared.fonts, ui.ICON_FONT_DATA)
 	h.after_input = FRAMES_AFTER_INPUT
-	ui.set_rounding(&h.state, ROUNDING)
 	ui.set_density(&h.state, DENSITY)
+	prefs_open(app)
 	h.partial_redraw = true
 	h.params = app_params
 	h.input = app_input
@@ -172,6 +179,8 @@ app_free :: proc(app: ^App) {
 	palette_free(&app.palette)
 	rename_free(&app.rename)
 	confirm_free(&app.confirm)
+	options_free(&app.options)
+	prefs_close(app)
 	delete(app.home)
 	delete(app.status)
 	delete(app.text_keys)
@@ -193,12 +202,12 @@ app_free :: proc(app: ^App) {
 @(private = "file")
 app_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 	app := (^App)(h.user)
-	choice := ui.Theme_Choice{name = "Graphite", mode = .System, finish = .Flat}
+	choice := ui.Theme_Choice{name = app.settings.theme, mode = app.settings.follow_system ? .System : .Dark, finish = .Flat}
 	if ui.theme_show(&app.shared.theme, themes(), choice, &app.theme_shown, render.blend_space(&app.shared.r)) {
 		platform.set_dark_title(h.win, !app.theme_shown.light)
 	}
 	bp.disable_zoom = true
-	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(26)}, font = app.shared.font, font_size = 13.5, text_pad = 5, cursor = .Arrow}
+	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(26)}, font = app.shared.font, font_size = app.settings.font_size, text_pad = 5, cursor = .Arrow}
 }
 
 // More frames: something changed outside of an input (a worker's result).

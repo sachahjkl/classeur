@@ -125,6 +125,7 @@
         done
         install -Dm644 -t $out/share/doc/classeur LICENSE README.md CHANGELOG.md
         install -Dm644 ext/gui_toolkit/src/lucide/LICENSE.txt $out/share/doc/classeur/LUCIDE-LICENSE.txt
+        install -Dm644 assets/fonts/PHOSPHOR-LICENSE.txt $out/share/doc/classeur/PHOSPHOR-LICENSE.txt
         runHook postInstall
       '';
 

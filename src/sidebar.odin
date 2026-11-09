@@ -16,20 +16,21 @@ Side_Section :: enum u8 { Recents, Bookmarks, Storage, Places }
 @(private = "file", rodata)
 SECTION_TITLES := [Side_Section]string{.Recents = "Recents", .Bookmarks = "Bookmarks", .Storage = "Storage", .Places = "Places"}
 @(private = "file", rodata)
-SECTION_ICONS := [Side_Section]string{.Recents = lucide.HISTORY, .Bookmarks = lucide.BOOKMARK, .Storage = lucide.DATABASE, .Places = lucide.FOLDER}
+SECTION_ICONS := [Side_Section]string{.Recents = PH_CLOCK_BACK, .Bookmarks = PH_BOOKMARK_SIMPLE, .Storage = PH_HARD_DRIVES, .Places = PH_FOLDER}
 
 // The colours of the places' icons (sRGB).
 @(private = "file")
 place_color :: proc(icon: string) -> u32 {
 	switch icon {
-	case lucide.MONITOR:   return 0x3fb8c9ff
-	case lucide.DOWNLOAD:  return 0x5dc48aff
-	case lucide.FILE_TEXT: return 0xb9c2ccff
-	case lucide.MUSIC:     return 0xf07a3aff
-	case lucide.IMAGE:     return 0x4f9de8ff
-	case lucide.FILM:      return 0xa66cf0ff
-	case lucide.HARD_DRIVE: return 0x4f9de8ff
-	case lucide.TRASH_2:   return 0x9aa3adff
+	case PH_HOUSE:           return 0xf4c542ff
+	case PH_DESKTOP:         return 0x35b1e0ff
+	case PH_FILE_TEXT:       return 0xc9cdd3ff
+	case PH_DOWNLOAD_SIMPLE: return 0x4fc48aff
+	case PH_IMAGE:           return 0x4f9de8ff
+	case PH_MUSIC_NOTES:     return 0xf2853cff
+	case PH_FILM_STRIP:      return 0xa774f2ff
+	case PH_HARD_DRIVES:     return 0x8fa3b8ff
+	case PH_TRASH:           return 0x9aa3adff
 	}
 	return 0xf4c542ff
 }
@@ -126,7 +127,7 @@ section :: proc(app: ^App, s: Side_Section, em: f32) -> bool {
 	if ui.row(.Center, {.Clickable, .Draw_Hot_Effects, .Hot_Within}, fmt.tprintf("###sec_%s", SECTION_TITLES[s])) {
 		sig = ui.signal(ui.parent_box())
 		ui.spacer(ui.px(em * 0.6))
-		if ui.tags("weak") { glyph(app, SECTION_ICONS[s], em * 1.6) }
+		if ui.tags("weak") { filled(app, SECTION_ICONS[s], em * 1.6) }
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###t", SECTION_TITLES[s]))
@@ -164,7 +165,7 @@ side_row :: proc(app: ^App, id, icon: string, color: ui.Color, name: string, her
 	if ui.row(.Center, flags, id) {
 		sig = ui.signal(ui.parent_box())
 		ui.spacer(ui.px(em * 2.4))
-		glyph(app, icon, em * 1.6, color)
+		filled(app, icon, em * 1.6, color)
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###n", shown_text(name)))
@@ -194,7 +195,7 @@ side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, e
 	if ui.row(.Center, flags, fmt.tprintf("###vol%d", i)) {
 		sig = ui.signal(ui.parent_box())
 		ui.spacer(ui.px(em * 2.4))
-		if ui.tags("weak") { glyph(app, v.removable ? lucide.USB : lucide.HARD_DRIVE, em * 1.6) }
+		filled(app, v.removable ? PH_USB : PH_HARD_DRIVE, em * 1.6, draw.hex(0x9fb0c2ff))
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
 		if ui.column() {
