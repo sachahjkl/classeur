@@ -14,15 +14,15 @@ import "gt:fsx"
 import "gt:ui"
 import "fs"
 
-Job_Kind :: enum u8 { Copy, Move, Trash, Delete }
+Job_Kind :: enum u8 { Copy, Move, Trash, Delete, Restore }
 
 Job_State :: enum u8 { Waiting, Counting, Running, Asking, Done, Failed, Cancelled }
 
 // What a name already taken at the destination becomes.
 Conflict :: enum u8 { Ask, Replace, Skip, Keep_Both }
 
-JOB_VERB := [Job_Kind]string{.Copy = "Copying", .Move = "Moving", .Trash = "Moving to the trash", .Delete = "Deleting"}
-JOB_DONE := [Job_Kind]string{.Copy = "copied", .Move = "moved", .Trash = "moved to the trash", .Delete = "deleted"}
+JOB_VERB := [Job_Kind]string{.Copy = "Copying", .Move = "Moving", .Trash = "Moving to the trash", .Delete = "Deleting", .Restore = "Putting back"}
+JOB_DONE := [Job_Kind]string{.Copy = "copied", .Move = "moved", .Trash = "moved to the trash", .Delete = "deleted", .Restore = "put back"}
 
 // How long an ended job stays in the status bar.
 JOB_SHOWN_MS :: 4000
@@ -32,7 +32,9 @@ Job :: struct {
 	kind:    Job_Kind,
 	sources: []string,     // owned, absolute
 	dest:    string,       // owned: the folder (Copy, Move)
+	targets: []string,     // owned: when set, each source's own target path (Copy, Move), not dest/<its name>
 	policy:  Conflict,     // for every conflict; Ask: the person says, then maybe for all
+	undoing: bool,         // an undo's job: what it does is not undone in turn
 
 	// written by the jobs' thread, read by the interface
 	state:       Job_State,   // atomic
@@ -44,6 +46,7 @@ Job :: struct {
 	mutex:       sync.Mutex,  // guards `current` and `errors`
 	current:     string,      // owned: the name being done
 	errors:      [dynamic]string,   // owned: what failed, one line each
+	done:        [dynamic][2]string,   // owned: each source done and where it is now (undo.odin reads them)
 
 	// a name taken: the jobs' thread waits on `answered` until the interface sets `answer`
 	ask_name:   string,       // owned (by the jobs' thread while it waits)
@@ -95,7 +98,7 @@ jobs_stop :: proc(app: ^App) {
 }
 
 // A new job, queued. `sources` are cloned.
-job_add :: proc(app: ^App, kind: Job_Kind, sources: []string, dest := "", policy := Conflict.Ask) -> ^Job {
+job_add :: proc(app: ^App, kind: Job_Kind, sources: []string, dest := "", policy := Conflict.Ask, targets: []string = nil, undoing := false) -> ^Job {
 	j := &app.jobs
 	job := new(Job)
 	j.next_id += 1
@@ -103,6 +106,11 @@ job_add :: proc(app: ^App, kind: Job_Kind, sources: []string, dest := "", policy
 	job.sources = make([]string, len(sources))
 	for s, i in sources { job.sources[i] = strings.clone(s) }
 	job.dest = strings.clone(dest)
+	job.undoing = undoing
+	if targets != nil {
+		job.targets = make([]string, len(targets))
+		for s, i in targets { job.targets[i] = strings.clone(s) }
+	}
 	append(&j.list, job)
 	sync.mutex_lock(&j.mutex)
 	append(&j.queue, job)
@@ -115,6 +123,10 @@ job_free :: proc(job: ^Job) {
 	for s in job.sources { delete(s) }
 	delete(job.sources)
 	delete(job.dest)
+	for s in job.targets { delete(s) }
+	delete(job.targets)
+	for d in job.done { delete(d[0]); delete(d[1]) }
+	delete(job.done)
 	delete(job.current)
 	for e in job.errors { delete(e) }
 	delete(job.errors)
@@ -192,10 +204,22 @@ job_run :: proc(job: ^Job) {
 		sync.atomic_store(&job.state, Job_State.Counting)
 		for s in job.sources { count_tree(job, s) }
 		sync.atomic_store(&job.state, Job_State.Running)
+		for s, i in job.sources {
+			if cancelled(job) { break }
+			target := job.targets != nil ? job.targets[i] : fs.join(job.dest, fs.base(s), context.temp_allocator)
+			at: string
+			ok: bool
+			if job.kind == .Copy { at, ok = copy_one(job, s, target) } else { at, ok = move_one(job, s, target) }
+			if ok { job_did(job, s, at) }
+		}
+	case .Restore:
+		sync.atomic_store(&job.files_total, len(job.sources))
+		sync.atomic_store(&job.state, Job_State.Running)
 		for s in job.sources {
 			if cancelled(job) { break }
-			target := fs.join(job.dest, fs.base(s), context.temp_allocator)
-			if job.kind == .Copy { copy_one(job, s, target) } else { move_one(job, s, target) }
+			set_current(job, fs.base(s))
+			if e := fs.untrash(s); e != .None { job_error(job, s, e) }
+			sync.atomic_add(&job.files_done, 1)
 		}
 	case .Trash, .Delete:
 		sync.atomic_store(&job.files_total, len(job.sources))
@@ -204,7 +228,8 @@ job_run :: proc(job: ^Job) {
 			if cancelled(job) { break }
 			set_current(job, fs.base(s))
 			if job.kind == .Trash {
-				if e := fs.trash(s); e != .None { job_error(job, s, e) }
+				in_trash, e := fs.trash(s, context.temp_allocator)
+				if e != .None { job_error(job, s, e) } else if in_trash != "" { job_did(job, s, in_trash) }
 			} else {
 				if !fsx.remove_tree(s) { job_error(job, s, .Other) }
 			}
@@ -220,6 +245,14 @@ job_run :: proc(job: ^Job) {
 @(private = "file")
 cancelled :: proc(job: ^Job) -> bool { return sync.atomic_load(&job.cancel) }
 
+// A source done: where it is now.
+@(private = "file")
+job_did :: proc(job: ^Job, source, now: string) {
+	sync.mutex_lock(&job.mutex)
+	append(&job.done, [2]string{strings.clone(source), strings.clone(now)})
+	sync.mutex_unlock(&job.mutex)
+}
+
 @(private = "file")
 set_current :: proc(job: ^Job, name: string) {
 	sync.mutex_lock(&job.mutex)
@@ -231,7 +264,7 @@ set_current :: proc(job: ^Job, name: string) {
 @(private = "file")
 job_error :: proc(job: ^Job, path: string, e: fs.Error) {
 	if e == .Cancelled { return }
-	verb := job.kind == .Copy ? "copied" : job.kind == .Move ? "moved" : job.kind == .Trash ? "moved to the trash" : "deleted"
+	verb := JOB_DONE[job.kind]
 	sync.mutex_lock(&job.mutex)
 	append(&job.errors, fmt.aprintf("%s cannot be %s: %s.", fs.base(path), verb, fs.ERROR_REASON[e]))
 	sync.mutex_unlock(&job.mutex)
@@ -274,16 +307,17 @@ resolve :: proc(job: ^Job, target: string) -> Conflict {
 }
 
 // Copies `from` (a file, a link, a folder and what it holds) to `target`. A folder copied onto a folder merges into it.
+// `at`: where the copy is (target, or the free name kept beside it).
 @(private = "file")
-copy_one :: proc(job: ^Job, from, target: string) -> (ok: bool) {
-	if cancelled(job) { return false }
+copy_one :: proc(job: ^Job, from, target: string) -> (at: string, ok: bool) {
+	if cancelled(job) { return }
 	info, found := fs.stat(from)
-	if !found && !fs.exists(from) { job_error(job, from, .Not_Found); return false }
+	if !found && !fs.exists(from) { job_error(job, from, .Not_Found); return }
 	to := target
 	is_folder := info.kind == .Directory && .Link not_in info.flags
 	if is_folder && (to == from || strings.has_prefix(to, strings.concatenate({from, fs.SEPARATOR_STRING}, context.temp_allocator))) {
 		append_line(job, fmt.aprintf("%s cannot be copied into itself.", fs.base(from)))
-		return false
+		return
 	}
 	set_current(job, fs.base(from))
 	if fs.exists(to) {
@@ -293,26 +327,26 @@ copy_one :: proc(job: ^Job, from, target: string) -> (ok: bool) {
 			choice := to == from ? Conflict.Keep_Both : resolve(job, to)
 			switch choice {
 			case .Skip, .Ask:
-				return false
+				return
 			case .Keep_Both:
 				to = fs.join(fs.parent(to), fs.free_name(fs.parent(to), fs.base(to), context.temp_allocator), context.temp_allocator)
 			case .Replace:
-				if !fsx.remove_tree(to) { job_error(job, to, .Denied); return false }
+				if !fsx.remove_tree(to) { job_error(job, to, .Denied); return }
 			}
 		}
 	}
 	if is_folder {
 		if !fs.exists(to) {
-			if e := fs.make_folder(to); e != .None { job_error(job, from, e); return false }
+			if e := fs.make_folder(to); e != .None { job_error(job, from, e); return }
 		}
 		l: fs.Listing
 		defer fs.listing_destroy(&l)
-		if e := fs.list(&l, from); e != .None { job_error(job, from, e); return false }
+		if e := fs.list(&l, from); e != .None { job_error(job, from, e); return }
 		ok = true
 		for e in l.entries {
-			if !copy_one(job, fs.join(from, e.name, context.temp_allocator), fs.join(to, e.name, context.temp_allocator)) { ok = false }
+			if _, cok := copy_one(job, fs.join(from, e.name, context.temp_allocator), fs.join(to, e.name, context.temp_allocator)); !cok { ok = false }
 		}
-		return ok
+		return to, ok
 	}
 	e: fs.Error
 	if .Link in info.flags || !found {
@@ -322,15 +356,15 @@ copy_one :: proc(job: ^Job, from, target: string) -> (ok: bool) {
 		e = fs.copy_file(from, to, &p)
 	}
 	sync.atomic_add(&job.files_done, 1)
-	if e != .None { job_error(job, from, e); return false }
-	return true
+	if e != .None { job_error(job, from, e); return }
+	return to, true
 }
 
 // Moves `from` to `target`: a rename on its volume, else a copy then the source deleted (only when all of it was
 // copied).
 @(private = "file")
-move_one :: proc(job: ^Job, from, target: string) {
-	if fs.parent(from) == fs.parent(target) && fs.base(from) == fs.base(target) { return }   // (already there)
+move_one :: proc(job: ^Job, from, target: string) -> (at: string, ok: bool) {
+	if fs.parent(from) == fs.parent(target) && fs.base(from) == fs.base(target) { return }   // (already there: nothing to undo)
 	info, _ := fs.stat(from)
 	set_current(job, fs.base(from))
 	to := target
@@ -357,13 +391,16 @@ move_one :: proc(job: ^Job, from, target: string) {
 		// (renamed in one step: its bytes count as done)
 		if info.size > 0 { sync.atomic_add(&job.bytes_done, info.size) }
 		sync.atomic_add(&job.files_done, 1)
+		return to, true
 	case .Cross_Volume:
-		if copy_one(job, from, to) && !cancelled(job) {
-			if !fsx.remove_tree(from) { job_error(job, from, .Denied) }
+		if copied, cok := copy_one(job, from, to); cok && !cancelled(job) {
+			if !fsx.remove_tree(from) { job_error(job, from, .Denied); return }
+			return copied, true
 		}
 	case .Not_Found, .Denied, .Not_A_Folder, .Exists, .No_Space, .Cancelled, .Other:
 		job_error(job, from, e)
 	}
+	return
 }
 
 @(private = "file")
@@ -391,6 +428,8 @@ job_ended :: proc(data: rawptr, word: u64) {
 	touched := make([dynamic]string, context.temp_allocator)
 	if job.dest != "" { append(&touched, job.dest) }
 	for s in job.sources { append(&touched, fs.parent(s)) }
+	for s in job.targets { append(&touched, fs.parent(s)) }
+	if !job.undoing { undo_push_job(app, job) }
 	for p in app.panels {
 		for t in p.tabs {
 			for d in touched { if t.path == d { tab_load(app, t); break } }

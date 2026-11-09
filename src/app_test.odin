@@ -507,6 +507,21 @@ test_jobs :: proc(t: ^testing.T) {
 	testing.expect(t, strings.has_prefix(string(info), "[Trash Info]\nPath=/"), "with its .trashinfo")
 	testing.expect(t, strings.contains(string(info), "/archive.zip\nDeletionDate="), "where it was, and when")
 
+	// undo, step by step: the trash, the move, the second copy
+	session.key(s, .Z, {.Ctrl})
+	wait_jobs(s)
+	testing.expect(t, fs.exists(fs.join(dir, "archive.zip", context.temp_allocator)), "undo: archive.zip back from the trash")
+	testing.expect(t, !fs.exists(fs.join(data, "Trash/info/archive.zip.trashinfo", context.temp_allocator)), "its .trashinfo gone")
+	session.key(s, .Z, {.Ctrl})
+	wait_jobs(s)
+	testing.expect(t, fs.exists(fs.join(dir, "report 2.pdf", context.temp_allocator)), "undo: report 2.pdf moved back")
+	testing.expect(t, !fs.exists(fs.join(dir, "Photos/report 2.pdf", context.temp_allocator)))
+	session.key(s, .Z, {.Ctrl})
+	wait_jobs(s)
+	testing.expect(t, !fs.exists(fs.join(dir, "Documents/notes 2.txt", context.temp_allocator)), "undo: the copy to the trash")
+	testing.expect(t, fs.exists(fs.join(data, "Trash/files/notes 2.txt", context.temp_allocator)), "not deleted: trashed")
+	testing.expect(t, fs.exists(fs.join(dir, "Documents/notes.txt", context.temp_allocator)), "the first copy stays")
+
 	// for good, after the question
 	point_at(t, tab, "notes.txt")
 	session.key(s, .Delete, {.Shift})
@@ -532,4 +547,40 @@ test_watch :: proc(t: ^testing.T) {
 		return slice.contains(names, "from elsewhere.txt") && !slice.contains(names, "archive.zip")
 	}, "the folder read again")
 	testing.expect_value(t, len(tab.folder.shown), 7)
+}
+
+@(test)
+test_undo_names :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir})
+	tab := current_tab(app)
+
+	// a new folder, named: one step; undone, it goes
+	session.key(s, .N, {.Ctrl, .Shift})
+	wait_read(s)
+	testing.expect(t, app.rename.active)
+	session.type_text(s, "Fresh")
+	session.key(s, .Return)
+	wait_read(s)
+	testing.expect(t, fs.exists(fs.join(dir, "Fresh", context.temp_allocator)), "the folder made and named")
+	testing.expect_value(t, len(app.undo), 1)
+
+	// a rename, undone: the old name again
+	point_at(t, tab, "notes.txt")
+	session.key(s, .F2)
+	session.frames(s, 2)
+	session.key(s, .A, {.Ctrl})
+	session.type_text(s, "renamed.txt")
+	session.key(s, .Return)
+	wait_read(s)
+	testing.expect(t, fs.exists(fs.join(dir, "renamed.txt", context.temp_allocator)), "renamed")
+	session.key(s, .Z, {.Ctrl})
+	wait_read(s)
+	testing.expect(t, fs.exists(fs.join(dir, "notes.txt", context.temp_allocator)), "undo: the old name")
+	testing.expect(t, !fs.exists(fs.join(dir, "renamed.txt", context.temp_allocator)))
+	session.key(s, .Z, {.Ctrl})
+	wait_read(s)
+	testing.expect(t, !fs.exists(fs.join(dir, "Fresh", context.temp_allocator)), "undo: the new folder gone")
+	testing.expect_value(t, len(app.undo), 0)
 }

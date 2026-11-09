@@ -227,6 +227,13 @@ rename_commit :: proc(app: ^App) {
 		say(app, "%s cannot be renamed: %v.", r.name, err)
 		return
 	}
+	// (a folder just made and named: its step says where it is now)
+	if n := len(app.undo); n > 0 && app.undo[n - 1].kind == .New_Folder && app.undo[n - 1].pairs[0][1] == from_path {
+		delete(app.undo[n - 1].pairs[0][1])
+		app.undo[n - 1].pairs[0][1] = strings.clone(to_path)
+	} else {
+		undo_push(app, .Rename, {{from_path, to_path}})
+	}
 	delete(t.reveal_name)
 	t.reveal_name = strings.clone(to)
 	tab_load(app, t)
@@ -244,6 +251,7 @@ act_new_folder :: proc(app: ^App) {
 		say(app, "The folder cannot be made here: %v.", err)
 		return
 	}
+	undo_push(app, .New_Folder, {{"", fs.join(t.path, name, context.temp_allocator)}})
 	delete(t.reveal_name)
 	t.reveal_name = strings.clone(name)
 	tab_load(app, t)

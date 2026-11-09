@@ -40,6 +40,7 @@ App :: struct {
 	measure_gen: u64,               // atomic: a measure asked in an older generation is dropped
 	recents:     [dynamic]string,   // owned: the folders visited, the last first (the sidebar)
 	bookmarks:   [dynamic]string,   // owned
+	undo:        [dynamic]Undo_Step,   // what was done to files, the last at the end (undo.odin)
 	side_open:   [Side_Section]bool,   // the sections of the sidebar that are open
 	side_filter: ui.Text_Field,
 	volume_space: [dynamic]fs.Space,   // of each volume, read with the places
@@ -190,6 +191,7 @@ app_free :: proc(app: ^App) {
 	delete(app.recents)
 	for p in app.bookmarks { delete(p) }
 	delete(app.bookmarks)
+	undo_free(app)
 	ui.field_destroy(&app.side_filter)
 	delete(app.volume_space)
 	delete(app.panel_rects)

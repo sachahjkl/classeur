@@ -168,14 +168,17 @@ FOF_ALLOWUNDO :: 0x40
 @(private = "file")
 FOF_NOERRORUI :: 0x400
 
-// To the Recycle Bin.
-trash :: proc(path: string) -> Error {
-	if !exists(path) { return .Not_Found }
+// To the Recycle Bin. `in_trash` is "": the Recycle Bin gives no path back (untrash cannot put it back; Explorer's
+// Recycle Bin can).
+trash :: proc(path: string, allocator := context.allocator) -> (in_trash: string, e: Error) {
+	if !exists(path) { return "", .Not_Found }
 	// (a list of paths, each ended by a zero, the list by another)
 	w := win.utf8_to_utf16(path, context.temp_allocator)
 	from := make([]u16, len(w) + 2, context.temp_allocator)
 	copy(from, w)
 	op := SHFILEOPSTRUCTW{wFunc = FO_DELETE, pFrom = raw_data(from), fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI}
-	if sh_file_operation(&op) != 0 || op.fAnyOperationsAborted { return .Other }
-	return .None
+	if sh_file_operation(&op) != 0 || op.fAnyOperationsAborted { return "", .Other }
+	return "", .None
 }
+
+untrash :: proc(in_trash: string) -> Error { return .Other }
