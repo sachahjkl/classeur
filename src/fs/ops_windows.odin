@@ -182,3 +182,10 @@ trash :: proc(path: string, allocator := context.allocator) -> (in_trash: string
 }
 
 untrash :: proc(in_trash: string) -> Error { return .Other }
+
+// Whether `a` and `b` are on one volume (their drive or share is the same).
+same_volume :: proc(a, b: string) -> bool {
+	ra, rb := root_length(a), root_length(b)
+	if ra == 0 || ra != rb { return false }
+	return strings.equal_fold(a[:ra], b[:rb])
+}

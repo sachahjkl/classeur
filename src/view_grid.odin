@@ -94,7 +94,18 @@ item :: proc(app: ^App, t: ^Tab, row: int, look: ^Row_Look, line: bool, width, h
 		}
 	}
 	if selected && look.focused { ui.pop_tags() }
-	if sig.pressed { folder_pick(f, row, extend = .Shift in sig.mods, toggle = .Ctrl in sig.mods) }
+	if sig.pressed && selected && sig.mods == {} && f.count > 1 {
+		f.cursor = row   // (a press on the selection may drag it: the item alone is picked at the click)
+	} else if sig.pressed {
+		folder_pick(f, row, extend = .Shift in sig.mods, toggle = .Ctrl in sig.mods)
+	}
+	if sig.clicked && selected && sig.mods == {} && f.count > 1 && !app.drag_started { folder_pick(f, row) }
+	drag_maybe(app, t, sig)
+	if e.kind == .Directory {
+		dir := fs.join(t.path, e.name, context.temp_allocator)
+		drop_zone(app, b.rect, dir)
+		if app.drop_hover == dir { drop_mark(b) }
+	}
 	if sig.right_clicked {
 		if !folder_row_selected(f, row) { folder_pick(f, row) }
 		f.cursor = row

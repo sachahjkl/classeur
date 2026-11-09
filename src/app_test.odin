@@ -11,6 +11,7 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 import "core:testing"
+import "gt:platform"
 import "gt:png"
 import "gt:testkit"
 import "gt:ui"
@@ -750,4 +751,68 @@ test_batch_rename :: proc(t: ^testing.T) {
 	wait_read(s)
 	names = shown_names(tab)
 	testing.expect(t, slice.contains(names, "notes.txt") && slice.contains(names, "report 2.pdf") && slice.contains(names, "report 10.pdf"), "undone")
+}
+
+@(test)
+test_drag_and_drop :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir})
+	tab := current_tab(app)
+	// a drop of another program's (two files) on the row of Documents: a move (one volume)
+	other := testkit.temp_folder(t, "classeur_other")
+	a := fs.join(other, "a.txt", context.temp_allocator)
+	b := fs.join(other, "b.txt", context.temp_allocator)
+	_ = os.write_entire_file(a, transmute([]u8)string("a"))
+	_ = os.write_entire_file(b, transmute([]u8)string("b"))
+	testing.expect(t, folder_cursor_to_name(&tab.folder, "Documents"))
+	session.frames(s, 2)
+	at: [2]f32
+	for z in app.drop_zones_last { if strings.has_suffix(z.path, "/Documents") { at = (z.rect.min + z.rect.max) * 0.5 } }
+	testing.expect(t, at != {}, "Documents takes a drop")
+	data: platform.Drag_Data
+	append(&data.files, a, b)
+	defer delete(data.files)
+	context.allocator = runtime.heap_allocator()
+	testing.expect_value(t, drop_answer(app, .Drop_Over, at, {}, {.Copy, .Move}), Maybe(platform.Drop_Effect)(nil))   // (no data yet)
+	platform.drop_inject(app.main.win, .Drop_Enter, at, &data, {.Copy, .Move})
+	platform.drop_inject(app.main.win, .Drop_Over, at, nil, {.Copy, .Move})
+	session.frames(s, 1)
+	testing.expect(t, strings.has_suffix(app.drop_hover, "/Documents"), "the target marked")
+	platform.drop_inject(app.main.win, .Drop, at, nil, {.Copy, .Move})
+	session.frames(s, 1)
+	wait_jobs(s)
+	testing.expect(t, fs.exists(fs.join(dir, "Documents/a.txt", context.temp_allocator)), "a.txt moved in")
+	testing.expect(t, !fs.exists(a), "and gone from where it was")
+	// Ctrl: a copy; on the list (the folder itself) with files already there: refused
+	_ = os.write_entire_file(a, transmute([]u8)string("a"))
+	clear(&data.files)
+	append(&data.files, a)
+	platform.drop_inject(app.main.win, .Drop_Enter, at, &data, {.Copy, .Move}, {.Ctrl})
+	platform.drop_inject(app.main.win, .Drop, at, nil, {.Copy, .Move}, {.Ctrl})
+	session.frames(s, 1)
+	session.key(s, .Escape)
+	wait_jobs(s)
+	testing.expect(t, fs.exists(a), "copied: the source stays")
+	// a row dragged out of the list onto the row of Photos (the drag of the system, scripted): moved
+	session.key(s, .Escape)
+	point_at(t, tab, "archive.zip")
+	session.frames(s, 2)
+	from, to: [2]f32
+	for z in app.drop_zones_last { if strings.has_suffix(z.path, "/Photos") { to = (z.rect.min + z.rect.max) * 0.5 } }
+	from = (tab.cursor_rect.min + tab.cursor_rect.max) * 0.5
+	from.x = tab.cursor_rect.min.x + 120
+	platform.drag_script(app.main.win, {{to, {}}, {to, {}}})
+	session.press(s, from)
+	session.move(s, from + {0, 30})
+	session.move(s, from + {0, 60})
+	session.release(s, from + {0, 60})
+	session.frames(s, 2)
+	wait_jobs(s)
+	testing.expect(t, fs.exists(fs.join(dir, "Photos/archive.zip", context.temp_allocator)), "dragged into Photos")
+
+	// files of this folder dropped on its own list: nothing
+	here := fs.join(dir, "notes.txt", context.temp_allocator)
+	testing.expect_value(t, drop_effect_for_test(app, {here}, dir), Maybe(platform.Drop_Effect)(nil))
+	testing.expect_value(t, drop_effect_for_test(app, {fs.join(dir, "Documents", context.temp_allocator)}, fs.join(dir, "Documents/Sub", context.temp_allocator)), Maybe(platform.Drop_Effect)(nil))
 }

@@ -71,6 +71,7 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 			if ui.mouse_pressed(.Back) { tab_back(app, t) }
 			if ui.mouse_pressed(.Forward) { tab_forward(app, t) }
 		}
+		drop_zone(app, box.rect, t.path)
 		room := box.rect.max.x - box.rect.min.x
 		if app.inspector.open && focused { room -= app.inspector.width_px * ui.scale() }
 		wide := details_columns(room, em)
@@ -389,9 +390,20 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 			folder_pick(f, row)
 			act_open(app)
 			return
+		} else if sig.pressed && selected && sig.mods == {} && f.count > 1 {
+			// (a press on the selection may drag it: the row alone is picked at the click)
+			clicked = true
+			f.cursor = row
 		} else if sig.pressed {
 			clicked = true
 			folder_pick(f, row, extend = .Shift in sig.mods, toggle = .Ctrl in sig.mods)
+		}
+		if sig.clicked && selected && sig.mods == {} && f.count > 1 && !app.drag_started { folder_pick(f, row) }
+		drag_maybe(app, t, sig)
+		if e.kind == .Directory {
+			dir := fs.join(t.path, e.name, context.temp_allocator)
+			drop_zone(app, sig.box.rect, dir)
+			if app.drop_hover == dir { drop_mark(sig.box) }
 		}
 		if sig.right_clicked {
 			clicked = true
@@ -768,4 +780,18 @@ tab_flat_line :: proc(b: ^ui.Box) {
 		r := b.rect
 		draw.rect(dc, {r.min, {r.max.x, r.min.y + max(2, ui.scale() * 2)}}, ui.color("accent"))
 	}
+}
+
+// A ring of the accent around the box a drop would go into.
+drop_mark :: proc(b: ^ui.Box) {
+	prev, prev_user := b.custom, b.custom_user
+	Mark :: struct { prev: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context), user: rawptr }
+	m := ui.frame_new(Mark)
+	m^ = {prev, prev_user}
+	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		m := (^Mark)(user)
+		if m.prev != nil { m.prev(b, m.user, dc) }
+		draw.rect(dc, b.rect, ui.color("accent"), border = max(2, ui.scale() * 2))
+	}
+	b.custom_user = m
 }

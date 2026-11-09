@@ -117,3 +117,10 @@ device_of :: proc(path: string) -> (dev: u64, ok: bool) {
 	if linux.statx(linux.AT_FDCWD, cpath(path), {.SYMLINK_NOFOLLOW}, {.TYPE}, &sx) != .NONE { return }
 	return u64(sx.dev_major) << 32 | u64(sx.dev_minor), true
 }
+
+// Whether `a` and `b` are on one volume (a move between them is a rename).
+same_volume :: proc(a, b: string) -> bool {
+	da, oka := device_of(a)
+	db, okb := device_of(b)
+	return oka && okb && da == db
+}

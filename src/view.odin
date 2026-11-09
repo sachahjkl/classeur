@@ -29,6 +29,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	em := ui.font_size()
 	app.room = size.x / max(ui.scale(), 0.01)
 	app.frame += 1
+	dnd_frame(app)
 	// a text field had the keyboard at the end of the last build: only the commands that work while typing run
 	clear(&app.text_keys_before)
 	append(&app.text_keys_before, ..app.text_keys[:])
@@ -175,6 +176,8 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 			if !on { flags += {.Draw_Hot_Effects} }
 			tab := ui.build_box(flags, fmt.tprintf("###tab%d", t.id))
 			if on { tab_paint(tab, draw.hex(surfaces(app).list), draw.hex(surfaces(app).edge)) }
+			drop_zone(app, tab.rect, t.path)
+			if app.drop_hover == t.path && !on { drop_mark(tab) }
 			sig := ui.signal(tab)
 			if ui.parent(tab) {
 				// (with several panels, the line of the accent says which one has the keyboard)

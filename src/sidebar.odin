@@ -137,6 +137,8 @@ side_folder :: proc(app: ^App, t: ^Tab, id, path, name: string, here: string, em
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###n", shown_text(name)))
+		drop_zone(app, ui.parent_box().rect, path)
+		if app.drop_hover == path { drop_mark(ui.parent_box()) }
 	}
 	go_from(app, t, sig, path)
 }
@@ -153,6 +155,8 @@ side_row :: proc(app: ^App, id, path: string, name: string, here: bool, em: f32)
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###n", shown_text(name)))
+		drop_zone(app, ui.parent_box().rect, path)
+		if app.drop_hover == path { drop_mark(ui.parent_box()) }
 	}
 	return
 }
@@ -178,6 +182,8 @@ side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, e
 	sig: ui.Signal
 	if ui.row(.Center, flags, fmt.tprintf("###vol%d", i)) {
 		sig = ui.signal(ui.parent_box())
+		drop_zone(app, ui.parent_box().rect, v.path)
+		if app.drop_hover == v.path { drop_mark(ui.parent_box()) }
 		ui.spacer(ui.px(em * 2.4))
 		path_icon(app, v.path, true, em * 1.7)
 		ui.spacer(ui.px(em * 0.5))

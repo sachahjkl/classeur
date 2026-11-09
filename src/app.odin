@@ -82,6 +82,11 @@ App :: struct {
 	theme_names: []string,          // the choices of look.theme
 	options:     Options,
 	inspector:   Inspector,         // the pane of Space (inspector.odin)           // the options' list (options.odin)
+	drop_zones:      [dynamic]Drop_Zone,   // where a drop goes, noted by this frame (dnd.odin)
+	drop_zones_last: [dynamic]Drop_Zone,   // and by the last one (what a drop is tested against)
+	drop_hover:  string,            // owned: the folder a drop would go into now ("": none)
+	drag_paths:  [dynamic]string,   // owned: what the next drag_start carries
+	drag_started: bool,             // the press that is held has started its drag
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
 	session_path: string,           // owned: the tests' session file ("": the person's, none when headless)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
@@ -175,6 +180,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	app.mono, _ = font.load_embedded(&app.shared.fonts, font.FALLBACK_MONO_DATA)
 	h.state.icon_font, _ = font.load_embedded(&app.shared.fonts, ui.ICON_FONT_DATA)
 	h.after_input = FRAMES_AFTER_INPUT
+	dnd_start(app)
 	ui.set_density(&h.state, DENSITY)
 	prefs_open(app)
 	h.partial_redraw = true
@@ -205,6 +211,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 
 app_frame :: proc(app: ^App) {
 	host.host_frame(&app.main)
+	drag_run(app)   // (between frames: it blocks until the drop)
 }
 
 app_close :: proc(app: ^App) {
@@ -249,6 +256,7 @@ app_free :: proc(app: ^App) {
 	for p in app.bookmarks { delete(p) }
 	delete(app.bookmarks)
 	undo_free(app)
+	dnd_free(app)
 	ui.field_destroy(&app.side_filter)
 	delete(app.volume_space)
 	delete(app.panel_rects)
@@ -338,6 +346,13 @@ app_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Event {
 	app := (^App)(h.user)
 	out := make([dynamic]platform.Event, 0, len(events), context.temp_allocator)
 	for e in events {
+		// a drag of another program's: where it would go, and the drop
+		#partial switch e.kind {
+		case .Drop_Enter, .Drop_Over, .Drop_Leave, .Drop:
+			platform.drop_set_effect(h.win, drop_answer(app, e.kind, e.pos, e.mods, e.drop_allowed))
+			if e.kind == .Drop || e.kind == .Drop_Leave { platform.drop_data_release(h.win) }
+			continue
+		}
 		if e.kind == .Scroll && .Ctrl in e.mods {
 			for r, i in app.panel_rects {
 				if e.pos.x < r.min.x || e.pos.x >= r.max.x || e.pos.y < r.min.y || e.pos.y >= r.max.y { continue }
