@@ -64,6 +64,7 @@ App :: struct {
 
 	palette:     Palette,           // the command palette (palette.odin)
 	goto:        Goto,              // GoTo (goto.odin)
+	batch:       Batch,             // batch rename (batch.odin)
 	rename:      Rename,            // the rename in place (actions.odin)
 	status:      string,            // a message for the status bar (owned), until status_until (ui clock, ms)
 	status_until: f64,
@@ -233,6 +234,7 @@ app_free :: proc(app: ^App) {
 	delete(app.places)
 	palette_free(&app.palette)
 	goto_free(&app.goto)
+	batch_free(&app.batch)
 	rename_free(&app.rename)
 	confirm_free(&app.confirm)
 	options_free(&app.options)

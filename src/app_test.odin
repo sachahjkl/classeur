@@ -440,6 +440,28 @@ test_shots :: proc(t: ^testing.T) {
 	session.key(s, .Down)
 	session.frames(s, 4)
 	session.save_png(s, "search.png")
+
+	// GoTo, a path being typed
+	session.key(s, .Escape)
+	session.key(s, .F, {.Ctrl, .Shift})
+	wait_read(s)
+	ui.field_clear(&panel_tab(app.panels[0]).filter)
+	session.key(s, .G, {.Ctrl})
+	session.type_text(s, "~/Doc")
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return len((^App)(s.user).goto.names) > 0 }, "the folders read")
+	session.frames(s, 3)
+	session.save_png(s, "goto.png")
+	session.key(s, .Escape)
+
+	// batch rename of the music
+	tab_go(app, panel_tab(app.panels[0]), fs.join(dir, "Music", context.temp_allocator))
+	wait_read(s)
+	session.key(s, .A, {.Ctrl})
+	session.key(s, .F2)
+	session.type_text(s, "{n:2} - {name}")
+	session.frames(s, 3)
+	session.save_png(s, "batch.png")
+	session.key(s, .Escape)
 }
 
 // Frames until every job has ended and its folders are read again.
@@ -698,4 +720,34 @@ test_more_actions :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(p.tabs), 1)
 	testing.expect_value(t, current_tab(app).path, fs.join(dir, "Photos", context.temp_allocator))
 	_ = tab
+}
+
+@(test)
+test_batch_rename :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir})
+	tab := current_tab(app)
+	// the two reports and notes.txt
+	for name in ([]string{"notes.txt", "report 2.pdf", "report 10.pdf"}) {
+		testing.expect(t, folder_cursor_to_name(&tab.folder, name))
+		folder_pick(&tab.folder, tab.folder.cursor, toggle = true)
+	}
+	testing.expect_value(t, tab.folder.count, 3)
+	session.key(s, .F2)
+	session.frames(s, 2)
+	testing.expect(t, app.batch.open)
+	session.type_text(s, "doc {n:2}.{ext}")
+	session.frames(s, 2)
+	session.key(s, .Return)
+	wait_read(s)
+	testing.expect(t, !app.batch.open)
+	names := shown_names(tab)
+	testing.expect(t, slice.contains(names, "doc 01.txt") || slice.contains(names, "doc 01.pdf"), "numbered")
+	testing.expect(t, !slice.contains(names, "notes.txt") && !slice.contains(names, "report 2.pdf"))
+	// undone at once: the three names back
+	session.key(s, .Z, {.Ctrl})
+	wait_read(s)
+	names = shown_names(tab)
+	testing.expect(t, slice.contains(names, "notes.txt") && slice.contains(names, "report 2.pdf") && slice.contains(names, "report 10.pdf"), "undone")
 }

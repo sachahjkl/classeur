@@ -199,6 +199,11 @@ rename_free :: proc(r: ^Rename) {
 act_rename :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
+	// several items: batch rename (batch.odin)
+	if t.folder.count > 1 {
+		batch_open(app, t)
+		return
+	}
 	e := folder_cursor_entry(&t.folder)
 	if e == nil { return }
 	rename_begin(app, t, e.name)

@@ -10,7 +10,9 @@ package classeur
 // Deleting for good cannot be undone. What an undo does is not undone in turn; it can be done again (redo, Ctrl+Y,
 // Ctrl+Shift+Z) until something else is done to files.
 
+import "core:fmt"
 import "core:os"
+import "core:slice"
 import "core:strings"
 import "fs"
 
@@ -80,18 +82,20 @@ act_undo :: proc(app: ^App) {
 	defer if done { append(&app.redo, step) } else { undo_step_free(&step) }
 	switch step.kind {
 	case .Rename:
-		before, after := step.pairs[0][0], step.pairs[0][1]
-		if fs.exists(before) {
-			say(app, "%s is there again: the rename cannot be undone.", fs.base(before))
+		// (a batch: every name back, the last renamed first)
+		for p in step.pairs {
+			if fs.exists(p[0]) && !slice.contains(afters_of(step.pairs), p[0]) {
+				say(app, "%s is there again: the rename cannot be undone.", fs.base(p[0]))
+				done = false
+				return
+			}
+		}
+		if !renames_swap(step.pairs, back = true) {
+			say(app, "The rename cannot be undone.")
 			done = false
 			return
 		}
-		if err := os.rename(after, before); err != nil {
-			say(app, "The rename cannot be undone: %v.", err)
-			done = false
-			return
-		}
-		undo_reveal(app, before)
+		undo_reveal(app, step.pairs[0][0])
 	case .New_Folder, .New_File:
 		path := step.pairs[0][1]
 		info, _ := fs.stat(path)
@@ -131,7 +135,7 @@ act_redo :: proc(app: ^App) {
 	for p, i in step.pairs { befores[i], afters[i] = p[0], p[1] }
 	switch step.kind {
 	case .Rename:
-		if fs.exists(afters[0]) || os.rename(befores[0], afters[0]) != nil {
+		if !renames_swap(step.pairs, back = false) {
 			say(app, "The rename cannot be done again.")
 			return
 		}
@@ -161,6 +165,35 @@ act_redo :: proc(app: ^App) {
 		job.redoing = true
 	}
 	say(app, "Done again: the %s%s.", UNDO_SAID[step.kind], n > 1 ? " of several items" : "")
+}
+
+@(private = "file")
+afters_of :: proc(pairs: [][2]string) -> []string {
+	out := make([]string, len(pairs), context.temp_allocator)
+	for p, i in pairs { out[i] = p[1] }
+	return out
+}
+
+// Renames each pair (before to after, or back), in two steps through free names: names of a batch can swap.
+@(private = "file")
+renames_swap :: proc(pairs: [][2]string, back: bool) -> bool {
+	temps := make([]string, len(pairs), context.temp_allocator)
+	for p, i in pairs {
+		from := back ? p[1] : p[0]
+		temps[i] = fmt.tprintf("%s.classeur-undo-%d", from, i)
+		if os.rename(from, temps[i]) != nil {
+			for j in 0 ..< i { _ = os.rename(temps[j], back ? pairs[j][1] : pairs[j][0]) }
+			return false
+		}
+	}
+	ok := true
+	for p, i in pairs {
+		if os.rename(temps[i], back ? p[0] : p[1]) != nil {
+			_ = os.rename(temps[i], back ? p[1] : p[0])
+			ok = false
+		}
+	}
+	return ok
 }
 
 // The tabs that show the folder of `path` read it again, the cursor on its name.
