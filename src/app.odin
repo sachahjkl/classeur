@@ -13,6 +13,7 @@ import "gt:devtools"
 import "gt:draw"
 import "gt:font"
 import "gt:host"
+import "gt:instance"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:render"
@@ -85,6 +86,9 @@ App :: struct {
 
 WINDOW_SIZE :: [2]int{1180, 720}
 
+// The window of this process (none in the tests): what a second start's message opens its folders in.
+global_app: ^App
+
 Open_Options :: struct {
 	folders:  []string,   // a tab for each (none: the home folder)
 	headless: bool,       // no window of the system: offscreen, the software renderer, the fonts compiled in (the tests)
@@ -94,20 +98,60 @@ Open_Options :: struct {
 }
 
 app_run :: proc(folders: []string) -> int {
+	// one window per person: a second start hands its folders to the first, which opens them in tabs, and ends
+	message := strings.join(folders, "\n", context.temp_allocator)
+	name := instance.key(ODIN_DEBUG ? "classeur.dev" : "classeur", platform.config_dir(context.temp_allocator))
+	outcome, owner := instance.acquire({name = name, wait_ms = 2000}, transmute([]u8)message)
+	if outcome == .Forwarded { return 0 }
 	app := app_open({folders = folders})
-	if app == nil { return 1 }
+	if app == nil {
+		if outcome == .First { instance.owner_stop(&owner) }
+		return 1
+	}
+	server: ^instance.Server
+	if outcome == .First { server = instance.serve_start(owner, app_message, app) }
 	platform.show_window(app.main.win)
 	for !platform.is_closed(app.main.win) {
 		host.hosts_wait({&app.main})
 		app_frame(app)
 	}
+	instance.serve_stop(server)
 	app_close(app)
 	return 0
+}
+
+// A second start's folders (on the instance's thread): copied, handed to the interface's.
+@(private = "file")
+app_message :: proc(user: rawptr, message: []byte) {
+	app := (^App)(user)
+	text := strings.clone(string(message))
+	if !ui.post(&app.main.state, app_message_open, rawptr(raw_data(text)), u64(len(text))) { delete(text) }
+}
+
+// The folders of a second start, each in a new tab of the panel with the keyboard (none: the home folder); the window
+// comes to the front.
+@(private = "file")
+app_message_open :: proc(data: rawptr, word: u64) {
+	text := string(([^]u8)(data)[:word])
+	defer delete(text)
+	app := global_app
+	if app == nil { return }
+	p := current_panel(app)
+	opened := false
+	for f in strings.split_lines(text, context.temp_allocator) {
+		if f == "" { continue }
+		tab_open(app, p, f, p.active + 1)
+		opened = true
+	}
+	if !opened { tab_open(app, p, app.home, p.active + 1) }
+	platform.raise_window(app.main.win)
+	app_frames(app)
 }
 
 // Opens the window and its first tabs. nil: no window (said why).
 app_open :: proc(o: Open_Options) -> ^App {
 	app := new(App)
+	if !o.headless { global_app = app }
 	app.headless = o.headless
 	app.session_path = strings.clone(o.session)
 	app.home = o.home != "" ? fs.clean(o.home) : fs.home()
@@ -171,6 +215,7 @@ app_close :: proc(app: ^App) {
 	thumbs_free(app)
 	inspector_free(app)   // (before the renderer goes: the textures are its)
 	devtools.stop(app.devtools)
+	if global_app == app { global_app = nil }
 	host.host_close(&app.main)
 	app_free(app)
 	free(app)
@@ -245,7 +290,7 @@ THEME_CLASSEUR :: ui.Theme_Def{"Graphite",
 	.Both, nil, false, 0xffffffff}
 
 // How square the corners are (1: the toolkit's) and how dense the rows (1: the toolkit's).
-ROUNDING :: 0.5
+ROUNDING :: 0.25
 DENSITY  :: 1.0
 
 // The selection's fill, solid as File Pilot's (the theme's own is a tint).

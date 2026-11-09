@@ -4,6 +4,7 @@ package classeur
 
 import "core:fmt"
 import "core:os"
+import "core:path/filepath"
 
 APP_VERSION :: "0.1.0"
 APP_NAME    :: "classeur"
@@ -29,7 +30,9 @@ run :: proc(args: []string) -> int {
 			fmt.print(USAGE)
 			return 0
 		}
-		append(&folders, a)
+		// (absolute: a second start hands them to the first, which runs in another folder)
+		abs, err := filepath.abs(a, context.temp_allocator)
+		append(&folders, err == nil ? abs : a)
 	}
 	return app_run(folders[:])
 }

@@ -110,8 +110,11 @@ build_top :: proc(app: ^App, em: f32) {
 	defer ui.pop_tags()
 	if ui.title_bar("###titlebar", {.Draw_Background}) {
 		// each part as wide as what is under it (the boxes of the last frame: the first has no width yet)
+		// (each region starts on the column of the line at the left of its panel: the shown tab's left line is that
+		// line going up, not a second one beside it)
 		have := len(app.panel_rects) == len(app.panels) && app.panel_rects[0].max.x > 0
-		head := have ? app.panel_rects[0].min.x : app.sidebar ? app.sidebar_px * ui.scale() : em * 5
+		line := max(1, ui.scale())
+		head := have ? app.panel_rects[0].min.x - line : app.sidebar ? app.sidebar_px * ui.scale() : em * 5
 		ui.next({width = ui.px(head), height = ui.pct(1)})
 		if ui.row(.Center, {}, "###head") {
 			ui.spacer(ui.px(em * 0.6))
@@ -123,12 +126,32 @@ build_top :: proc(app: ^App, em: f32) {
 		for p, i in app.panels {
 			last := i == len(app.panels) - 1
 			w: ui.Size = ui.fill()
-			if have && !last { w = ui.px(app.panel_rects[i].max.x - app.panel_rects[i].min.x) }
-			if have && i > 0 { ui.spacer(ui.px(app.panel_rects[i].min.x - app.panel_rects[i - 1].max.x)) }
+			if have && !last { w = ui.px(app.panel_rects[i].max.x - app.panel_rects[i].min.x + line) }
+			if have && i > 0 { ui.spacer(ui.px(app.panel_rects[i].min.x - app.panel_rects[i - 1].max.x - line)) }
 			tab_region(app, p, i, w, have ? app.panel_rects[i].max.x - app.panel_rects[i].min.x : 0, em)
 		}
 		ui.window_buttons()
 	}
+}
+
+@(private = "file")
+Tab_Paint :: struct { base, edge: ui.Color }
+
+// The shown tab: its surface, a line at its left, top and right; none at its bottom, where the toolbar goes on.
+@(private = "file")
+tab_paint :: proc(b: ^ui.Box, base, edge: ui.Color) {
+	d := ui.frame_new(Tab_Paint)
+	d^ = {base, edge}
+	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		d := (^Tab_Paint)(user)
+		r := b.rect
+		w := max(1, ui.scale())
+		draw.rect(dc, r, d.base)
+		draw.rect(dc, {r.min, {r.min.x + w, r.max.y}}, d.edge)
+		draw.rect(dc, {{r.max.x - w, r.min.y}, r.max}, d.edge)
+		draw.rect(dc, {r.min, {r.max.x, r.min.y + w}}, d.edge)
+	}
+	b.custom_user = d
 }
 
 // A panel's tabs, at the top of the window over it: as wide as TAB_EM, narrower when they do not fit; the shown one
@@ -144,16 +167,12 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 		close := -1
 		for t, i in p.tabs {
 			on := i == p.active
-			ui.spacer(ui.px(em * 0.15))
-			ui.next({width = ui.px(tab_w), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .Y, radius = em * 0.45})
+			// (square, from the panel's left edge: the shown tab is the top of the toolbar under it, one surface)
+			ui.next({width = ui.px(tab_w), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .Y, radius = 0})
 			flags := ui.Box_Flags{.Clickable, .Hot_Within, .Middle_Click}
 			if !on { flags += {.Draw_Hot_Effects} }
 			tab := ui.build_box(flags, fmt.tprintf("###tab%d", t.id))
-			tab.square_corners = {.Bottom_Left, .Bottom_Right}
-			if on {
-				r := em * 0.45 * ui.rounding(&app.main.state)
-				raise(tab, {base = draw.hex(surfaces(app).list), edge = draw.hex(surfaces(app).edge), radii = {r, 0, r, 0}})
-			}
+			if on { tab_paint(tab, draw.hex(surfaces(app).list), draw.hex(surfaces(app).edge)) }
 			sig := ui.signal(tab)
 			if ui.parent(tab) {
 				// (with several panels, the line of the accent says which one has the keyboard)
@@ -202,7 +221,7 @@ build_body :: proc(app: ^App, em: f32) {
 		app.sidebar_px = clamp(app.sidebar_px, SIDEBAR_MIN_PX, max(min(SIDEBAR_MAX_PX, app.room - PANELS_MIN_PX), SIDEBAR_MIN_PX))
 		ui.next({width = ui.px(app.sidebar_px * scale), height = ui.fill()})
 		sidebar_build(app, em)
-		ui.splitter("###side_split", .X, &app.sidebar_px, SIDEBAR_MIN_PX, SIDEBAR_MAX_PX, {default_size = 240, total = app.room, min_other = PANELS_MIN_PX, thickness = 3})
+		ui.splitter("###side_split", .X, &app.sidebar_px, SIDEBAR_MIN_PX, SIDEBAR_MAX_PX, {default_size = 240, total = app.room, min_other = PANELS_MIN_PX, thickness = 3, fill = draw.hex(surfaces(app).side), line_at = .End})
 	}
 	resize(&app.panel_rects, len(app.panels))
 	for p, i in app.panels {

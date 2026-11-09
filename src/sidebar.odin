@@ -28,7 +28,7 @@ sidebar_build :: proc(app: ^App, em: f32) {
 	t := current_tab(app)
 	here := t != nil ? t.path : ""
 	ui.next_merge({axis = .Y, bg = draw.hex(surfaces(app).side)})
-	box := ui.build_box({.Clip, .Draw_Side_Right, .Draw_Background}, "###sidebar")
+	box := ui.build_box({.Clip, .Draw_Background}, "###sidebar")
 	if ui.parent(box) {
 		side_filter(app, em)
 		query := strings.to_lower(ui.field_string(&app.side_filter), context.temp_allocator)

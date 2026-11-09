@@ -436,7 +436,7 @@ row_look :: proc(app: ^App, focused: bool, em: f32) -> ^Row_Look {
 	look := ui.frame_new(Row_Look)
 	sel := selection_color(app)
 	look^ = {
-		inset = em * ROW_INSET_EM, radius = em * 0.25,
+		inset = em * ROW_INSET_EM, radius = max(1, ui.scale()) * 2,
 		line = ui.color("border") * {1, 1, 1, 0.7},
 		fill = focused ? sel : sel * {1, 1, 1, 0.35},
 		edge = focused ? draw.hex(app.theme_shown.light ? SELECTION_EDGE_LIGHT : SELECTION_EDGE_DARK) : draw.hex(app.theme_shown.light ? SELECTION_EDGE_LIGHT : SELECTION_EDGE_DARK) * {1, 1, 1, 0.45},
@@ -591,20 +591,20 @@ match_text :: proc(text: string, ranges: []ui.Fuzzy_Range, offset: int, selected
 ////////////////////////////////
 // The footer
 
-// The footer, File Pilot's: two boxes floating on the panel's colour, the filter at the left, the counts and the zoom
-// at the right.
+// The footer: one strip under the list, its cells flush with its edges, a single line between two cells: the filter at
+// the left (a well, darker), the job at work, the counts and the zoom at the right.
 @(private = "file")
 footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	f := &t.folder
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * FOOTER_EM)), bg = draw.hex(surfaces(app).side)})
 	if ui.row(.Center, {.Draw_Background, .Draw_Side_Top}, "###footer") {
-		ui.spacer(ui.px(em * 0.3))
 		filter_field(app, t, em)
+		cell_rule()
 		ui.spacer(ui.fill())
 		if focused { job_status(app, em) }
-		ui.next({width = ui.children_sum(), height = ui.px(ui.dense(em * 2.0))})
+		cell_rule()
+		ui.next({width = ui.children_sum(), height = ui.pct(1)})
 		if ui.row(.Center, {}, "###stats") {
-			raise(ui.parent_box(), {base = draw.hex(surfaces(app).raised), edge = draw.hex(surfaces(app).edge), radii = radii_all(em * 0.35)})
 			if ui.style({font_size = em * 0.92}) {
 				folders, files, folders_shown, files_shown: int
 				for e in f.listing.entries { if e.kind == .Directory { folders += 1 } else { files += 1 } }
@@ -617,13 +617,18 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 					used := 100 - int(100 * f64(t.space.free) / f64(t.space.total))
 					stat(app, "disk", lucide.HARD_DRIVE, fmt.tprintf("%d%%", used), fmt.tprintf("%s free of %s", size_text(t.space.free), size_text(t.space.total)), em)
 				}
-				ui.spacer(ui.px(em * 0.3))
+				ui.spacer(ui.px(em * 0.5))
 				zoom_pill(app, t, em)
-				ui.spacer(ui.px(em * 0.3))
+				ui.spacer(ui.px(em * 0.5))
 			}
 		}
-		ui.spacer(ui.px(em * 0.3))
 	}
+}
+
+// A line between two cells of a strip, as high as the strip.
+cell_rule :: proc() {
+	ui.next({width = ui.px(max(1, ui.scale())), height = ui.pct(1), bg = ui.color("border")})
+	ui.build_box({.Draw_Background}, fmt.tprintf("###cell_rule%d", ui.parent_box().child_count))
 }
 
 @(private = "file")
@@ -686,11 +691,12 @@ stat :: proc(app: ^App, id, icon, text, tip: string, em: f32) {
 
 @(private = "file")
 filter_field :: proc(app: ^App, t: ^Tab, em: f32) {
-	ui.next({width = ui.px(em * FILTER_EM), height = ui.px(ui.dense(em * 2.0))})
-	if ui.row(.Center, {}, "###filterbox") {
-		// (a well: darker than the footer, its border the accent's while it searches every folder below)
-		raise(ui.parent_box(), {base = draw.hex(surfaces(app).top), edge = t.flat ? ui.color("accent") : draw.hex(surfaces(app).edge), radii = radii_all(em * 0.35)})
-		ui.spacer(ui.px(em * 0.4))
+	// (a well, the whole height of the footer: darker than it; a line of the accent along its top while it searches
+	// every folder below)
+	ui.next({width = ui.px(em * FILTER_EM), height = ui.pct(1), bg = draw.hex(surfaces(app).top)})
+	if ui.row(.Center, {.Draw_Background}, "###filterbox") {
+		if t.flat { tab_flat_line(ui.parent_box()) }
+		ui.spacer(ui.px(em * 0.5))
 		if ui.tags("weak") { glyph(app, lucide.SEARCH, em * 1.5) }
 		key := ui.key_from_string(ui.parent_box().key, "###filter")
 		ui.next({width = ui.fill(), height = ui.pct(1)})
@@ -744,4 +750,13 @@ shown_name :: proc(app: ^App, e: fs.Entry) -> string {
 	if app.settings.show_extensions || e.kind == .Directory { return e.name }
 	ext := fs.extension(e.name)
 	return ext == "" ? e.name : e.name[:len(e.name) - len(ext) - 1]
+}
+
+// The accent along the top of `b` (the filter while it searches every folder below).
+@(private = "file")
+tab_flat_line :: proc(b: ^ui.Box) {
+	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		r := b.rect
+		draw.rect(dc, {r.min, {r.max.x, r.min.y + max(2, ui.scale() * 2)}}, ui.color("accent"))
+	}
 }
