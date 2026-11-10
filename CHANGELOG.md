@@ -24,7 +24,6 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ### Changed
 - The settings' sliders show their value while they are held (the rounding, the text size), written when let go.
-- The alternating rows are on by default.
 
 ### Fixed
 - A tab dragged back into its own window moves that tab, not another one showing the same folder.
