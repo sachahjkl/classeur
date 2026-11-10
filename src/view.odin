@@ -323,6 +323,22 @@ list_keys :: proc(app: ^App) {
 		}
 	}
 	if ui.key_press(.Space, {.Ctrl}) { folder_pick(f, f.cursor, toggle = true) }
+	// the tree: Right opens the folder at the cursor in place, Left closes it (or goes to the folder that holds it)
+	if f.tree && !grid {
+		if e := folder_cursor_entry(f); e != nil {
+			name := strings.clone(e.name, context.temp_allocator)
+			if ui.key_press(.Right) && e.kind == .Directory && !tab_tree_is_open(t, name) { tab_tree_toggle(app, t, name) }
+			if ui.key_press(.Left) {
+				if e.kind == .Directory && tab_tree_is_open(t, name) {
+					tab_tree_toggle(app, t, name)
+				} else if parent := fs.parent(name); parent != "" {
+					folder_cursor_to_name(f, parent)
+					folder_pick(f, f.cursor)
+					ui.list_select(&t.vl, f.cursor)
+				}
+			}
+		}
+	}
 	if ui.key_press(.Escape) && f.count > 1 { folder_pick(f, f.cursor) }
 	if ui.key_press(.Menu) || ui.key_press(.F10, {.Shift}) {
 		if f.cursor >= 0 { entry_menu_open(app, t, {t.cursor_rect.min.x + 24, t.cursor_rect.max.y}, from_keyboard = true) }

@@ -105,8 +105,7 @@ listing_destroy :: proc(l: ^Listing) {
 	l^ = {}
 }
 
-// A name kept in the listing's arena.
-@(private)
+// A name kept in the listing's arena (a listing made of several: the tree's).
 keep_name :: proc(l: ^Listing, name: string) -> string {
 	return strings.clone(name, virtual.arena_allocator(&l.arena))
 }

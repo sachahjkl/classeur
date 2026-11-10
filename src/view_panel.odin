@@ -574,6 +574,20 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, wi
 		check = check_box(app, fmt.tprintf("check%d", row), selected, false, em)
 	}
 	folder := e.kind == .Directory
+	// the tree: a step in per level, a chevron that opens or closes a folder in place, before its icon
+	if t.folder.tree && t.folder.filter == "" {
+		ui.spacer(ui.px(em * 1.4 * f32(tree_depth(e.name))))
+		if folder {
+			open := tab_tree_is_open(t, e.name)
+			if ui.tags("weak") {
+				if icon_action(app, fmt.tprintf("tree_%s", e.name), open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, open ? "Close it here (Left)" : "Open it here (Right)", em * 0.8) {
+					tab_tree_toggle(app, t, strings.clone(e.name, context.temp_allocator))
+				}
+			}
+		} else {
+			ui.spacer(ui.px(em * 1.6))
+		}
+	}
 	entry_glyph(app, t.path, e^, em * 1.9)
 	ui.spacer(ui.px(em * 0.5))
 	entry_name(app, t, e, selected, em)
@@ -637,6 +651,13 @@ entry_name :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, em: f32) {
 	}
 	hidden := .Hidden in e.flags && !selected
 	needle := t.folder.filter
+	if t.folder.tree && needle == "" {
+		ui.next({width = ui.fill(), height = ui.pct(1)})
+		if hidden { ui.push_tags("weak") }
+		ui.label(fmt.tprintf("%s###n", shown_text(fs.base(e.name))))
+		if hidden { ui.pop_tags() }
+		return
+	}
 	if !t.folder.flat && needle == "" {
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		if hidden { ui.push_tags("weak") }

@@ -92,6 +92,7 @@ COMMANDS := [?]Command{
 	{id = "setup", title = "Setup: install classeur, repair, upgrade or uninstall it", icon = lucide.PACKAGE, keys = {{.F12, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_setup},
 	{id = "layout_save", title = "Save the panels and tabs as a layout", icon = lucide.LAYOUT_GRID, keys = {{.S, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_layout_save},
 	{id = "layout_open", title = "Open a layout", icon = lucide.LAYOUT_GRID, keys = {{.L, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_layout_open},
+	{id = "tree", title = "Tree view: folders opened in place (Right, Left)", icon = lucide.LIST_TREE, keys = {{.E, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_tree},
 	{id = "view_list", title = "Names view", icon = lucide.LIST, keys = {{.N3, {.Ctrl}}, {}}, in_text = true, run = act_view_list},
 	{id = "view_columns", title = "Names in columns", icon = lucide.COLUMNS_2, keys = {{.N4, {.Ctrl}}, {}}, in_text = true, run = act_view_columns},
 	{id = "types", title = "The types shown (files, folders, extensions)", icon = lucide.FILTER, keys = {{.Y, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_types},

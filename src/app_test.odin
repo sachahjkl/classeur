@@ -1176,3 +1176,32 @@ test_own_keys :: proc(t: ^testing.T) {
 	b, ok := binding_parse("Ctrl+K, T")
 	testing.expect(t, ok && b == app.keymap.custom["tab_new"])
 }
+
+// The tree view: Right opens the folder at the cursor in place (its entries under it, a step in), Left closes it.
+@(test)
+test_tree :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 700})
+	tab := current_tab(app)
+	session.key(s, .E, {.Ctrl, .Shift})
+	wait_read(s)
+	testing.expect(t, tab.tree)
+	point_at(t, tab, "Documents")
+	session.key(s, .Right)
+	wait_read(s)
+	names := shown_names(tab)
+	at, _ := slice.linear_search(names, "Documents")
+	budget := fs.join("Documents", "budget.xlsx", context.temp_allocator)
+	letter := fs.join("Documents", "letter.odt", context.temp_allocator)
+	testing.expectf(t, at + 2 < len(names) && names[at + 1] == budget && names[at + 2] == letter, "under it, in order: %v", names)
+	testing.expect_value(t, names[at + 3], "Photos")
+	when SHOTS { session.frames(s, 2); session.save_png(s, "tree.png") }
+	// Left on one of its files: the cursor to the folder; Left again: closed
+	testing.expect(t, folder_cursor_to_name(&tab.folder, letter))
+	session.key(s, .Left)
+	testing.expect_value(t, folder_cursor_entry(&tab.folder).name, "Documents")
+	session.key(s, .Left)
+	wait_read(s)
+	testing.expect(t, !slice.contains(shown_names(tab), letter), "closed")
+}

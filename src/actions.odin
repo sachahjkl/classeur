@@ -223,11 +223,12 @@ rename_begin :: proc(app: ^App, t: ^Tab, name: string) {
 	r := &app.rename
 	delete(r.name)
 	r.active, r.tab, r.name, r.focus_due = true, t.id, strings.clone(name), true
-	ui.field_set(&r.field, name)
+	base := fs.base(name)
+	ui.field_set(&r.field, base)
 	// the name without its extension selected, as the systems' file managers do
-	ext := fs.extension(name)
+	ext := fs.extension(base)
 	r.field.mark = 0
-	r.field.cursor = ext != "" ? len(name) - len(ext) - 1 : len(name)
+	r.field.cursor = ext != "" ? len(base) - len(ext) - 1 : len(base)
 }
 
 rename_end :: proc(app: ^App) {
@@ -247,8 +248,9 @@ rename_commit :: proc(app: ^App) {
 		say(app, "A name cannot hold %s.", fs.SEPARATOR_STRING)
 		return
 	}
+	// (in the tree the entry's name is a path from the tab's folder: renamed in its own folder)
 	from_path := fs.join(t.path, r.name, context.temp_allocator)
-	to_path := fs.join(t.path, to, context.temp_allocator)
+	to_path := fs.join(fs.parent(from_path), to, context.temp_allocator)
 	if _, exists := fs.stat(to_path); exists {
 		say(app, "%s is already there.", to)
 		return

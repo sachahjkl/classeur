@@ -18,6 +18,7 @@ Folder :: struct {
 	listing:     fs.Listing,
 	loaded:      bool,              // a listing came (it may be an error)
 	flat:        bool,              // the listing is a flat read: its names are paths from the folder
+	tree:        bool,              // the tree view: its names are paths too, the rows in the tree's order
 	sort:        fs.Sort,
 	show_hidden: bool,
 	filter:      string,            // owned; lower case; "" shows every row
@@ -71,6 +72,7 @@ folder_set_listing :: proc(f: ^Folder, l: ^fs.Listing) {
 		if f.selected[i] { f.count += 1 }
 	}
 	fs.sort_order(f.listing.entries[:], f.order[:], f.sort)
+	if f.tree { tree_order(f) }
 	f.cursor = -1
 	folder_refilter(f)
 	if cursor_name != "" { folder_cursor_to_name(f, cursor_name) }
@@ -84,6 +86,7 @@ folder_set_sort :: proc(f: ^Folder, s: fs.Sort) {
 	if e := folder_cursor_entry(f); e != nil { name = e.name }
 	f.sort = s
 	fs.sort_order(f.listing.entries[:], f.order[:], f.sort)
+	if f.tree { tree_order(f) }
 	folder_refilter(f)
 	if name != "" { folder_cursor_to_name(f, name) }
 }
@@ -342,4 +345,37 @@ fuzzy_holds :: proc(hay, needle: string) -> bool {
 		if !found { return false }
 	}
 	return true
+}
+
+// The sorted order made the tree's: each entry, then the entries of the folder it is (when they were read), in the
+// sort's order at each level.
+tree_order :: proc(f: ^Folder) {
+	entries := f.listing.entries[:]
+	children := make(map[string][dynamic]u32, allocator = context.temp_allocator)
+	for i in f.order {
+		name := entries[i].name
+		cut := len(name) - 1
+		for cut >= 0 && !fs.is_separator(name[cut]) { cut -= 1 }
+		parent := cut > 0 ? name[:cut] : ""
+		if parent not_in children { children[parent] = make([dynamic]u32, context.temp_allocator) }
+		append(&children[parent], i)
+	}
+	out := make([dynamic]u32, 0, len(f.order), context.temp_allocator)
+	walk :: proc(entries: []fs.Entry, children: ^map[string][dynamic]u32, parent: string, out: ^[dynamic]u32, depth: int) {
+		list, ok := children[parent]
+		if !ok || depth > 64 { return }
+		for i in list {
+			append(out, i)
+			if entries[i].kind == .Directory { walk(entries, children, entries[i].name, out, depth + 1) }
+		}
+	}
+	walk(entries, &children, "", &out, 0)
+	copy(f.order[:], out[:])
+}
+
+// How deep an entry of the tree is (0: the folder's own).
+tree_depth :: proc(name: string) -> int {
+	n := 0
+	for i in 0 ..< len(name) { if fs.is_separator(name[i]) { n += 1 } }
+	return n
 }

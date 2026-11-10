@@ -31,6 +31,8 @@ Tab :: struct {
 	measured:     u64,               // the read whose folders were given to the measures
 	locked:       bool,
 	flat:         bool,              // the search of File Pilot: every entry under the folder, flattened
+	tree:         bool,              // the tree view: folders opened in place (tree_open), their entries under them
+	tree_open:    [dynamic]string,   // owned: the folders opened in the tree, by their path from the tab's folder
 	walk:         ^Load_Job,         // the flat read the tab waits for (its progress), nil: none
 	zoom:         int,               // an index of ZOOMS: the view and the size of its items
 	grid_cols:    int,               // the cards per row of the grid, as last laid out              // a folder opened from it opens in a new tab (the lock of the toolbar)
@@ -98,6 +100,8 @@ tab_destroy :: proc(t: ^Tab) {
 	ui.vlist_destroy(&t.vl)
 	ui.field_destroy(&t.filter)
 	ui.field_destroy(&t.address)
+	for p in t.tree_open { delete(p) }
+	delete(t.tree_open)
 	free(t)
 }
 
@@ -129,6 +133,8 @@ tab_go :: proc(app: ^App, t: ^Tab, path: string, history := true) {
 	if old != "" && fs.parent(old) == clean { t.reveal_name = strings.clone(fs.base(old)) }
 	t.path = clean
 	t.flat = false
+	for p in t.tree_open { delete(p) }
+	clear(&t.tree_open)
 	measure_forget_asked(app)
 	ui.field_clear(&t.filter)
 	t.filter_open = false
@@ -172,6 +178,7 @@ Load_Job :: struct {
 	serial:  u64,
 	path:    string,
 	flat:    bool,   // every entry under the folder (fs.walk), not its own
+	tree:    []string,   // owned: the folders opened in the tree, read too (their entries named by their path)
 	count:   int,    // atomic: the entries read so far (a flat read's progress)
 	cancel:  bool,   // atomic: the tab no longer waits for it
 	listing: fs.Listing,
@@ -187,6 +194,10 @@ tab_load :: proc(app: ^App, t: ^Tab) {
 	if t.walk != nil { sync.atomic_store(&t.walk.cancel, true) }   // (a long walk the tab no longer waits for)
 	job := new(Load_Job)
 	job^ = {app = app, tab = t.id, serial = t.serial, path = strings.clone(t.path), flat = t.flat}
+	if t.tree && !t.flat {
+		job.tree = make([]string, len(t.tree_open))
+		for p, i in t.tree_open { job.tree[i] = strings.clone(p) }
+	}
 	t.walk = t.flat ? job : nil
 	pool_submit(&app.pool, load_run, job)
 }
@@ -202,6 +213,18 @@ load_run :: proc(data: rawptr) {
 		fs.walk(&job.listing, job.path, &job.count, proc(user: rawptr) -> bool { return sync.atomic_load(&(^Load_Job)(user).cancel) }, job)
 	} else {
 		fs.list(&job.listing, job.path)
+		// the tree's open folders: their entries after the folder's own, named by their path from it
+		for rel in job.tree {
+			sub: fs.Listing
+			if fs.list(&sub, fs.join(job.path, rel, context.temp_allocator)) == .None {
+				for e in sub.entries {
+					x := e
+					x.name = fs.keep_name(&job.listing, fs.join(rel, e.name, context.temp_allocator))
+					append(&job.listing.entries, x)
+				}
+			}
+			fs.listing_destroy(&sub)
+		}
 	}
 	job.ms = time.duration_milliseconds(time.tick_since(start))
 	job.space, job.has_space = fs.space(job.path)
@@ -213,6 +236,8 @@ load_free :: proc(data: rawptr) {
 	job := (^Load_Job)(data)
 	fs.listing_destroy(&job.listing)
 	delete(job.path)
+	for p in job.tree { delete(p) }
+	delete(job.tree)
 	free(job)
 }
 
@@ -245,6 +270,7 @@ load_done :: proc(data: rawptr, word: u64) {
 	t.space, t.has_space = job.space, job.has_space
 	same_place := t.folder.loaded && t.folder.listing.path == job.listing.path && t.folder.flat == job.flat
 	t.folder.flat = job.flat
+	t.folder.tree = t.tree && !job.flat
 	if !same_place {
 		folder_select_none(&t.folder)
 		t.folder.cursor = -1
@@ -368,4 +394,41 @@ tab_back_quiet :: proc(t: ^Tab) {
 	to := pop(&t.back)
 	append(&t.forward, t.path)
 	t.path = to
+}
+
+// The tree view on or off (off: the folders opened are closed).
+act_tree :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	t.tree = !t.tree
+	if !t.tree {
+		for p in t.tree_open { delete(p) }
+		clear(&t.tree_open)
+	}
+	tab_load(app, t)
+}
+
+// The folder `rel` (its path from the tab's folder) opened in the tree, or closed with what is open below it.
+tab_tree_toggle :: proc(app: ^App, t: ^Tab, rel: string) {
+	for p, i in t.tree_open {
+		if p != rel { continue }
+		prefix := strings.concatenate({rel, fs.SEPARATOR_STRING}, context.temp_allocator)
+		for k := len(t.tree_open) - 1; k >= 0; k -= 1 {
+			if t.tree_open[k] == rel || strings.has_prefix(t.tree_open[k], prefix) {
+				delete(t.tree_open[k])
+				ordered_remove(&t.tree_open, k)
+			}
+		}
+		_ = i
+		tab_load(app, t)
+		return
+	}
+	t.tree = true
+	append(&t.tree_open, strings.clone(rel))
+	tab_load(app, t)
+}
+
+tab_tree_is_open :: proc(t: ^Tab, rel: string) -> bool {
+	for p in t.tree_open { if p == rel { return true } }
+	return false
 }
