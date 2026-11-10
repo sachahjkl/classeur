@@ -1963,3 +1963,44 @@ test_stripes :: proc(t: ^testing.T) {
 	testing.expect(t, app.settings.alternating_rows)
 	when SHOTS { session.save_png(s, "stripes.png") }
 }
+
+// Ctrl and a drag from a selected row take the rows it passes out of the selection; a right click on the list's empty
+// part opens the folder's menu.
+@(test)
+test_ctrl_band_and_empty_menu :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 700})
+	context.allocator = runtime.heap_allocator()
+	tab := current_tab(app)
+	tab.zoom = 0
+	wait_read(s)
+	session.frames(s, 2)
+	folder_select_all(&tab.folder)
+	n := tab.folder.count
+	row1 := session.get(s, "check1").rect
+	row3 := session.get(s, "check3").rect
+	from := [2]f32{row1.max.x + 200, (row1.min.y + row1.max.y) * 0.5}
+	to := [2]f32{from.x, (row3.min.y + row3.max.y) * 0.5}
+	// (Ctrl held through the press, the drag and the release)
+	ctrl :: proc(s: ^session.Session, kind: platform.Event_Kind, at: [2]f32) {
+		s.pointer = at
+		if kind == .Mouse_Press { s.buttons += {.Left} }
+		if kind == .Mouse_Release { s.buttons -= {.Left} }
+		session.event(s, {kind = kind, button = .Left, pos = at, mods = {.Ctrl}})
+		session.frames(s, 2)
+	}
+	session.move(s, from)
+	ctrl(s, .Mouse_Press, from)
+	ctrl(s, .Mouse_Move, from + {0, 6})
+	ctrl(s, .Mouse_Move, to)
+	ctrl(s, .Mouse_Release, to)
+	testing.expectf(t, tab.folder.count == n - 3, "rows 1 to 3 taken out: %d of %d", tab.folder.count, n)
+	testing.expect(t, len(app.drag_paths) == 0, "no file dragged")
+	// the empty part, right-clicked: the folder's menu (New folder)
+	session.click_at(s, {from.x, 600}, .Right)
+	session.frames(s, 3)
+	testing.expect(t, session.find_text(s, "New folder") != nil, "the folder's menu")
+	when SHOTS { session.save_png(s, "empty_menu.png") }
+	session.key(s, .Escape)
+}

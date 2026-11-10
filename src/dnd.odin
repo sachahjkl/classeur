@@ -11,6 +11,7 @@ package classeur
 //   - A drag of classeur's own blocks in drag_start: the window answers at once (drop_sync_set) and the drop is a job
 //     before drag_start returns. A drag of another program's comes as events (app_input).
 
+import "core:slice"
 import "core:strings"
 import "gt:platform"
 import "gt:ui"
@@ -81,6 +82,10 @@ drop_answer :: proc(app: ^App, kind: platform.Event_Kind, pos: [2]f32, mods: pla
 	if e, is_tab := tab_drop(app, data, pos, kind); is_tab { app_frames(app); return e }
 	dir := drop_target(app, pos)
 	effect := drop_effect(app, data.files[:], dir, allowed, mods)
+	// (Linux reads a drag's data at its drop only: before it, files that the drag offers are judged by its types)
+	if kind != .Drop && len(data.files) == 0 && dir != "" && slice.contains(platform.drop_types(app.main.win), "text/uri-list") {
+		effect = platform.drop_effect_for(allowed, mods, .Copy)
+	}
 	delete(app.drop_hover)
 	app.drop_hover = effect != nil ? strings.clone(dir) : ""
 	if kind == .Drop {
@@ -105,7 +110,7 @@ dnd_start :: proc(app: ^App) {
 // A press on a selected row that moved past the system's distance: the selection is dragged (after this frame).
 drag_maybe :: proc(app: ^App, t: ^Tab, sig: ui.Signal) {
 	if sig.pressed { app.drag_started = false }   // (a new press: it may drag)
-	if !sig.dragging || app.drag_started { return }
+	if !sig.dragging || app.drag_started || app.band.active { return }   // (a band of Ctrl selects; it drags no file)
 	d := sig.drag_delta
 	th := platform.drag_threshold(app.main.win)
 	if abs(d.x) < th.x && abs(d.y) < th.y { return }

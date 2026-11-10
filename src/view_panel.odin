@@ -674,7 +674,14 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 			f.cursor = row
 		} else if sig.pressed {
 			clicked = true
-			folder_pick(f, row, extend = .Shift in sig.mods, toggle = .Ctrl in sig.mods)
+			if .Ctrl in sig.mods && .Shift not_in sig.mods {
+				// (Ctrl: the row toggled, and a drag from it goes on doing the same to the rows it passes)
+				base := slice.clone(f.selected[:], context.temp_allocator)
+				folder_pick(f, row, toggle = true)
+				band_begin_on_row(app, t, selected, base)
+			} else {
+				folder_pick(f, row, extend = .Shift in sig.mods, toggle = .Ctrl in sig.mods)
+			}
 		}
 		if sig.clicked && !check && selected && sig.mods == {} && f.count > 1 && !app.drag_started { folder_pick(f, row) }
 		drag_maybe(app, t, sig)

@@ -5,6 +5,18 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Ctrl and a drag from a row (Explorer's): from a selected row, the rows it passes leave the selection; from another, they
+  join it.
+- A right click on the empty part of a list opens the folder's menu (New folder, New file, Paste...).
+
+### Fixed
+- A tab dragged onto another classeur window docks there on Linux: the window took no drop of a tab, whose data Linux
+  reads at the drop only (the toolkit's drop_types tells it before); files dragged from another program too.
+- The dragged tab's picture and ghost had several blue borders: its picture is read before the ghost shows, the ghost has
+  one line, the tab left behind is dimmed.
+- A line under the title bar, the whole width, the shown tab's lines going on from it.
+
 ### Changed
 - The alternating rows a faint shade (a few levels off the list, mixed in sRGB): the tint of the text, blended in linear
   light, made a band that stood out on a dark list.

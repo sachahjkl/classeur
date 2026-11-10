@@ -1,7 +1,8 @@
 package classeur
 
 // The rectangle selection (a rubber band): a press on the empty part of a list, then a drag, selects every row the
-// rectangle touches; with Ctrl the rows are added to the selection there was. The rectangle is kept in the list's
+// rectangle touches; with Ctrl the rows are added to the selection there was. Ctrl and a press on a row start it too
+// (Explorer's): from a selected row it takes the rows it touches out of the selection, from another it adds them. The rectangle is kept in the list's
 // content (it scrolls with the rows) and drawn over them in a floating box.
 
 import "core:fmt"
@@ -12,6 +13,19 @@ Band :: struct {
 	tab:    u64,
 	start:  [2]f32,       // in the list's content
 	base:   [dynamic]bool,   // the selection at the press (Ctrl: the rows are added to it), per entry
+	removing: bool,          // the rows it touches leave the selection (Ctrl and a press on a selected row)
+}
+
+// Ctrl and a press on a row: a band from there, its rows taken out of the selection when that row was in it (`base`: the
+// selection before the press toggled the row).
+band_begin_on_row :: proc(app: ^App, t: ^Tab, removing: bool, base: []bool) {
+	lb := ui.box_from_key(t.vl.key)
+	if lb == nil { return }
+	b := &app.band
+	b.active, b.tab, b.removing = true, t.id, removing
+	b.start = ui.mouse_pos() - lb.rect.min + lb.view_off
+	clear(&b.base)
+	append(&b.base, ..base)
 }
 
 band_free :: proc(b: ^Band) {
@@ -28,8 +42,10 @@ band_update :: proc(app: ^App, t: ^Tab, pressed_row: bool) {
 	sig := ui.signal(lb)
 	m := ui.mouse_pos()
 	content := m - lb.rect.min + lb.view_off
+	// (a right click on the empty part: the folder's menu, what makes and pastes)
+	if sig.right_clicked && !pressed_row { entry_menu_open(app, t, m, on_entry = false) }
 	if sig.pressed && !pressed_row && !b.active {
-		b.active, b.tab, b.start = true, t.id, content
+		b.active, b.tab, b.start, b.removing = true, t.id, content, false
 		clear(&b.base)
 		if .Ctrl in sig.mods {
 			append(&b.base, ..f.selected[:])
@@ -38,7 +54,8 @@ band_update :: proc(app: ^App, t: ^Tab, pressed_row: bool) {
 		}
 	}
 	if !b.active || b.tab != t.id { return }
-	if !sig.dragging {
+	// (held: the list's press, or a row's for a band begun on it)
+	if ui.active_key() == 0 {
 		b.active = false
 		return
 	}
@@ -47,7 +64,8 @@ band_update :: proc(app: ^App, t: ^Tab, pressed_row: bool) {
 	for row in 0 ..< len(f.shown) {
 		if row + 1 >= len(offs) { break }
 		touched := offs[row + 1] > y0 && offs[row] < y1
-		on := touched || (len(b.base) == len(f.selected) && b.base[f.shown[row]])
+		was := len(b.base) == len(f.selected) && b.base[f.shown[row]]
+		on := b.removing ? was && !touched : was || touched
 		folder_set_row(f, row, on)
 		if touched { f.cursor = row }
 	}

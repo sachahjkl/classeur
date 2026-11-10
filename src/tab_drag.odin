@@ -8,6 +8,7 @@ import "core:fmt"
 import "core:math"
 import "core:os"
 import "core:strconv"
+import "core:slice"
 import "core:strings"
 import "gt:draw"
 import "gt:render"
@@ -173,20 +174,6 @@ free_panel_shell :: proc(p: ^Panel) {
 	free(p)
 }
 
-// The tab being dragged, outlined in the accent.
-tab_drag_mark :: proc(b: ^ui.Box) {
-	prev, prev_user := b.custom, b.custom_user
-	Mark :: struct { prev: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context), user: rawptr }
-	m := ui.frame_new(Mark)
-	m^ = {prev, prev_user}
-	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-		m := (^Mark)(user)
-		if m.prev != nil { m.prev(b, m.user, dc) }
-		draw.rect(dc, b.rect, ui.color("accent"), border = max(1, ui.scale()))
-	}
-	b.custom_user = m
-}
-
 TAB_MIME :: "application/x-classeur-tab"
 
 // What a dragged tab carries: its process, its id and its path ("<pid>:<id>:<path>"): back in its own window, the tab
@@ -240,6 +227,8 @@ tab_image_free :: proc(app: ^App) {
 // window, a window of its own (said under the ghost).
 tab_drag_overlay :: proc(app: ^App, em: f32) {
 	d := &app.tab_drag
+	// (while its picture is read back: the frame shows the tab alone, no ghost over it)
+	if d.capture { return }
 	// (after the tabs' signals: a press that ended out of its tab's box, a capture lost, ends the drag)
 	if d.active && ui.active_key() == 0 {
 		d.active = false
@@ -296,7 +285,8 @@ tab_drag_overlay :: proc(app: ^App, em: f32) {
 	at := m - d.grab
 	at.x = clamp(at.x, 0, max(app.window_px.x - hint_w, 0))
 	at.y = clamp(at.y, 0, max(app.window_px.y - d.size.y - em * 2.3, 0))
-	ghost := place({at, at + d.size}, draw.hex(surfaces(app).list) * {1, 1, 1, 0.92}, accent, "###tab_ghost", tab_radius(em) / max(ui.rounding(ui.current_state()), 0.01))
+	// (one line around it, the tabs' own: the accent marks where it lands, not the tab)
+	ghost := place({at, at + d.size}, draw.hex(surfaces(app).list) * {1, 1, 1, 0.94}, draw.hex(surfaces(app).edge), "###tab_ghost", tab_radius(em) / max(ui.rounding(ui.current_state()), 0.01))
 	if ui.parent(ghost) {
 		ui.spacer(ui.px(em * 0.7))
 		path_icon(app, t.path, true, em * 1.6)
@@ -371,6 +361,8 @@ tab_drop :: proc(app: ^App, data: ^platform.Drag_Data, pos: [2]f32, kind: platfo
 		if e.mime != TAB_MIME { continue }
 		if p, i, at, ok := tab_mime_parse(e.data); ok { pid, id, path = p, i, at }
 	}
+	// (Linux reads the data at the drop only: before it, a tab is told by its type, and taken)
+	if kind != .Drop && path == "" && slice.contains(platform.drop_types(app.main.win), TAB_MIME) { return .Move, true }
 	if path == "" { return nil, false }
 	if kind != .Drop { return .Move, true }
 	panel := app.focus

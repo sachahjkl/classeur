@@ -144,6 +144,14 @@ build_top :: proc(app: ^App, em: f32) {
 	ui.push_tags("bar")
 	defer ui.pop_tags()
 	if ui.title_bar("###titlebar", {.Draw_Background}) {
+		// its bottom line, the whole width: the shown tab paints over it (its own lines going up), one line with them
+		edge := ui.frame_new(ui.Color)
+		edge^ = draw.hex(surfaces(app).edge)
+		bar := ui.parent_box()
+		bar.custom, bar.custom_user = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+			w := max(1, ui.scale())
+			draw.rect(dc, {{b.rect.min.x, b.rect.max.y - w}, b.rect.max}, (^ui.Color)(user)^)
+		}, edge
 		// each part as wide as what is under it (the boxes of the last frame: the first has no width yet)
 		// (each region starts on the column of the line at the left of its panel: the shown tab's left line is that
 		// line going up, not a second one beside it)
@@ -255,7 +263,8 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 			if !app.tab_drag.active { hover_tip(sig, home_path(app, t.path), t.locked ? "Locked: folders open in a new tab" : "") }
 			append(&app.tab_rects, Tab_Rect{index, i, tab.rect})
 			tab_drag_signal(app, index, i, sig)
-			if app.tab_drag.active && app.tab_drag.tab == t.id { tab_drag_mark(tab) }
+			// (the tab dragged, dimmed where it was: its ghost follows the pointer; not while its picture is read)
+			if app.tab_drag.active && app.tab_drag.tab == t.id && !app.tab_drag.capture { tab.transparency = 0.5 }
 			if sig.middle_clicked { close = i }
 			if sig.right_clicked {
 				p.active, app.focus = i, index
