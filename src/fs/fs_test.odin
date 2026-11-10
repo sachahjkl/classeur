@@ -208,7 +208,8 @@ test_recycle_bin :: proc(t: ^testing.T) {
 	in_trash, err := trash(file, context.temp_allocator)
 	testing.expect_value(t, err, Error.None)
 	if in_trash == "" {
-		return   // (a drive with no Recycle Bin the runner can read: nothing to put back)
+		fmt.println("recycle bin: none found, nothing to put back")   // (a drive with no Recycle Bin the runner can read)
+		return
 	}
 	testing.expect(t, !exists(file), "gone")
 	from, uerr := untrash(in_trash, context.temp_allocator)
@@ -216,4 +217,5 @@ test_recycle_bin :: proc(t: ^testing.T) {
 	testing.expect(t, strings.equal_fold(from, file), "where it was")
 	data, _ := os.read_entire_file(file, context.temp_allocator)
 	testing.expect_value(t, string(data), "back")
+	fmt.println("recycle bin: put back")
 }
