@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-10
+
 ### Added
 - The path field suggests the folders of the path typed: Up and Down choose, Tab completes, Enter or a click goes.
 - The zoom's slider: a row per step with its icon, its name and its percent; a click on a row goes to that step.
@@ -115,3 +117,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.6.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.6.0
 [0.7.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.7.0
 [0.8.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.8.0
+[0.9.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.9.0
