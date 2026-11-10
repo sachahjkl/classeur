@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-10
+
 ### Changed
 - The Setup is classeur's own screen over the toolkit's controller: a head with the state in its colour, sections as the
   settings page has them (Location, Options, On this system), the buttons in a bar at the foot.
@@ -144,3 +146,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.8.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.8.0
 [0.9.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.9.0
 [0.10.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.10.0
+[0.11.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.11.0
