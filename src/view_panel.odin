@@ -21,7 +21,9 @@ HEADER_EM  :: 2.1
 ROW_EM     :: 2.2
 FOOTER_EM  :: 2.3
 // The widths of the columns after the name, in ems.
-COL_CHECK_EM    :: 2.4
+ROW_LEAD_EM     :: 0.4   // between a row's edge and its icon
+ICON_CELL_EM    :: 1.9   // a row's icon, which is its box too
+TREE_CHEVRON_EM :: 1.6   // a tree's chevron (icon_action at 0.8 em)
 COL_MODIFIED_EM :: 9.5
 COL_TYPE_EM     :: 8.5
 COL_COUNT_EM    :: 5.6
@@ -372,12 +374,14 @@ header :: proc(app: ^App, t: ^Tab, wide: Columns, em: f32) {
 			if app.columns_menu_key == 0 { app.columns_menu_key = ui.key_from_string(0, "classeur_columns_menu") }
 			ui.ctx_menu_open(app.columns_menu_key, ui.mouse_pos())
 		}
-		ui.spacer(ui.px(em * ROW_INSET_EM))
-		// the box of every row: all, some or none of them selected
+		ui.spacer(ui.px(em * (ROW_INSET_EM + ROW_LEAD_EM)))
+		// the box of every row, over the icons' column (File Pilot's): all, some or none of them selected
+		if f.tree && f.filter == "" { ui.spacer(ui.px(em * TREE_CHEVRON_EM)) }
 		all := len(f.shown) > 0 && f.count == len(f.shown)
-		if check_box(app, "check_all", all, f.count > 0 && !all, em) {
+		if check_box(app, "check_all", all, f.count > 0 && !all, em * ICON_CELL_EM) {
 			if f.count > 0 { folder_select_none(f) } else { folder_select_all(f) }
 		}
+		ui.spacer(ui.px(em * 0.5))
 		if ui.tags("weak") {
 			column_head(app, t, .Name, "Name", ui.fill(), .Left, em, nil)
 			for c in app.columns_order {
@@ -458,16 +462,36 @@ check_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	}
 }
 
-// The box at the start of a row (and of the header): clicked, it says so.
+// The box of the header, `width` wide (the icons' column): clicked, it says so.
 @(private = "file")
-check_box :: proc(app: ^App, id: string, on, some: bool, em: f32) -> bool {
+check_box :: proc(app: ^App, id: string, on, some: bool, width: f32) -> bool {
 	d := ui.frame_new(Check_Draw)
-	d^ = {on, some, ui.color("weak text"), ui.color("accent"), ui.color("bright")}
-	if ui.tags("weak") { d.line = ui.color("text") }
-	d.mark = {1, 1, 1, 1}
-	ui.next({width = ui.px(em * COL_CHECK_EM), height = ui.pct(1)})
+	d^ = {on, some, ui.color("text"), ui.color("accent"), {1, 1, 1, 1}}
+	ui.next({width = ui.px(width), height = ui.pct(1)})
 	b := ui.custom(fmt.tprintf("###%s", id), check_draw, d, {.Clickable})
 	return ui.signal(b).clicked
+}
+
+// A row's icon, which is its box too (File Pilot's): the pointer over it, or the row checked among others, shows the
+// box in its place; a click on it checks the row or not, the others kept. True: it was clicked.
+@(private = "file")
+icon_check :: proc(app: ^App, t: ^Tab, e: fs.Entry, row: int, selected: bool, em: f32) -> bool {
+	width := em * ICON_CELL_EM
+	ui.next({width = ui.px(width), height = ui.pct(1)})
+	cell := ui.build_box({.Clickable}, fmt.tprintf("###check%d", row))
+	sig := ui.signal(cell)
+	if ui.parent(cell) {
+		if sig.hovering || selected && t.folder.count > 1 {
+			d := ui.frame_new(Check_Draw)
+			d^ = {selected, false, ui.color("text"), ui.color("accent"), {1, 1, 1, 1}}
+			ui.next({width = ui.px(width), height = ui.pct(1)})
+			ui.custom("###box", check_draw, d)
+		} else {
+			entry_glyph(app, t.path, e, width)
+		}
+	}
+	hover_tip(sig, selected ? "Uncheck it (the others stay)" : "Check it (the others stay)")
+	return sig.clicked
 }
 
 ////////////////////////////////
@@ -680,15 +704,10 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 // size. `names_only`: the icon and the name. True: its box was clicked.
 @(private = "file")
 entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, wide: Columns, names_only: bool, em: f32) -> (check: bool) {
-	ui.spacer(ui.px(em * ROW_INSET_EM))
-	if names_only {
-		ui.spacer(ui.px(em * 0.4))
-	} else {
-		check = check_box(app, fmt.tprintf("check%d", row), selected, false, em)
-	}
+	ui.spacer(ui.px(em * (ROW_INSET_EM + ROW_LEAD_EM)))
 	folder := e.kind == .Directory
 	tree_lead(app, t, e, em)
-	entry_glyph(app, t.path, e^, em * 1.9)
+	check = icon_check(app, t, e^, row, selected, em)
 	ui.spacer(ui.px(em * 0.5))
 	entry_name(app, t, e, selected, em)
 	if names_only {
@@ -1157,6 +1176,6 @@ tree_lead :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, em: f32) {
 			}
 		}
 	} else {
-		ui.spacer(ui.px(em * 1.6))
+		ui.spacer(ui.px(em * TREE_CHEVRON_EM))
 	}
 }

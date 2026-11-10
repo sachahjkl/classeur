@@ -1465,3 +1465,34 @@ test_setup_dialog :: proc(t: ^testing.T) {
 	when SHOTS { session.save_png(s, "menu_typed.png") }
 	session.key(s, .Escape)
 }
+
+// A row's icon is its box (File Pilot's): the pointer over it shows the box, a click checks the row and keeps the
+// others; the rows checked among others show their box; the header's box, over the icons, checks every row or none.
+@(test)
+test_icon_checks :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 700})
+	tab := current_tab(app)
+	tab.zoom = 0
+	wait_read(s)
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "box") == nil, "icons, no box")
+	session.hover(s, "check1")
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "box") != nil, "the pointer over an icon shows its box")
+	session.click(s, "check1")
+	session.click(s, "check3")
+	session.frames(s, 2)
+	testing.expect_value(t, tab.folder.count, 2)
+	session.leave(s)
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "box", 1) != nil, "the rows checked among others show their box")
+	when SHOTS { session.save_png(s, "icon_checks.png") }
+	session.click(s, "check_all")
+	session.frames(s, 1)
+	testing.expect_value(t, tab.folder.count, 0)
+	session.click(s, "check_all")
+	session.frames(s, 1)
+	testing.expect_value(t, tab.folder.count, len(tab.folder.shown))
+}
