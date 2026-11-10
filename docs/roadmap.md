@@ -75,6 +75,10 @@ with one line on how it is made, and update [architecture.md](architecture.md).
   searched by typing (gui_toolkit's `ctx_menu_open(search)`), Open with, a terminal here (gui_toolkit's
   `desktop.open_terminal`), the system's icons (gui_toolkit's `desktop.file_icon`).
 - The site (`site/`, `classeurtool site`, published by `.github/workflows/pages.yml` at classeur.sacha.house).
+- The settings on gui_toolkit's `prefs_page` (the rounding of the whole interface, the density, the animations, live
+  sliders), updates by the toolkit's `update.Updater` (signed manifests in each release), the columns' filters, the
+  icons as boxes, the sidebar's sections moved, tabs dragged with their feedback and torn off at the window's edge, the
+  Windows icon and `classeur.com` (checked by the Windows CI).
 
 ## Next
 
@@ -82,13 +86,12 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 5. **The inspector, more**: its width dragged, a text highlighted by its language, PDF and videos, the permissions.
 6. **Sort by the measures** and a bar in the size column; the thumbnails' cache on the disk, more formats.
 7. **A progressive search**: the results shown as the walk reads them, on several threads.
-8. **The release**: `classeurtool ship` and archives for Linux and Windows (as papier's); the window raised by a second
-   start on Wayland (an xdg-activation token).
+8. The window raised by a second start on Wayland (an xdg-activation token).
 9. Archives as folders (zip, tar), read only; the properties of a file.
 
 ## Debts
 
 - The sessions of papier and classeur both have a shots command; papier's runs a headless sway, classeur's runs
   headless in a test. If papier moves to the headless test, nothing is left to share.
-- Windows: the code compiles (`odin check src/fs -target:windows_amd64`) but has not run on Windows yet. Run the tests
-  there first.
+- Windows: the CI runs the tests and checks the icon and `classeur.com` there; a person's run found the Setup's
+  "Repair" after an install (fixed in the toolkit). Drags between two real windows are tested by hand only.
