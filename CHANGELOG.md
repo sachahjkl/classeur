@@ -17,11 +17,13 @@ and the versions follow [semantic versioning](https://semver.org/).
 - Sorted by size, the folders go by what they hold as it is measured; a folder measured empty says 0 B. The Size column
   has a bar of each row's share of the largest (File Pilot's).
 
-## [0.13.1] - 2026-11-10
-
 ### Fixed
 - Wayland: a second start brings the window up with its launcher's activation token (the toolkit's
   raise_window_token), which the compositor honours where it may refuse the window's own.
+
+## [0.13.1] - 2026-11-10
+
+### Fixed
 - Where the system has no picture for an icon (no icon theme, a type it does not know), Lucide's folder or file stands
   in: no empty icon. (The 0.13.0 release stopped on this: the CI's machines have no icon theme.)
 
