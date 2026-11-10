@@ -38,6 +38,7 @@ Folder :: struct {
 	today:       i64,
 	order:       [dynamic]u32,      // every entry, sorted
 	shown:       [dynamic]u32,      // the rows: `order` without what the filter and the hidden setting leave out
+	size_max:    i64,               // the largest size among the rows (the Size column's bars are its share)
 	ids:         [dynamic]u64,      // a stable identity per row (the hash of its name): the virtual list's
 	lowered:     [dynamic]string,   // each entry's name in lower case (made at the first filter), in `lowered_arena`
 	selected:    [dynamic]bool,     // per entry
@@ -99,6 +100,16 @@ folder_set_sort :: proc(f: ^Folder, s: fs.Sort) {
 	name := ""
 	if e := folder_cursor_entry(f); e != nil { name = e.name }
 	f.sort = s
+	fs.sort_order(f.listing.entries[:], f.order[:], f.sort)
+	if f.tree { tree_order(f) }
+	folder_refilter(f)
+	if name != "" { folder_cursor_to_name(f, name) }
+}
+
+// The order again, the same sort (folders' sizes measured since): the cursor stays on its entry.
+folder_resort :: proc(f: ^Folder) {
+	name := ""
+	if e := folder_cursor_entry(f); e != nil { name = strings.clone(e.name, context.temp_allocator) }
 	fs.sort_order(f.listing.entries[:], f.order[:], f.sort)
 	if f.tree { tree_order(f) }
 	folder_refilter(f)
@@ -240,6 +251,7 @@ folder_refilter :: proc(f: ^Folder) {
 	}
 	clear(&f.shown)
 	clear(&f.ids)
+	f.size_max = 0
 	// with a filter, the rows best matched first (letters side by side, at the start of a word: ui.fuzzy_score); the
 	// order of the sort between equals
 	scores := make([dynamic]int, context.temp_allocator)
@@ -258,6 +270,7 @@ folder_refilter :: proc(f: ^Folder) {
 		}
 		append(&f.shown, i)
 		append(&f.ids, hash.fnv64a(transmute([]u8)e.name))
+		f.size_max = max(f.size_max, e.size)
 	}
 	if f.group != .None && f.filter == "" {
 		// (grouped: by the group's rank, stable: the sort's order in each group)

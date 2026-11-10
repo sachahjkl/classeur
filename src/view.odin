@@ -38,6 +38,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app.column_rects, app.column_rects_now = app.column_rects_now, app.column_rects
 	clear(&app.column_rects_now)
 	tab_drag_apply(app)
+	measures_resort(app)
 	tab_drag_poll(app)
 	// (a band whose tab went, or whose press ended out of its list: over)
 	if app.band.active && (find_tab(app, app.band.tab) == nil || ui.active_key() == 0) { app.band.active = false }

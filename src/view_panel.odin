@@ -5,6 +5,7 @@ package classeur
 // same per frame), and its footer (the filter, the counts). Its tabs are in the row at the top of the window (view.odin).
 
 import "core:fmt"
+import "core:math"
 import "core:sync"
 import "gt:platform"
 import config "gt:config"
@@ -448,6 +449,20 @@ column_funnel :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, em: f
 	}
 }
 
+@(private = "file")
+Size_Bar :: struct { share: f32, color: ui.Color, em: f32 }
+
+@(private = "file")
+size_bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+	d := (^Size_Bar)(user)
+	r := b.rect
+	h := max(2, math.round(d.em * 0.14))
+	right := r.max.x - d.em * 0.35
+	w := max((right - r.min.x - d.em * 0.35) * clamp(d.share, 0, 1), 1)
+	y := r.max.y - d.em * 0.45
+	draw.rect(dc, {{right - w, y - h}, {right, y}}, d.color)
+}
+
 // Whether the column's filter leaves rows out.
 @(private = "file")
 column_filtered :: proc(f: ^Folder, key: fs.Sort_Key) -> bool {
@@ -789,7 +804,14 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, wi
 				size := "--"
 				if e.size >= 0 { size = size_text(e.size) } else if measured && m.bytes > 0 { size = size_text(m.bytes) }
 				ui.next({width = ui.px(em * COL_SIZE_EM), height = ui.pct(1), text_align = .Right})
-				ui.label(fmt.tprintf("%s###s", size))
+				cell := ui.build_box({.Draw_Text}, fmt.tprintf("%s###s", size))
+				// (File Pilot's: a thin bar under the size, its share of the largest row's)
+				bytes := e.size >= 0 ? e.size : (measured ? m.bytes : 0)
+				if bytes > 0 && t.folder.size_max > 0 {
+					d := ui.frame_new(Size_Bar)
+					d^ = {f32(f64(bytes) / f64(t.folder.size_max)), ui.color("accent") * {1, 1, 1, 0.55}, em}
+					cell.custom, cell.custom_user = size_bar_draw, d
+				}
 			}
 		}
 	}

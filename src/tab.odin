@@ -11,6 +11,7 @@ import "gt:ui"
 import "fs"
 
 Tab :: struct {
+	resort_due:  bool,              // folders measured since its sort by size: sorted again before the next build
 	id:          u64,
 	path:        string,             // owned, clean (fs.clean)
 	folder:      Folder,
@@ -283,6 +284,7 @@ load_done :: proc(data: rawptr, word: u64) {
 		if job.listing.error == .None && !job.flat { recent_add(job.app, job.listing.path) }
 	}
 	if t.folder.group != t.group { t.folder.group, t.folder.group_now, t.folder.group_tz = t.group, time.now()._nsec, job.app.tz }
+	measures_apply(job.app, &job.listing)
 	folder_set_listing(&t.folder, &job.listing)
 	// the row asked for (made, renamed, the folder we came up from) has the cursor and the selection
 	revealed := t.reveal_name != "" && folder_cursor_to_name(&t.folder, t.reveal_name)

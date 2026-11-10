@@ -122,5 +122,38 @@ measure_done :: proc(data: rawptr, word: u64) {
 		job.m.mtime = job.mtime
 		m^ = job.m
 		app_frames(app)
+		// the folder's size in its entry, in the tabs that show it: sorted by size, folders go among the sizes
+		parent, name := fs.parent(job.path), fs.base(job.path)
+		for p in app.panels {
+			for t in p.tabs {
+				if t.path != parent { continue }
+				for &e in t.folder.listing.entries {
+					if e.kind != .Directory || e.name != name { continue }
+					e.size = job.m.bytes
+					if t.folder.sort.key == .Size { t.resort_due = true }
+				}
+			}
+		}
+	}
+}
+
+// A listing come: the sizes of its folders measured already, in their entries (measure_done's, for a new read).
+measures_apply :: proc(app: ^App, l: ^fs.Listing) {
+	for &e in l.entries {
+		if e.kind != .Directory { continue }
+		m, ok := app.measures[fs.join(l.path, e.name, context.temp_allocator)]
+		if ok && m.done && m.mtime == e.mtime { e.size = m.bytes }
+	}
+}
+
+// Before a build: the tabs sorted by size whose folders were measured since, sorted again (once a frame, whatever
+// the number of measures come).
+measures_resort :: proc(app: ^App) {
+	for p in app.panels {
+		for t in p.tabs {
+			if !t.resort_due { continue }
+			t.resort_due = false
+			folder_resort(&t.folder)
+		}
 	}
 }

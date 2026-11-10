@@ -5,6 +5,10 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Sorted by size, the folders go by what they hold as it is measured; a folder measured empty says 0 B. The Size column
+  has a bar of each row's share of the largest (File Pilot's).
+
 ## [0.13.1] - 2026-11-10
 
 ### Fixed

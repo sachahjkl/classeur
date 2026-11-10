@@ -1759,3 +1759,35 @@ test_tab_drag_closed :: proc(t: ^testing.T) {
 	testing.expect(t, !app.tab_drag.active, "over: its tab went")
 	session.release(s, from + {30, 0})
 }
+
+// Sorted by size, the folders go by what they hold, as it is measured (their sizes in their entries; once a frame);
+// the Size column has a bar of each row's share of the largest.
+@(test)
+test_sort_by_measures :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1200, 700})
+	context.allocator = runtime.heap_allocator()
+	tab := current_tab(app)
+	tab.zoom = 0
+	wait_read(s)
+	f := &tab.folder
+	folder_set_sort(f, {key = .Size, descending = true, mixed = true})
+	// (the three folders measured: their sizes in their entries)
+	session.wait_until(s, proc(s: ^session.Session) -> bool {
+		tab := current_tab((^App)(s.user))
+		n := 0
+		for e in tab.folder.listing.entries { if e.kind == .Directory && e.size >= 0 { n += 1 } }
+		return n == 3
+	}, "the folders measured")
+	session.frames(s, 3)
+	prev := max(i64)
+	for i in f.shown {
+		e := f.listing.entries[i]
+		testing.expectf(t, e.size <= prev, "%s (%d) after %d", e.name, e.size, prev)
+		prev = e.size
+	}
+	first := f.listing.entries[f.shown[0]]
+	testing.expect_value(t, first.kind, fs.Kind.Directory)   // (Documents' 61 bytes: more than any file)
+	when SHOTS { session.save_png(s, "size_sort.png") }
+}

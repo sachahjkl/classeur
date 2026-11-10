@@ -84,7 +84,7 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 
 2. Undo of the Recycle Bin on Windows (`IFileOperation`).
 5. **The inspector, more**: its width dragged, a text highlighted by its language, PDF and videos, the permissions.
-6. **Sort by the measures** and a bar in the size column; the thumbnails' cache on the disk, more formats.
+6. The thumbnails' cache on the disk, more formats.
 7. **A progressive search**: the results shown as the walk reads them, on several threads.
 8. The window raised by a second start on Wayland (an xdg-activation token).
 9. Archives as folders (zip, tar), read only; the properties of a file.
