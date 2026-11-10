@@ -82,7 +82,6 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 
 ## Next
 
-2. Undo of the Recycle Bin on Windows (`IFileOperation`).
 5. The inspector: PDF and videos.
 6. The thumbnails' cache on the disk, more formats.
 

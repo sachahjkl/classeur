@@ -18,6 +18,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   has a bar of each row's share of the largest (File Pilot's).
 
 ### Fixed
+- Windows: a move to the Recycle Bin is undone (Ctrl+Z): the item is found by its $I record and put back where it was.
 - Wayland: a second start brings the window up with its launcher's activation token (the toolkit's
   raise_window_token), which the compositor honours where it may refuse the window's own.
 

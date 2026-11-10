@@ -3,6 +3,7 @@ package fs
 import "base:runtime"
 import "core:fmt"
 import "core:os"
+import "core:strings"
 import "core:testing"
 import "core:time"
 
@@ -193,4 +194,26 @@ test_walk_progress :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(l.entries), FOLDERS * 3)
 	testing.expect(t, seen.batches > 0, "batches before the end")
 	testing.expect(t, seen.entries <= len(l.entries), "never more than the listing")
+}
+
+// Windows: an item put in the Recycle Bin is found there (its $I record) and put back where it was.
+@(test)
+test_recycle_bin :: proc(t: ^testing.T) {
+	when ODIN_OS != .Windows { return }
+	dir := join(os.get_env("TEMP", context.temp_allocator), fmt.tprintf("classeur_recycle_%d", os.get_pid()), context.temp_allocator)
+	_ = os.make_directory_all(dir)
+	defer os.remove_all(dir)
+	file := join(dir, "back.txt", context.temp_allocator)
+	testing.expect(t, os.write_entire_file(file, "back") == nil)
+	in_trash, err := trash(file, context.temp_allocator)
+	testing.expect_value(t, err, Error.None)
+	if in_trash == "" {
+		return   // (a drive with no Recycle Bin the runner can read: nothing to put back)
+	}
+	testing.expect(t, !exists(file), "gone")
+	from, uerr := untrash(in_trash, context.temp_allocator)
+	testing.expect_value(t, uerr, Error.None)
+	testing.expect(t, strings.equal_fold(from, file), "where it was")
+	data, _ := os.read_entire_file(file, context.temp_allocator)
+	testing.expect_value(t, string(data), "back")
 }

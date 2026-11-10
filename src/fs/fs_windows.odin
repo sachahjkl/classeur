@@ -26,7 +26,7 @@ foreign kernel32 {
 @(private = "file")
 EPOCH_DIFF_100NS :: 116_444_736_000_000_000
 
-@(private = "file")
+@(private)
 filetime_ns :: proc(t: win.FILETIME) -> i64 {
 	v := i64(t.dwHighDateTime) << 32 | i64(t.dwLowDateTime)
 	return (v - EPOCH_DIFF_100NS) * 100

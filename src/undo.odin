@@ -6,7 +6,7 @@ package classeur
 //   - a new folder: the folder removed, when it is still empty;
 //   - a copy: the copies to the trash (never deleted for good: an undo loses nothing);
 //   - a move: each item moved back to where it was (a job: a move across volumes copies);
-//   - the trash: each item put back from the trash (Linux; the Recycle Bin of Windows gives no path back).
+//   - the trash: each item put back from the trash (Linux's, or the Recycle Bin of Windows, its $I records read).
 // Deleting for good cannot be undone. What an undo does is not undone in turn; it can be done again (redo, Ctrl+Y,
 // Ctrl+Shift+Z) until something else is done to files.
 
