@@ -135,9 +135,10 @@ section :: proc(app: ^App, s: Side_Section, em: f32) -> bool {
 	// dragged past a few pixels: the section moves where it is let go (side_drag_end); a right click: its menu
 	// (a drag cancelled by Escape stays so until its button comes up)
 	if app.side_cancelled && s == app.side_drag && !sig.dragging { app.side_cancelled = false }
-	if sig.dragging && abs(sig.drag_delta.y) > em * 0.5 && !app.side_cancelled { app.side_drag, app.side_dragging = s, true }
+	if sig.dragging && abs(sig.drag_delta.y) > em * 0.5 && !app.side_cancelled { app.side_drag, app.side_dragging, app.side_menu_of = s, true, s }
 	if app.side_dragging && app.side_drag == s { app.side_held = sig.dragging }
 	if sig.clicked && !(app.side_dragging && app.side_drag == s) { app.side_open[s] = !open }
+	if sig.clicked || sig.right_clicked { app.side_menu_of = s }   // (the section the commands move)
 	if sig.right_clicked { side_menu_open(app, s) }
 	hover_tip(sig, "Drag it, or right-click it, to move the section")
 	return app.side_open[s]
@@ -228,8 +229,8 @@ side_menu_build :: proc(app: ^App, em: f32) {
 		at := 0
 		for x, i in app.side_order { if x == s { at = i } }
 		last := len(Side_Section) - 1
-		if ui.menu_item("Move up", icon = lucide.ARROW_UP, enabled = at > 0).clicked { side_move(app, s, at - 1) }
-		if ui.menu_item("Move down", icon = lucide.ARROW_DOWN, enabled = at < last).clicked { side_move(app, s, at + 1) }
+		menu_command(app, "side_up", enabled = at > 0)
+		menu_command(app, "side_down", enabled = at < last)
 		ui.menu_separator()
 		if ui.menu_item("Move to the top", enabled = at > 0).clicked { side_move(app, s, 0) }
 		if ui.menu_item("Move to the bottom", enabled = at < last).clicked { side_move(app, s, last) }
@@ -324,4 +325,14 @@ side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, e
 	}
 	hover_tip(sig, v.path, sp.total > 0 ? fmt.tprintf("%s free of %s", size_text(sp.free), size_text(sp.total)) : "")
 	return sig.clicked
+}
+
+// The section last touched (a click or a right click on its heading) a place up or down (its keys, its menu's lines).
+act_side_up :: proc(app: ^App) { side_step(app, -1) }
+act_side_down :: proc(app: ^App) { side_step(app, 1) }
+
+@(private = "file")
+side_step :: proc(app: ^App, by: int) {
+	s := app.side_menu_of
+	for x, i in app.side_order { if x == s { side_move(app, s, i + by); return } }
 }

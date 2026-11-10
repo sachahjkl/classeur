@@ -1645,6 +1645,10 @@ test_side_order :: proc(t: ^testing.T) {
 	session.release(s, to)
 	session.frames(s, 2)
 	testing.expect_value(t, app.side_order[len(Side_Section) - 1], Side_Section.Places)
+	// its keys: the section last touched (Places, dragged) a place up
+	session.key(s, .Up, {.Ctrl, .Alt, .Shift})
+	session.frames(s, 1)
+	testing.expect_value(t, app.side_order[len(Side_Section) - 2], Side_Section.Places)
 }
 
 // Ctrl+wheel through the zoom's steps: at every frame of the moves, every icon shown has its picture (a size not made yet
