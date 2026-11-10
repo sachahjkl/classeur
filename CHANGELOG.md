@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-10
+
 ### Added
 - The settings (Ctrl+,): the toolkit's settings page, a page per subject (Appearance, Files, Opening), a search, the
   themes as cards; resizable by its edges and corner.
@@ -131,3 +133,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.7.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.7.0
 [0.8.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.8.0
 [0.9.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.9.0
+[0.10.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.10.0
