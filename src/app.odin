@@ -155,7 +155,8 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 	outcome := instance.Outcome.Other_Instance
 	owner: instance.Owner
 	if !standalone {
-		message := strings.join(folders, "\n", context.temp_allocator)
+		// (its launcher's activation token first: the first start's window comes up with it on Wayland)
+		message := app_message_make(platform.activation_token_from_env(context.temp_allocator), folders)
 		name := instance.key(ODIN_DEBUG ? "classeur.dev" : "classeur", platform.config_dir(context.temp_allocator))
 		outcome, owner = instance.acquire({name = name, wait_ms = 2000}, transmute([]u8)message)
 		if outcome == .Forwarded { return 0 }
@@ -184,6 +185,29 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 	return 0
 }
 
+// What a second start hands the first: its launcher's activation token on a line of its own (marked by a byte no path
+// has), then its folders, one a line.
+APP_MESSAGE_TOKEN :: "\x01"
+
+app_message_make :: proc(token: string, folders: []string) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	if token != "" { strings.write_string(&b, APP_MESSAGE_TOKEN); strings.write_string(&b, token); strings.write_byte(&b, '\n') }
+	for f, i in folders {
+		if i > 0 { strings.write_byte(&b, '\n') }
+		strings.write_string(&b, f)
+	}
+	return strings.to_string(b)
+}
+
+app_message_read :: proc(text: string) -> (token: string, folders: []string) {
+	list := make([dynamic]string, context.temp_allocator)
+	for line in strings.split_lines(text, context.temp_allocator) {
+		if strings.has_prefix(line, APP_MESSAGE_TOKEN) { token = line[len(APP_MESSAGE_TOKEN):]; continue }
+		if line != "" { append(&list, line) }
+	}
+	return token, list[:]
+}
+
 // A second start's folders (on the instance's thread): copied, handed to the interface's.
 @(private = "file")
 app_message :: proc(user: rawptr, message: []byte) {
@@ -201,14 +225,10 @@ app_message_open :: proc(data: rawptr, word: u64) {
 	app := global_app
 	if app == nil { return }
 	p := current_panel(app)
-	opened := false
-	for f in strings.split_lines(text, context.temp_allocator) {
-		if f == "" { continue }
-		tab_open(app, p, f, p.active + 1)
-		opened = true
-	}
-	if !opened { tab_open(app, p, app.home, p.active + 1) }
-	platform.raise_window(app.main.win)
+	token, folders := app_message_read(text)
+	for f in folders { tab_open(app, p, f, p.active + 1) }
+	if len(folders) == 0 { tab_open(app, p, app.home, p.active + 1) }
+	platform.raise_window_token(app.main.win, token)
 	app_frames(app)
 }
 

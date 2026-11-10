@@ -1906,3 +1906,17 @@ test_inspector_code :: proc(t: ^testing.T) {
 	testing.expect(t, session.find(s, "insp_body") != nil, "its text")
 	when SHOTS { session.save_png(s, "inspector_code.png") }
 }
+
+// A second start's message: its launcher's token on a line of its own, then its folders.
+@(test)
+test_app_message :: proc(t: ^testing.T) {
+	token, folders := app_message_read(app_message_make("tok-1", {"/a", "/b c"}))
+	testing.expect_value(t, token, "tok-1")
+	testing.expect_value(t, len(folders), 2)
+	testing.expect_value(t, folders[1], "/b c")
+	token, folders = app_message_read(app_message_make("", {"/a"}))
+	testing.expect_value(t, token, "")
+	testing.expect_value(t, len(folders), 1)
+	_, folders = app_message_read(app_message_make("t", nil))
+	testing.expect_value(t, len(folders), 0)
+}
