@@ -1225,3 +1225,51 @@ test_group :: proc(t: ^testing.T) {
 	testing.expect_value(t, tab.group, Group_By.None)
 	testing.expect_value(t, shown_names(tab)[3], "archive.zip")
 }
+
+// A group folded by a click on its title: its first row alone, as the title; a click again: all of it.
+@(test)
+test_group_fold :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 700})
+	tab := current_tab(app)
+	session.key(s, .N6, {.Ctrl, .Alt})
+	session.frames(s, 3)
+	testing.expect_value(t, len(tab.folder.shown), 7)
+	session.click_text(s, "PDF")
+	session.frames(s, 3)
+	testing.expect_value(t, len(tab.folder.shown), 6)   // (report 10.pdf folded under the title on report 2.pdf's row)
+	testing.expect(t, !slice.contains(shown_names(tab), "report 10.pdf"))
+	when SHOTS { session.save_png(s, "group_folded.png") }
+	session.click_text(s, "PDF")
+	session.frames(s, 3)
+	testing.expect_value(t, len(tab.folder.shown), 7)
+}
+
+// The tree in the names view (Right opens) and in the columns view (the chevron opens).
+@(test)
+test_tree_views :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 700})
+	tab := current_tab(app)
+	letter := fs.join("Documents", "letter.odt", context.temp_allocator)
+	session.key(s, .N3, {.Ctrl})
+	session.key(s, .E, {.Ctrl, .Shift})
+	wait_read(s)
+	point_at(t, tab, "Documents")
+	session.key(s, .Right)
+	wait_read(s)
+	testing.expect(t, slice.contains(shown_names(tab), letter), "the names view: opened")
+	session.key(s, .Left)
+	wait_read(s)
+	testing.expect(t, !slice.contains(shown_names(tab), letter))
+	// the columns view: its chevron
+	session.key(s, .N4, {.Ctrl})
+	session.frames(s, 3)
+	session.click(s, "tree_Documents")
+	wait_read(s)
+	session.frames(s, 2)
+	testing.expect(t, slice.contains(shown_names(tab), letter), "the columns view: opened")
+	when SHOTS { session.save_png(s, "tree_columns.png") }
+}

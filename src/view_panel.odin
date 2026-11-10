@@ -446,6 +446,7 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 		t.focus_due = .None
 	}
 	clicked := false
+	fold := ""   // a group's title clicked: folded once the rows are built
 	look := row_look(app, focused, em)
 	for row in rows.first ..< rows.last {
 		e := &f.listing.entries[f.shown[row]]
@@ -459,28 +460,40 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 			if row == 0 || key != prev { title = key }
 		}
 		head := title != "" ? ui.dense(em * GROUP_HEAD_EM) : 0
-		// (the list's own fill of the cursor's row is clear: the row draws its pill itself)
-		ui.next({height = ui.px(ui.dense(em * ROW_EM) + head), radius = 0, bg = ui.Color{}})
+		folded := title != "" && title in f.folded
+		// (the list's own fill of the cursor's row is clear: the row draws its pill itself; a folded group: its title alone)
+		ui.next({height = ui.px(folded ? head : ui.dense(em * ROW_EM) + head), radius = 0, bg = ui.Color{}})
 		if selected && focused { ui.push_tags("selected") }
 		sig := ui.list_row(&t.vl, row, e.name)
 		if selected && focused { ui.pop_tags() }
-		row_paint(sig.box, look, selected, row == f.cursor && (!selected || f.count > 1), row & 1 == 1, head)
+		if !folded { row_paint(sig.box, look, selected, row == f.cursor && (!selected || f.count > 1), row & 1 == 1, head) }
 		check := false
 		if ui.parent(sig.box) {
 			if title != "" {
 				// (the title, then the row's cells under it)
 				ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
 				if ui.column(.Start, {}, "###grouped") {
+					// (a click on the title folds the group, or unfolds it)
 					ui.next({width = ui.fill(), height = ui.px(head)})
-					if ui.row(.End, {.Draw_Side_Bottom}, "###group") {
-						ui.spacer(ui.px(em * (ROW_INSET_EM + 0.4)))
-						ui.next({width = ui.fill(), height = ui.px(head * 0.8), font_size = em * 0.9})
+					if ui.row(.End, {.Draw_Side_Bottom, .Clickable, .Draw_Hot_Effects}, "###group") {
+						gsig := ui.signal(ui.parent_box())
+						ui.spacer(ui.px(em * ROW_INSET_EM))
 						ui.push_tags("weak")
+						ui.next({height = ui.px(head * 0.8)})
+						glyph(app, folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, em * 1.3)
+						ui.next({width = ui.fill(), height = ui.px(head * 0.8), font_size = em * 0.9})
 						ui.label(fmt.tprintf("%s###g", title))
 						ui.pop_tags()
+						if gsig.clicked {
+							fold = strings.clone(title, context.temp_allocator)   // (after the rows: they are being built)
+							clicked = true
+						}
+						hover_tip(gsig, folded ? "Unfold the group" : "Fold the group")
 					}
-					ui.next({width = ui.fill(), height = ui.fill()})
-					if ui.row(.Center, {}, "###cells") { check = entry_row(app, t, e, row, selected, wide, names_only, em) }
+					if !folded {
+						ui.next({width = ui.fill(), height = ui.fill()})
+						if ui.row(.Center, {}, "###cells") { check = entry_row(app, t, e, row, selected, wide, names_only, em) }
+					}
 				}
 			} else {
 				check = entry_row(app, t, e, row, selected, wide, names_only, em)
@@ -525,6 +538,7 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 			return
 		}
 	}
+	if fold != "" { folder_fold(f, fold) }
 	band_update(app, t, clicked)
 	// a move of the list's own keys (Up, Down, Page Up, Home, type-ahead): the cursor's row alone is selected
 	if t.vl.changed && !clicked && !app.band.active && t.vl.sel >= 0 { folder_pick(f, t.vl.sel) }
@@ -607,20 +621,7 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, wi
 		check = check_box(app, fmt.tprintf("check%d", row), selected, false, em)
 	}
 	folder := e.kind == .Directory
-	// the tree: a step in per level, a chevron that opens or closes a folder in place, before its icon
-	if t.folder.tree && t.folder.filter == "" {
-		ui.spacer(ui.px(em * 1.4 * f32(tree_depth(e.name))))
-		if folder {
-			open := tab_tree_is_open(t, e.name)
-			if ui.tags("weak") {
-				if icon_action(app, fmt.tprintf("tree_%s", e.name), open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, open ? "Close it here (Left)" : "Open it here (Right)", em * 0.8) {
-					tab_tree_toggle(app, t, strings.clone(e.name, context.temp_allocator))
-				}
-			}
-		} else {
-			ui.spacer(ui.px(em * 1.6))
-		}
-	}
+	tree_lead(app, t, e, em)
 	entry_glyph(app, t.path, e^, em * 1.9)
 	ui.spacer(ui.px(em * 0.5))
 	entry_name(app, t, e, selected, em)
@@ -1020,4 +1021,21 @@ column_drag_signal :: proc(app: ^App, c: Column, sig: ui.Signal) -> bool {
 		}
 	}
 	return false
+}
+
+// The tree's lead of a row or a line, before its icon: a step in per level, a chevron that opens or closes a folder in
+// place. Nothing outside the tree, or while filtering.
+tree_lead :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, em: f32) {
+	if !t.folder.tree || t.folder.filter != "" { return }
+	ui.spacer(ui.px(em * 1.4 * f32(tree_depth(e.name))))
+	if e.kind == .Directory {
+		open := tab_tree_is_open(t, e.name)
+		if ui.tags("weak") {
+			if icon_action(app, fmt.tprintf("tree_%s", e.name), open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, open ? "Close it here (Left)" : "Open it here (Right)", em * 0.8) {
+				tab_tree_toggle(app, t, strings.clone(e.name, context.temp_allocator))
+			}
+		}
+	} else {
+		ui.spacer(ui.px(em * 1.6))
+	}
 }

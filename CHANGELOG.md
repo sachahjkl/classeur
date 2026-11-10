@@ -5,6 +5,10 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Groups folded and unfolded by a click on their title.
+- The tree in the names and the columns views too.
+
 ## [0.5.0] - 2026-11-10
 
 ### Added

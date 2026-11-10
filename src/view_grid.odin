@@ -88,6 +88,7 @@ item :: proc(app: ^App, t: ^Tab, row: int, look: ^Row_Look, line: bool, width, h
 	if ui.parent(b) {
 		if line {
 			ui.spacer(ui.px(em * 0.4))
+			tree_lead(app, t, e, em)
 			entry_glyph(app, t.path, e^, em * 1.9)
 			ui.spacer(ui.px(em * 0.5))
 			entry_name(app, t, e, selected, em)

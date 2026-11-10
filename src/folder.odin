@@ -25,6 +25,7 @@ Folder :: struct {
 	group:       Group_By,          // the rows grouped (by date, type or size), the sort's order in each group
 	group_now:   i64,               // the date groups' "now" (ns), set when grouped by date
 	group_tz:    ^datetime.TZ_Region,
+	folded:      map[string]bool,   // the groups folded (keys owned): their first row alone, as their title
 	sort:        fs.Sort,
 	show_hidden: bool,
 	filter:      string,            // owned; lower case; "" shows every row
@@ -45,6 +46,8 @@ folder_destroy :: proc(f: ^Folder) {
 	delete(f.filter)
 	for k in f.types_off { delete(k) }
 	delete(f.types_off)
+	for k in f.folded { delete(k) }
+	delete(f.folded)
 	delete(f.order)
 	delete(f.shown)
 	delete(f.ids)
@@ -232,9 +235,13 @@ folder_refilter :: proc(f: ^Folder) {
 		g := make([]Grouped, len(f.shown), context.temp_allocator)
 		for i, k in f.shown { rank, key := group_of(f, entries[i]); g[k] = {i, rank, key} }
 		slice.stable_sort_by(g, proc(a, b: Grouped) -> bool { return a.rank != b.rank ? a.rank < b.rank : a.key < b.key })
+		// (a folded group keeps its first row: its title is drawn on it)
+		clear(&f.shown)
+		clear(&f.ids)
 		for x, k in g {
-			f.shown[k] = x.i
-			f.ids[k] = hash.fnv64a(transmute([]u8)entries[x.i].name)
+			if k > 0 && g[k - 1].key == x.key && x.key in f.folded { continue }
+			append(&f.shown, x.i)
+			append(&f.ids, hash.fnv64a(transmute([]u8)entries[x.i].name))
 		}
 	}
 	if f.filter != "" {
@@ -449,4 +456,18 @@ day_number :: proc(ns: i64, tz: ^datetime.TZ_Region) -> i64 {
 	if tz != nil { if local, lok := timezone.datetime_to_tz(dt, tz); lok { dt = local } }
 	ord, _ := datetime.date_to_ordinal(dt.date)
 	return i64(ord)
+}
+
+// A group folded, or unfolded again.
+folder_fold :: proc(f: ^Folder, key: string) {
+	if key in f.folded {
+		k, _ := delete_key(&f.folded, key)
+		delete(k)
+	} else {
+		f.folded[strings.clone(key)] = true
+	}
+	name := ""
+	if e := folder_cursor_entry(f); e != nil { name = strings.clone(e.name, context.temp_allocator) }
+	folder_refilter(f)
+	if name != "" { folder_cursor_to_name(f, name) }
 }
