@@ -5,6 +5,9 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The menus' search is a field at their top, from edge to edge: a magnifier, what is typed, a caret (the toolkit's).
+
 ## [0.10.0] - 2026-11-10
 
 ### Added

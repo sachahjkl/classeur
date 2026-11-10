@@ -1451,5 +1451,11 @@ test_setup_dialog :: proc(t: ^testing.T) {
 	entry_menu_open(app, current_tab(app), {300, 200})
 	session.frames(s, 3)
 	when SHOTS { session.save_png(s, "menu.png") }
+	// typed: the field shows it, the lines that have it stay
+	session.type_text(s, "term")
+	session.frames(s, 2)
+	testing.expect(t, session.find_text(s, "term") != nil, "the query shown")
+	testing.expect(t, session.find_text(s, "Cut") == nil, "Cut filtered out")
+	when SHOTS { session.save_png(s, "menu_typed.png") }
 	session.key(s, .Escape)
 }
