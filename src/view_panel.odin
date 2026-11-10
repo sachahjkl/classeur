@@ -162,7 +162,10 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 				case .List:
 					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
 					folder_list(app, t, focused, {}, true, em)
-				case .Columns, .Grid:
+				case .Columns:
+					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
+					columns_list(app, t, focused, em)
+				case .Grid:
 					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
 					grid_list(app, t, focused, em)
 				}

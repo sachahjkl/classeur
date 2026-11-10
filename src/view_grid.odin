@@ -186,3 +186,55 @@ picture_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	at := r.min + (room - sz) * 0.5
 	draw.image(dc, d.tex, {at, at + sz}, radius = 2)
 }
+
+// The columns view (File Pilot's, Explorer's list): the names filled column by column, as many in a column as the height
+// holds, the columns side by side scrolled sideways (the wheel too). Only the columns in view are built: a folder of
+// 100 000 names costs what is shown.
+columns_list :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
+	f := &t.folder
+	if empty_state(app, t, em) { return }
+	row_h := ui.dense(em * ROW_EM)
+	col_w := em * COLUMN_EM
+	size := [2]f32{col_w * 3, row_h * 12}
+	if b := ui.prev_box("###cols"); b != nil && b.size.y > 0 { size = b.size }
+	per := max(1, int((size.y - em * 0.4) / row_h))
+	t.grid_cols = per
+	n := len(f.shown)
+	ncols := (n + per - 1) / per
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .X})
+	b := ui.build_box({.Clip, .View_Scroll_X, .Allow_Overflow_X, .Scroll_Self, .Clickable, .Focusable}, "###cols")
+	t.cols_key = b.key
+	sig := ui.signal(b)
+	if t.focus_due == .List {
+		ui.set_focus(b.key)
+		t.focus_due = .None
+	}
+	// the wheel, either way, scrolls sideways; the cursor moved by the keys is brought into view
+	limit := max(0, f32(ncols) * col_w - size.x)
+	if d := sig.scrolled.x + sig.scrolled.y; d != 0 { b.view_target.x = clamp(b.view_target.x + d, 0, limit) }
+	if f.cursor != t.cols_cursor && f.cursor >= 0 {
+		c := f32(f.cursor / per)
+		ui.view_reveal(b, c * col_w, (c + 1) * col_w, .X)
+		b.view_target.x = clamp(b.view_target.x, 0, limit)
+	}
+	t.cols_cursor = f.cursor
+	off := b.view_off.x
+	first := clamp(int(off / col_w) - 1, 0, ncols)
+	last := clamp(int((off + size.x) / col_w) + 2, first, ncols)
+	look := row_look(app, focused, em)
+	if ui.parent(b) {
+		ui.spacer(ui.px(f32(first) * col_w))
+		for c in first ..< last {
+			ui.next({width = ui.px(col_w), height = ui.fill(), axis = .Y})
+			if ui.column(.Start, {}, fmt.tprintf("###col%d", c)) {
+				for r in 0 ..< per {
+					at := c * per + r
+					if at >= n { break }
+					if item(app, t, at, look, true, col_w - em * ROW_INSET_EM, row_h, em) { return }
+				}
+			}
+		}
+		ui.spacer(ui.px(f32(ncols - last) * col_w))
+	}
+	if sig.right_clicked && f.loaded { entry_menu_open(app, t, ui.mouse_pos(), on_entry = false) }
+}

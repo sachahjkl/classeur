@@ -1273,3 +1273,39 @@ test_tree_views :: proc(t: ^testing.T) {
 	testing.expect(t, slice.contains(shown_names(tab), letter), "the columns view: opened")
 	when SHOTS { session.save_png(s, "tree_columns.png") }
 }
+
+// The columns view: the names filled column by column, scrolled sideways (End, the wheel), Right a column further.
+@(test)
+test_columns_view :: proc(t: ^testing.T) {
+	names := make([dynamic]string, context.temp_allocator)
+	for i in 0 ..< 60 { append(&names, fmt.tprintf("file %02d.txt", i)) }
+	dir := make_fixture(t, names[:])
+	s, app := start(t, {dir}, size = {900, 500})
+	tab := current_tab(app)
+	session.key(s, .N4, {.Ctrl})
+	session.frames(s, 4)
+	per := tab.grid_cols
+	testing.expect(t, per > 2 && per < 60, "several columns")
+	a := session.get(s, "item0").rect
+	b := session.get(s, "item1").rect
+	c := session.get(s, fmt.tprintf("item%d", per)).rect
+	testing.expect(t, b.min.y > a.min.y && b.min.x == a.min.x, "the second name under the first")
+	testing.expect(t, c.min.x > a.min.x && c.min.y == a.min.y, "the next column starts at the top")
+	// End: the last name, the view scrolled sideways to it
+	session.key(s, .End)
+	session.frames(s, 8)
+	box := ui.box_from_key(tab.cols_key)
+	testing.expect(t, box.view_target.x > 0, "scrolled sideways")
+	testing.expect_value(t, tab.folder.cursor, 59)
+	// Home, then Right: a column further
+	session.key(s, .Home)
+	session.key(s, .Right)
+	testing.expect_value(t, tab.folder.cursor, per)
+	// the wheel scrolls sideways
+	session.key(s, .Home)
+	session.frames(s, 8)
+	before := box.view_target.x
+	session.wheel(s, (box.rect.min + box.rect.max) * 0.5, {0, 3})
+	session.frames(s, 2)
+	testing.expect(t, ui.box_from_key(tab.cols_key).view_target.x > before, "the wheel down: the next columns")
+}

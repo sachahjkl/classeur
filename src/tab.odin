@@ -36,7 +36,9 @@ Tab :: struct {
 	tree_open:    [dynamic]string,   // owned: the folders opened in the tree, by their path from the tab's folder
 	walk:         ^Load_Job,         // the flat read the tab waits for (its progress), nil: none
 	zoom:         int,               // an index of ZOOMS: the view and the size of its items
-	grid_cols:    int,               // the cards per row of the grid, as last laid out              // a folder opened from it opens in a new tab (the lock of the toolbar)
+	grid_cols:    int,               // (the columns view: the names in a column)
+	cols_key:     ui.Key,            // the columns view's box (the keyboard there)
+	cols_cursor:  int,               // the cursor the columns view last brought into view               // the cards per row of the grid, as last laid out              // a folder opened from it opens in a new tab (the lock of the toolbar)
 	cursor_rect:  ui.Rect,           // the cursor's row as last built (where the Menu key opens the menu)
 }
 

@@ -11,6 +11,7 @@ import "core:sync"
 import "gt:draw"
 import "gt:host"
 import lucide "gt:lucide"
+import "gt:platform"
 import "gt:ui"
 import "fs"
 
@@ -308,7 +309,18 @@ list_keys :: proc(app: ^App) {
 	append(&moves, Move{{.Down, {.Shift}}, f.cursor + row, true}, Move{{.Up, {.Shift}}, f.cursor - row, true},
 		Move{{.Page_Down, {.Shift}}, f.cursor + page, true}, Move{{.Page_Up, {.Shift}}, f.cursor - page, true},
 		Move{{.Home, {.Shift}}, 0, true}, Move{{.End, {.Shift}}, n - 1, true})
-	if grid {
+	if tab_mode(t) == .Columns {
+		// (the columns view: down a column, across to the next one)
+		clear(&moves)
+		per := max(t.grid_cols, 1)
+		for shift in ([]bool{false, true}) {
+			mods := shift ? platform.Modifiers{.Shift} : platform.Modifiers{}
+			append(&moves, Move{{.Down, mods}, f.cursor + 1, shift}, Move{{.Up, mods}, f.cursor - 1, shift},
+				Move{{.Right, mods}, f.cursor + per, shift}, Move{{.Left, mods}, f.cursor - per, shift},
+				Move{{.Page_Down, mods}, f.cursor + per, shift}, Move{{.Page_Up, mods}, f.cursor - per, shift},
+				Move{{.Home, mods}, 0, shift}, Move{{.End, mods}, n - 1, shift})
+		}
+	} else if grid {
 		// (the grid's moves are its own: the list under it moves by rows of cards)
 		append(&moves, Move{{.Right, {}}, f.cursor + 1, false}, Move{{.Left, {}}, f.cursor - 1, false},
 			Move{{.Down, {}}, f.cursor + row, false}, Move{{.Up, {}}, f.cursor - row, false},
