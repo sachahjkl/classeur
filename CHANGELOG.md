@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-10
+
 ### Changed
 - The jobs run in the background with their view beside the window, not over it: a panel over the footer that leaves
   the window working, opened by itself once for a job that runs on, sent away by Background or Escape, brought back by
@@ -106,3 +108,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.5.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.5.0
 [0.6.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.6.0
 [0.7.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.7.0
+[0.8.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.8.0
