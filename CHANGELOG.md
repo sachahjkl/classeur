@@ -5,6 +5,21 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- A key for every action: tabs by number (Alt+1 to Alt+9), the views (Ctrl+1 to Ctrl+4), the sorts (Ctrl+Alt+1 to
+  Ctrl+Alt+4), the types (Ctrl+Shift+Y, files or folders alone), copy and move to the other panel (Shift+F5, Shift+F6),
+  the names copied (Ctrl+Alt+C), the item's own folder in a search (Alt+O), the tabs closed around the shown one.
+- Layouts: the panels and their tabs saved by name (Ctrl+Alt+S) and opened again (Ctrl+Alt+L).
+- Tooltips: a tab's path, a row's whole name with its type, size and date, a crumb's path, a column's sort, a place's
+  path, a volume's free space.
+- The Setup (`classeur --setup`, Ctrl+Shift+F12) and `classeur install`, `uninstall`, `status`: the launcher in the
+  applications menu as a file manager, the icons, classeur on the PATH. A copy downloaded on Windows offers it at its start.
+- Releases: an archive for Linux and one for Windows on each version's GitHub release.
+
+### Changed
+- The interface knows no system: what differs between Linux and Windows is asked of `src/fs` and gui_toolkit
+  (`classeurtool check` refuses anything else).
+
 ## [0.1.0] - 2026-11-10
 
 ### Added

@@ -28,7 +28,8 @@
       every folder below, batch rename, undo, drag and drop. One small native program: a folder of a hundred thousand files
       lists and scrolls without a wait.</p>
     <div class="actions">
-      <a class="btn accent get" href="#get"><span class="get-text"><span class="get-main">Get classeur</span> <span class="get-sub">v{{version}} · Linux · Nix or from source</span></span></a>
+      <a class="btn accent get" href="https://github.com/sachahjkl/classeur/releases/download/v{{version}}/classeur-{{version}}-linux-x64.tar.gz"><span class="get-text"><span class="get-main">Download for Linux</span> <span class="get-sub">v{{version}} · x64 · .tar.gz</span></span></a>
+      <a class="btn get" href="https://github.com/sachahjkl/classeur/releases/download/v{{version}}/classeur-{{version}}-windows-x64.zip"><span class="get-text"><span class="get-main">Download for Windows</span> <span class="get-sub">v{{version}} · x64 · .zip · untried</span></span></a>
       <a class="btn" href="https://github.com/sachahjkl/classeur">Source on GitHub</a>
     </div>
     <p class="small">With Nix: <code>nix run github:sachahjkl/classeur</code> &nbsp;·&nbsp; MIT</p>
@@ -115,6 +116,12 @@
     <h2>Get it</h2>
     <div class="cols">
       <div class="well">
+        <h3>The archive</h3>
+        <p>One program for Linux x64. Unpack it and run <code>./classeur install</code>: the launcher in the applications
+          menu, its icons, <code>classeur</code> on your PATH. Needs Vulkan and fontconfig; librsvg for the SVG icons.</p>
+        <code><a href="https://github.com/sachahjkl/classeur/releases/download/v{{version}}/classeur-{{version}}-linux-x64.tar.gz">classeur-{{version}}-linux-x64.tar.gz</a></code>
+      </div>
+      <div class="well">
         <h3>Nix</h3>
         <p>The flake builds classeur from source with everything it needs (Vulkan, fontconfig, librsvg for the SVG icons).</p>
         <code>nix run github:sachahjkl/classeur</code>
@@ -126,9 +133,9 @@
       </div>
       <div class="well">
         <h3>Windows</h3>
-        <p>The code builds for Windows (<code>build.bat</code>) and uses the shell's icons, the Recycle Bin and the clipboard's
-          files there; it has not been tried on Windows yet.</p>
-        <code>build.bat release</code>
+        <p>One program for Windows 10 and 11 (x64): its Setup installs it for you. It uses the shell's icons, the Recycle Bin
+          and the clipboard's files there; it is built and tested by the release, not yet tried by hand.</p>
+        <code><a href="https://github.com/sachahjkl/classeur/releases/download/v{{version}}/classeur-{{version}}-windows-x64.zip">classeur-{{version}}-windows-x64.zip</a></code>
       </div>
     </div>
     <p class="small">Every key is in the command palette (Ctrl+Shift+P). The <a href="https://github.com/sachahjkl/classeur#readme">README</a> says the rest.</p>

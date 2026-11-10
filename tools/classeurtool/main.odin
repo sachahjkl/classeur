@@ -25,6 +25,9 @@ COMMANDS :: [?]Command{
 	{name = "test", about = "the tests of the program, of its packages and of this tool", run = run_test},
 	{name = "check", about = "odin check of the program for this system and for Windows (-vet), the tests, then a release build", run = run_check},
 	{name = "logo", about = "assets/logo*.png, drawn by the toolkit's paint package", run = run_logo},
+	{name = "package", about = "[version]: build/dist, the archive of a release build and its SHA-256", run = run_package},
+	{name = "notes", about = "<version>: the changelog's section of that version (a release's notes)", run = run_notes},
+	{name = "ship", about = "<version> [--dry-run]: from a clean master: the changelog, APP_VERSION, the checks, a commit, the tag, the push", run = run_ship},
 	{name = "site", about = "build <site> <out> | check: the site's pages from site/ and CHANGELOG.md", run = run_site},
 	{name = "shots", about = "[--out folder]: the pictures of the README, the program's own frames with no window of the system", run = run_shots},
 }

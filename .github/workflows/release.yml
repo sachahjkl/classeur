@@ -1,0 +1,64 @@
+name: Release
+
+# A version tag vX.Y.Z (classeurtool ship makes it) builds classeur and publishes it: the Linux and the Windows archives,
+# each with its SHA-256, on a GitHub release whose notes are the changelog's section of that version. The Linux job makes
+# the release; the Windows job adds its archive. The tag must be APP_VERSION's (classeurtool package checks).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-odin-linux
+      - name: Mesa's software Vulkan (the tests render headless)
+        run: sudo apt-get install -y -qq mesa-vulkan-drivers libvulkan1 libxkbcommon0 librsvg2-2
+      - name: Build and test
+        run: |
+          odin build tools/classeurtool -collection:gt=ext/gui_toolkit/src -out:build/classeurtool -vet
+          build/classeurtool check
+      - name: Package
+        run: build/classeurtool package ${{ github.ref_name }}
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build/classeurtool notes ${{ github.ref_name }} > build/notes.md
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release upload "${{ github.ref_name }}" build/dist/* --clobber
+          else
+            gh release create "${{ github.ref_name }}" build/dist/* --title "classeur ${GITHUB_REF_NAME#v}" --notes-file build/notes.md
+          fi
+
+  windows:
+    needs: release
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./ext/gui_toolkit/.github/actions/setup-odin
+      - name: Build, test, package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build | Out-Null
+          odin build tools/classeurtool -collection:gt=ext/gui_toolkit/src -out:build/classeurtool.exe -vet
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          build/classeurtool.exe check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          build/classeurtool.exe package ${{ github.ref_name }}
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.ref_name }}" (Get-ChildItem build/dist/*).FullName --clobber
