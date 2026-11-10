@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-10
+
 ### Added
 - A key for every action: tabs by number (Alt+1 to Alt+9), the views (Ctrl+1 to Ctrl+4), the sorts (Ctrl+Alt+1 to
   Ctrl+Alt+4), the types (Ctrl+Shift+Y, files or folders alone), copy and move to the other panel (Shift+F5, Shift+F6),
@@ -47,3 +49,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
 [0.1.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.1.0
+[0.2.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.2.0
