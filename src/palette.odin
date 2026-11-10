@@ -1,6 +1,6 @@
 package classeur
 
-// The command palette (Ctrl+Shift+P, F1): every command of the table, found by a few letters of its name (fuzzy:
+// The command palette (Ctrl+K, Ctrl+Shift+P): every command of the table, found by a few letters of its name (fuzzy:
 // "nf" finds "New folder"), run with Enter or a click. The rows show the keys of each command.
 
 import "core:fmt"

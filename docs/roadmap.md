@@ -24,7 +24,7 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 - Tabs per panel: Ctrl+T, Ctrl+W, Ctrl+Shift+T (reopen), Ctrl+Tab, Ctrl+Shift+K (duplicate), Ctrl+Enter and a middle
   click (a folder in a new tab), a middle click on a tab closes it.
 - Panels side by side: Ctrl+Shift+D (split), Ctrl+Shift+W, F6 (the next panel), Shift+Enter (open in the other panel).
-- The command palette (Ctrl+Shift+P, F1): every command, fuzzy, its keys shown.
+- The command palette (Ctrl+K, Ctrl+Shift+P): every command, fuzzy, its keys shown.
 - Rename in place (F2: the name without its extension selected), new folder (Ctrl+Shift+N, then named in place),
   copy the paths (Ctrl+Shift+C), open with the system's application.
 - The sidebar: the person's folders, the volumes (Linux: the root and /media, /run/media, /mnt; Windows: the drives).

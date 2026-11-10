@@ -258,6 +258,10 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 	if ui.ctx_menu(m.panel_key) {
 		t := current_tab(app)
 		if t == nil { ui.ctx_menu_close(); return }
+		// (where every command is, and the settings, first: the menu that the "…" opens is where one looks for them)
+		menu_command(app, "palette")
+		menu_command(app, "options")
+		ui.menu_separator()
 		menu_command(app, "new_folder")
 		menu_command(app, "new_file")
 		menu_command(app, "refresh")

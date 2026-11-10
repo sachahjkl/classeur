@@ -216,7 +216,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 		switch insp.kind {
 		case .Picture:
 			d := ui.frame_new(Inspect_Picture)
-			d^ = {insp.tex, {f32(insp.size.x), f32(insp.size.y)}}
+			d^ = {insp.tex, {f32(insp.size.x), f32(insp.size.y)}, corner_k()}
 			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.row() {
 				ui.spacer(ui.px(em * 0.8))
@@ -270,6 +270,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 Inspect_Picture :: struct {
 	tex:  render.Texture,
 	size: [2]f32,
+	round: f32,   // corner_k(): the settings' rounding
 }
 
 @(private = "file")
@@ -281,5 +282,5 @@ inspect_picture_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	scale := min(room.x / d.size.x, room.y / d.size.y, 1)
 	sz := d.size * scale
 	at := r.min + (room - sz) * 0.5
-	draw.image(dc, d.tex, {at, at + sz}, radius = 3)
+	draw.image(dc, d.tex, {at, at + sz}, radius = 3 * d.round)
 }

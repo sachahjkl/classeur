@@ -171,24 +171,35 @@ build_top :: proc(app: ^App, em: f32) {
 }
 
 @(private = "file")
-Tab_Paint :: struct { base, edge: ui.Color }
+Tab_Paint :: struct { base, edge, line: ui.Color, radius: f32 }
 
 // The shown tab: its surface, a line at its left, top and right; none at its bottom, where the toolbar goes on.
 @(private = "file")
-tab_paint :: proc(b: ^ui.Box, base, edge: ui.Color) {
+tab_paint :: proc(b: ^ui.Box, base, edge, line: ui.Color, radius: f32) {
 	d := ui.frame_new(Tab_Paint)
-	d^ = {base, edge}
+	d^ = {base, edge, line, radius}
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		d := (^Tab_Paint)(user)
 		r := b.rect
 		w := max(1, ui.scale())
-		draw.rect(dc, r, d.base)
-		draw.rect(dc, {r.min, {r.min.x + w, r.max.y}}, d.edge)
-		draw.rect(dc, {{r.max.x - w, r.min.y}, r.max}, d.edge)
-		draw.rect(dc, {r.min, {r.max.x, r.min.y + w}}, d.edge)
+		top := [4]f32{d.radius, 0, d.radius, 0}   // (its top corners: its foot is the toolbar's top, one surface)
+		draw.rect_corners(dc, r, {d.edge, d.edge, d.edge, d.edge}, top)
+		inner := ui.Rect{{r.min.x + w, r.min.y + w}, {r.max.x - w, r.max.y}}
+		inner_top := [4]f32{max(d.radius - w, 0), 0, max(d.radius - w, 0), 0}
+		if d.line.a > 0 {
+			// the accent along its top, following its corners
+			draw.rect_corners(dc, inner, {d.line, d.line, d.line, d.line}, inner_top)
+			lw := max(2, ui.scale() * 2)
+			inner.min.y += lw - w
+		}
+		draw.rect_corners(dc, inner, {d.base, d.base, d.base, d.base}, inner_top)
 	}
 	b.custom_user = d
 }
+
+// A tab's top corners: TAB_RADIUS_EM at a rounding of 1 (look.rounding), square at 0.
+TAB_RADIUS_EM :: 0.6
+tab_radius :: proc(em: f32) -> f32 { return em * TAB_RADIUS_EM * ui.rounding(ui.current_state()) }
 
 // A panel's tabs, at the top of the window over it: as wide as TAB_EM, narrower when they do not fit; the shown one
 // in the list's colour, with a line of the accent along its top when its panel has the keyboard.
@@ -203,19 +214,19 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 		for t, i in p.tabs {
 			on := i == p.active
 			// (square, from the panel's left edge: the shown tab is the top of the toolbar under it, one surface)
-			ui.next({width = ui.px(tab_w), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .Y, radius = 0})
+			// (a hidden tab's hover in the same shape: the rounding of the settings; the box's radius is scaled by it)
+			ui.next({width = ui.px(tab_w), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .Y, radius = em * TAB_RADIUS_EM})
 			flags := ui.Box_Flags{.Clickable, .Hot_Within, .Middle_Click}
 			if !on { flags += {.Draw_Hot_Effects} }
 			tab := ui.build_box(flags, fmt.tprintf("###tab%d", t.id))
-			if on { tab_paint(tab, draw.hex(surfaces(app).list), draw.hex(surfaces(app).edge)) }
+			// (the line of the accent along the top says, with several panels, which one has the keyboard)
+			line := on && focused && len(app.panels) > 1 ? ui.color("accent") : ui.Color{}
+			if on { tab_paint(tab, draw.hex(surfaces(app).list), draw.hex(surfaces(app).edge), line, tab_radius(em)) }
 			drop_zone(app, tab.rect, t.path)
 			if app.drop_hover == t.path && !on { drop_mark(tab) }
 			sig := ui.signal(tab)
 			if ui.parent(tab) {
-				// (with several panels, the line of the accent says which one has the keyboard)
-				line := on && focused && len(app.panels) > 1 ? ui.color("accent") : ui.Color{}
-				ui.next({width = ui.fill(), height = ui.px(max(2, ui.scale() * 2)), bg = line, radius = 0})
-				ui.build_box({.Draw_Background}, "###top")
+				ui.spacer(ui.px(max(2, ui.scale() * 2)))
 				ui.next({width = ui.fill(), height = ui.fill()})
 				if ui.row(.Center) {
 					ui.spacer(ui.px(em * 0.7))

@@ -137,7 +137,7 @@ card_body :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, width, heigh
 		if e.kind == .File && thumb_mime(e.name) != "" {
 			if th, ready := thumb_get(app, path); ready {
 				d := ui.frame_new(Picture_Draw)
-				d^ = {th.tex, {f32(th.size.x), f32(th.size.y)}}
+				d^ = {th.tex, {f32(th.size.x), f32(th.size.y)}, corner_k()}
 				ui.next({width = ui.fill(), height = ui.pct(1)})
 				ui.custom("###thumb", picture_draw, d)
 			} else {
@@ -172,6 +172,7 @@ big_icon :: proc(app: ^App, dir: string, e: fs.Entry, size: f32) {
 Picture_Draw :: struct {
 	tex:  render.Texture,
 	size: [2]f32,
+	round: f32,   // corner_k(): the settings' rounding
 }
 
 // The picture as large as it fits, centred, never larger than it is.
@@ -184,7 +185,7 @@ picture_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	scale := min(room.x / d.size.x, room.y / d.size.y, 1)
 	sz := d.size * scale
 	at := r.min + (room - sz) * 0.5
-	draw.image(dc, d.tex, {at, at + sz}, radius = 2)
+	draw.image(dc, d.tex, {at, at + sz}, radius = 2 * d.round)
 }
 
 // The columns view (File Pilot's, Explorer's list): the names filled column by column, as many in a column as the height

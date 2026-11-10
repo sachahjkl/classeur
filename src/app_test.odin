@@ -1513,6 +1513,10 @@ test_settings_look :: proc(t: ^testing.T) {
 	testing.expect(t, app.settings.compact, "compact")
 	session.click(s, "check1")
 	session.click(s, "check2")
+	session.key(s, .T, {.Ctrl})
+	wait_read(s)
+	session.frames(s, 3)
+	when SHOTS { session.save_png(s, "round_window.png") }
 	session.key(s, .Comma, {.Ctrl})
 	session.frames(s, 3)
 	when SHOTS { session.save_png(s, "settings_round.png") }
@@ -1521,5 +1525,22 @@ test_settings_look :: proc(t: ^testing.T) {
 	testing.expect(t, session.find_text(s, "Update") != nil, "the update line")
 	when SHOTS { session.save_png(s, "settings_update.png") }
 	session.key(s, .Escape)
+	session.key(s, .Escape)
+}
+
+// The palette opens with Ctrl+K, as in the other programs, and the "…" menu offers it with its keys.
+@(test)
+test_palette_keys :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir})
+	session.key(s, .K, {.Ctrl})
+	session.frames(s, 2)
+	testing.expect(t, app.palette.open, "Ctrl+K")
+	session.key(s, .Escape)
+	session.frames(s, 2)
+	panel_menu_open(app, {300, 120})
+	session.frames(s, 3)
+	testing.expect(t, session.find_text(s, "Command palette") != nil && session.find_text(s, "Ctrl+K") != nil, "the menu's line and its keys")
 	session.key(s, .Escape)
 }

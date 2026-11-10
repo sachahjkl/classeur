@@ -9,8 +9,9 @@ and the versions follow [semantic versioning](https://semver.org/).
 - Updates: the installed classeur checks its latest release once a day, downloads it, checks its signed manifest and puts
   it in place (the toolkit's Updater); the settings' Updates page checks now, installs, restarts. Releases publish the
   programs alone and their signed manifests.
-- Settings: the rounding of the whole interface (a slider, classeur's own drawings too), the density, the animations,
+- Settings: the rounding of the whole interface (a slider; the tabs' corners and classeur's own drawings too), the density, the animations,
   smooth scrolling, scroll bars that hide.
+- The palette opens with Ctrl+K too (as in the other programs), and the "…" menu offers it and the settings first.
 - A row's icon is its box (File Pilot's): the pointer over it, or the row checked among others, shows it; the header's
   box is over the icons.
 

@@ -42,7 +42,7 @@ Its site: [classeur.sacha.house](https://classeur.sacha.house/).
   rectangle selection.
 - **Copy, cut, paste, trash** in a queue of jobs with their progress; a cut is a move for the other file managers too.
 - **Folder sizes**: what each folder holds all the way down, its folders, files and bytes, measured as you look.
-- **Command palette** (Ctrl+Shift+P): every action found by typing, the last ones first, under their groups; resizable
+- **Command palette** (Ctrl+K, or the "…" menu): every action found by typing, the last ones first, under their groups; resizable
   by its corner. **Settings** (Ctrl+,): a page per subject, searched, the themes as cards. The menus are searched by
   typing too, each line with its icon; "Open with", a terminal here (F4) or in the folder under the cursor (Shift+F4).
 - **The sidebar**: recent folders, bookmarks (Ctrl+D), the volumes and how full they are, the places.
@@ -83,7 +83,7 @@ What comes next is in [docs/roadmap.md](docs/roadmap.md).
 | Ctrl+Z, Ctrl+Y | undo, redo |
 | F4 | a terminal here |
 | Ctrl+H | hidden files |
-| Ctrl+Shift+P, F1 | the command palette |
+| Ctrl+K, Ctrl+Shift+P | the command palette |
 
 ## Build
 
