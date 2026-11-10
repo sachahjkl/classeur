@@ -208,7 +208,19 @@ test_recycle_bin :: proc(t: ^testing.T) {
 	in_trash, err := trash(file, context.temp_allocator)
 	testing.expect_value(t, err, Error.None)
 	if in_trash == "" {
-		fmt.println("recycle bin: none found, nothing to put back")   // (a drive with no Recycle Bin the runner can read)
+		// (a drive with no Recycle Bin the runner can read): what there is, to tell why
+		fmt.println("recycle bin: none found, nothing to put back; the file still there:", exists(file))
+		bin := join(file[:root_length(file)], "$Recycle.Bin", context.temp_allocator)
+		users: Listing
+		defer listing_destroy(&users)
+		fmt.println("recycle bin:", bin, list_native(&users, bin), len(users.entries))
+		for u in users.entries {
+			items: Listing
+			defer listing_destroy(&items)
+			e := list_native(&items, join(bin, u.name, context.temp_allocator))
+			fmt.println("recycle bin:", u.name, e, len(items.entries))
+			for it in items.entries { fmt.println("recycle bin:   ", it.name, it.size) }
+		}
 		return
 	}
 	testing.expect(t, !exists(file), "gone")
