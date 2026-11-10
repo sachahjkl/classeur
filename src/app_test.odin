@@ -535,7 +535,7 @@ test_jobs :: proc(t: ^testing.T) {
 	session.key(s, .Delete)
 	wait_jobs(s)
 	testing.expect(t, !fs.exists(fs.join(dir, "archive.zip", context.temp_allocator)), "archive.zip left")
-	// (Linux: the freedesktop.org trash of the test; Windows: the Recycle Bin, which gives no path back to undo with)
+	// (Linux: the freedesktop.org trash of the test; Windows: the Recycle Bin)
 	when ODIN_OS == .Linux {
 		testing.expect(t, fs.exists(fs.join(data, "Trash/files/archive.zip", context.temp_allocator)), "into the trash")
 		info, _ := os.read_entire_file(fs.join(data, "Trash/info/archive.zip.trashinfo", context.temp_allocator), context.temp_allocator)
@@ -543,13 +543,11 @@ test_jobs :: proc(t: ^testing.T) {
 		testing.expect(t, strings.contains(string(info), "/archive.zip\nDeletionDate="), "where it was, and when")
 	}
 
-	// undo, step by step: the trash (Linux), the move, the second copy
-	when ODIN_OS == .Linux {
-		session.key(s, .Z, {.Ctrl})
-		wait_jobs(s)
-		testing.expect(t, fs.exists(fs.join(dir, "archive.zip", context.temp_allocator)), "undo: archive.zip back from the trash")
-		testing.expect(t, !fs.exists(fs.join(data, "Trash/info/archive.zip.trashinfo", context.temp_allocator)), "its .trashinfo gone")
-	}
+	// undo, step by step: the trash (Linux's, or the Recycle Bin by its $I record), the move, the second copy
+	session.key(s, .Z, {.Ctrl})
+	wait_jobs(s)
+	testing.expect(t, fs.exists(fs.join(dir, "archive.zip", context.temp_allocator)), "undo: archive.zip back from the trash")
+	when ODIN_OS == .Linux { testing.expect(t, !fs.exists(fs.join(data, "Trash/info/archive.zip.trashinfo", context.temp_allocator)), "its .trashinfo gone") }
 	session.key(s, .Z, {.Ctrl})
 	wait_jobs(s)
 	testing.expect(t, fs.exists(fs.join(dir, "report 2.pdf", context.temp_allocator)), "undo: report 2.pdf moved back")
