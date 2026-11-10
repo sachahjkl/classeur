@@ -7,6 +7,7 @@ package classeur
 import "core:fmt"
 import "core:strings"
 import "gt:desktop"
+import lucide "gt:lucide"
 import "gt:ui"
 import "fs"
 
@@ -80,13 +81,14 @@ entry_menu_open :: proc(app: ^App, t: ^Tab, pos: ui.Vec2, from_keyboard := false
 menu_command :: proc(app: ^App, id: string, enabled := true, checked := false) {
 	c := command_find(id)
 	if c == nil { return }
-	if ui.menu_item(c.title, shortcut_text(c.keys[0]), checked = checked, icon = "", enabled = enabled).clicked { c.run(app) }
+	if ui.menu_item(c.title, shortcut_text(c.keys[0]), checked = checked, icon = c.icon, enabled = enabled).clicked { c.run(app) }
 }
 
 entry_menu_build :: proc(app: ^App, em: f32) {
 	m := &app.menu
 	if m.key == 0 { return }
-	if ui.ctx_menu(m.key, em * MENU_WIDTH_EM) { entry_menu_items(app, m) }
+	// (as wide as its longest line: no title cut)
+	if ui.ctx_menu(m.key) { entry_menu_items(app, m) }
 }
 
 @(private = "file")
@@ -101,6 +103,7 @@ entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 		menu_command(app, "open_other_panel", enabled = folder)
 		menu_command(app, "open_system")
 		if e != nil && !folder { open_with_menu(app, fs.join(t.path, e.name, context.temp_allocator)) }
+		if folder { menu_command(app, "terminal_in") }
 		ui.menu_separator()
 		menu_command(app, "cut")
 		menu_command(app, "copy")
@@ -122,7 +125,7 @@ entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 	menu_command(app, "select_all")
 	menu_command(app, "refresh")
 	ui.menu_separator()
-	if ui.menu_submenu("Sort by") {
+	if ui.menu_submenu("Sort by", icon = lucide.ARROW_UP_DOWN) {
 		s := t.folder.sort
 		menu_command(app, "sort_name", checked = s.key == .Name)
 		menu_command(app, "sort_modified", checked = s.key == .Modified)
@@ -191,7 +194,7 @@ tab_menu_open :: proc(app: ^App) {
 tab_menu_build :: proc(app: ^App, em: f32) {
 	m := &app.panel_menus
 	if m.tab_key == 0 { return }
-	if ui.ctx_menu(m.tab_key, em * MENU_WIDTH_EM) {
+	if ui.ctx_menu(m.tab_key) {
 		p := current_panel(app)
 		t := current_tab(app)
 		if t == nil { ui.ctx_menu_close(); return }
@@ -252,7 +255,7 @@ history_menu_build :: proc(app: ^App, em: f32) {
 panel_menu_build :: proc(app: ^App, em: f32) {
 	m := &app.panel_menus
 	if m.panel_key == 0 { return }
-	if ui.ctx_menu(m.panel_key, em * MENU_WIDTH_EM) {
+	if ui.ctx_menu(m.panel_key) {
 		t := current_tab(app)
 		if t == nil { ui.ctx_menu_close(); return }
 		menu_command(app, "new_folder")
@@ -261,7 +264,7 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 		menu_command(app, "goto_popup")
 		menu_command(app, "terminal")
 		ui.menu_separator()
-		if ui.menu_submenu("Sort by") {
+		if ui.menu_submenu("Sort by", icon = lucide.ARROW_UP_DOWN) {
 			s := t.folder.sort
 			menu_command(app, "sort_name", checked = s.key == .Name)
 			menu_command(app, "sort_modified", checked = s.key == .Modified)
@@ -270,7 +273,7 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 			ui.menu_separator()
 			menu_command(app, "folders_mixed", checked = !s.mixed)
 		}
-		if ui.menu_submenu("Group by") {
+		if ui.menu_submenu("Group by", icon = lucide.ROWS_2) {
 			g := t.group
 			menu_command(app, "group_date", checked = g == .Date)
 			menu_command(app, "group_type", checked = g == .Type)
@@ -287,7 +290,7 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 // "Open with": the applications the system knows for the file, its default first.
 @(private = "file")
 open_with_menu :: proc(app: ^App, path: string) {
-	if ui.menu_submenu("Open with") {
+	if ui.menu_submenu("Open with", icon = lucide.APP_WINDOW) {
 		ready := app.menu.with_path == path && app.menu.handlers_ready
 		hs := ready ? app.menu.handlers : nil
 		if !ready { _ = ui.menu_item("Reading…", enabled = false) } else if len(hs) == 0 { _ = ui.menu_item("No application", enabled = false) }

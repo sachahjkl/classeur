@@ -37,7 +37,7 @@ COMMANDS := [?]Command{
 	{id = "goto", title = "Type the path", icon = lucide.TEXT_CURSOR_INPUT, keys = {{.L, {.Ctrl}}, {.D, {.Alt}}}, in_text = true, run = act_goto},
 	{id = "filter", title = "Filter this folder", icon = lucide.FILTER, keys = {{.F, {.Ctrl}}, {}}, in_text = true, run = act_filter},
 	{id = "flat", title = "Search every folder below (flatten)", icon = lucide.FOLDER_TREE, keys = {{.F, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_flat},
-	{id = "options", title = "Options", icon = lucide.SETTINGS, keys = {{.Comma, {.Ctrl}}, {}}, in_text = true, run = act_options},
+	{id = "options", title = "Settings", icon = lucide.SETTINGS, keys = {{.Comma, {.Ctrl}}, {}}, in_text = true, run = act_options},
 	{id = "inspector", title = "Inspector: what the cursor is on, beside the list", icon = lucide.EYE, keys = {{.Space, {}}, {.I, {.Ctrl, .Shift}}}, run = act_inspector},
 	{id = "palette", title = "Command palette", icon = lucide.COMMAND, keys = {{.P, {.Ctrl, .Shift}}, {.F1, {}}}, in_text = true, run = act_palette},
 
@@ -71,6 +71,7 @@ COMMANDS := [?]Command{
 	{id = "new_folder", title = "New folder", icon = lucide.FOLDER_PLUS, keys = {{.N, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_new_folder},
 	{id = "new_file", title = "New file", icon = lucide.FILE_PLUS, keys = {{.N, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_new_file},
 	{id = "terminal", title = "Open a terminal here", icon = lucide.SQUARE_TERMINAL, keys = {{.F4, {}}, {}}, in_text = true, run = act_terminal},
+	{id = "terminal_in", title = "Open a terminal in the folder", icon = lucide.SQUARE_TERMINAL, keys = {{.F4, {.Shift}}, {}}, run = act_terminal_in},
 	{id = "tab_close_others", title = "Close the other tabs", icon = lucide.X, keys = {{.W, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_tab_close_others},
 	{id = "tab_close_left", title = "Close the tabs to the left", icon = lucide.X, keys = {{.Page_Up, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_tab_close_left},
 	{id = "tab_close_right", title = "Close the tabs to the right", icon = lucide.X, keys = {{.Page_Down, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_tab_close_right},

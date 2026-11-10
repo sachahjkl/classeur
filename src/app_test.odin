@@ -324,17 +324,24 @@ test_options :: proc(t: ^testing.T) {
 	tab := current_tab(app)
 	session.key(s, .Comma, {.Ctrl})
 	testing.expect(t, app.options.open)
-	// typed words find the option; Enter flips it
+	// the settings' search finds it by its words; its switch flips it
+	session.frames(s, 2)
 	session.type_text(s, "hidden")
-	session.key(s, .Return)
+	session.frames(s, 2)
+	session.click(s, "sw")
+	session.frames(s, 1)
 	testing.expect(t, app.show_hidden)
 	testing.expect(t, slice.contains(shown_names(tab), ".hidden"))
 	session.key(s, .Escape)
 	testing.expect(t, !app.options.open)
 	// the extensions left out of the names shown
 	session.key(s, .Comma, {.Ctrl})
+	session.frames(s, 2)
+	session.key(s, .A, {.Ctrl})
 	session.type_text(s, "extension")
-	session.key(s, .Return)
+	session.frames(s, 2)
+	session.click(s, "sw")
+	session.frames(s, 1)
 	session.key(s, .Escape)
 	testing.expect(t, !app.settings.show_extensions)
 	session.frames(s, 2)
@@ -427,8 +434,7 @@ test_shots :: proc(t: ^testing.T) {
 	session.key(s, .Space)
 
 	session.key(s, .Comma, {.Ctrl})
-	session.key(s, .Down, repeat = 3)
-	session.frames(s, 2)
+	session.frames(s, 3)
 	session.save_png(s, "options.png")
 	session.key(s, .Escape)
 
@@ -739,6 +745,10 @@ test_more_actions :: proc(t: ^testing.T) {
 	// a terminal here (headless: noted, not started)
 	session.key(s, .F4)
 	testing.expect(t, len(app.opened) > 0 && strings.has_prefix(app.opened[len(app.opened) - 1], "terminal:"))
+	// a terminal in the folder under the cursor (the first row: Documents)
+	session.key(s, .Home)
+	session.key(s, .F4, {.Shift})
+	testing.expect(t, len(app.opened) > 0 && strings.has_suffix(app.opened[len(app.opened) - 1], "Documents"), "a terminal in Documents")
 
 	// tabs: three, the others closed
 	context.allocator = runtime.heap_allocator()
@@ -1421,5 +1431,25 @@ test_palette_groups :: proc(t: ^testing.T) {
 	session.frames(s, 2)
 	session.frames(s, 20)
 	testing.expect(t, session.get(s, "pal_list").view_off.y > 0, "scrolled")
+	session.key(s, .Escape)
+}
+
+// The Setup opens over the window (it only reads where an install would go: nothing is installed).
+@(test)
+test_setup_dialog :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 720})
+	context.allocator = runtime.heap_allocator()
+	act_setup(app)
+	session.frames(s, 4)
+	testing.expect(t, app.setup.open, "open")
+	when SHOTS { session.save_png(s, "setup.png") }
+	session.key(s, .Escape)
+	session.frames(s, 2)
+	// the entry's menu, with its icons
+	entry_menu_open(app, current_tab(app), {300, 200})
+	session.frames(s, 3)
+	when SHOTS { session.save_png(s, "menu.png") }
 	session.key(s, .Escape)
 }

@@ -5,6 +5,19 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The settings (Ctrl+,): the toolkit's settings page, a page per subject (Appearance, Files, Opening), a search, the
+  themes as cards; resizable by its edges and corner.
+- The menus' lines show their commands' icons, and are as wide as their longest line (no title cut).
+- "Open a terminal in the folder" (Shift+F4, and the menu of a folder).
+
+### Changed
+- The palette is resized by its edges and corner and keeps its size; its rows scroll in the toolkit's list.
+- The options' list is gone: the settings page replaces it.
+
+### Fixed
+- The path suggestions' test waits for the folder's listing (it failed on Windows).
+
 ## [0.9.0] - 2026-11-10
 
 ### Added

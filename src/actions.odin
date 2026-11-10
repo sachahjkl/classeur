@@ -318,6 +318,16 @@ act_terminal :: proc(app: ^App) {
 	if !desktop.open_terminal(t.path) { say(app, "No terminal was found: set $TERMINAL.") }
 }
 
+// A terminal in the folder under the cursor (the folder shown when the cursor is on a file).
+act_terminal_in :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	dir := t.path
+	if e := folder_cursor_entry(&t.folder); e != nil && e.kind == .Directory { dir = fs.join(t.path, e.name, context.temp_allocator) }
+	if app.headless { append(&app.opened, strings.concatenate({"terminal:", dir})); return }
+	if !desktop.open_terminal(dir) { say(app, "No terminal was found: set $TERMINAL.") }
+}
+
 act_copy_path :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }

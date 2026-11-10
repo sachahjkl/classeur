@@ -216,7 +216,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	win := h.win
 	app.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
 	app.mono, _ = font.load_embedded(&app.shared.fonts, font.FALLBACK_MONO_DATA)
-	h.state.icon_font, _ = font.load_embedded(&app.shared.fonts, ui.ICON_FONT_DATA)
+	h.state.icon_font = app.icons   // (the menus' icons are the commands' Lucide ones; the widgets keep the toolkit's marks)
 	h.after_input = FRAMES_AFTER_INPUT
 	dnd_start(app)
 	ui.set_density(&h.state, DENSITY)
