@@ -6,6 +6,7 @@ package classeur
 
 import "core:fmt"
 import "core:strings"
+import config "gt:config"
 import "gt:draw"
 import lucide "gt:lucide"
 import "gt:ui"
@@ -35,43 +36,55 @@ sidebar_build :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###side_scroll") {
 			ui.spacer(ui.px(em * 0.3))
-			if section(app, .Recents, em) {
-				for p, i in app.recents {
-					if !keeps(query, fs.base(p)) { continue }
-					side_folder(app, t, fmt.tprintf("###recent%d", i), p, cut_text(home_path(app, p), 40), here, em)
-				}
-			}
-			if section(app, .Bookmarks, em) {
-				for p, i in app.bookmarks {
-					if !keeps(query, fs.base(p)) { continue }
-					side_folder(app, t, fmt.tprintf("###bookmark%d", i), p, fs.base(p), here, em)
-				}
-				if len(app.bookmarks) == 0 && query == "" {
-					if ui.tags("weak") {
-						ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.8)), font_size = em * 0.85})
-						if ui.row(.Center) {
-							ui.spacer(ui.px(em * 2.6))
-							ui.label(fmt.tprintf("%s: bookmark a folder###bm_hint", shortcut_text(command_find("bookmark").keys[0])))
+			// (the sections in the person's order: a heading dragged, or its menu's Move up and Move down)
+			for sec in app.side_order {
+				switch sec {
+				case .Recents:
+				if section(app, .Recents, em) {
+						for p, i in app.recents {
+							if !keeps(query, fs.base(p)) { continue }
+							side_folder(app, t, fmt.tprintf("###recent%d", i), p, cut_text(home_path(app, p), 40), here, em)
+						}
+					}
+				case .Bookmarks:
+				if section(app, .Bookmarks, em) {
+						for p, i in app.bookmarks {
+							if !keeps(query, fs.base(p)) { continue }
+							side_folder(app, t, fmt.tprintf("###bookmark%d", i), p, fs.base(p), here, em)
+						}
+						if len(app.bookmarks) == 0 && query == "" {
+							if ui.tags("weak") {
+								ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.8)), font_size = em * 0.85})
+								if ui.row(.Center) {
+									ui.spacer(ui.px(em * 2.6))
+									ui.label(fmt.tprintf("%s: bookmark a folder###bm_hint", shortcut_text(command_find("bookmark").keys[0])))
+								}
+							}
+						}
+					}
+				case .Storage:
+				if section(app, .Storage, em) {
+						for v, i in app.volumes {
+							if !keeps(query, v.label) { continue }
+							sp := i < len(app.volume_space) ? app.volume_space[i] : fs.Space{}
+							if side_volume(app, i, v, sp, v.path == here, em) && t != nil { tab_go(app, t, v.path) }
+						}
+					}
+				case .Places:
+				if section(app, .Places, em) {
+						for p, i in app.places {
+							if !keeps(query, p.name) { continue }
+							sig := side_row(app, fmt.tprintf("###place%d", i), p.path, p.name, p.path == here, em)
+							go_from(app, t, sig, p.path)
 						}
 					}
 				}
 			}
-			if section(app, .Storage, em) {
-				for v, i in app.volumes {
-					if !keeps(query, v.label) { continue }
-					sp := i < len(app.volume_space) ? app.volume_space[i] : fs.Space{}
-					if side_volume(app, i, v, sp, v.path == here, em) && t != nil { tab_go(app, t, v.path) }
-				}
-			}
-			if section(app, .Places, em) {
-				for p, i in app.places {
-					if !keeps(query, p.name) { continue }
-					sig := side_row(app, fmt.tprintf("###place%d", i), p.path, p.name, p.path == here, em)
-					go_from(app, t, sig, p.path)
-				}
-			}
+			app.side_end_y = ui.parent_box().rect.min.y - ui.parent_box().view_off.y + ui.parent_box().view_bounds.y
 			ui.spacer(ui.px(em * 0.6))
 		}
+		// (out of the scrolled list: the line and the tint are placed on the screen)
+		side_drag_end(app, em)
 	}
 }
 
@@ -118,8 +131,108 @@ section :: proc(app: ^App, s: Side_Section, em: f32) -> bool {
 		if ui.tags("weak") { glyph(app, open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, em * 1.6) }
 		ui.spacer(ui.px(em * 0.5))
 	}
-	if sig.clicked { app.side_open[s] = !open }
+	app.side_heads[s] = sig.box.rect
+	// dragged past a few pixels: the section moves where it is let go (side_drag_end); a right click: its menu
+	if sig.dragging && abs(sig.drag_delta.y) > em * 0.5 { app.side_drag, app.side_dragging = s, true }
+	if app.side_dragging && app.side_drag == s { app.side_held = sig.dragging }
+	if sig.clicked && !(app.side_dragging && app.side_drag == s) { app.side_open[s] = !open }
+	if sig.right_clicked { side_menu_open(app, s) }
+	hover_tip(sig, "Drag it, or right-click it, to move the section")
 	return app.side_open[s]
+}
+
+// The order of the sections as the preference says it ("recents,bookmarks,storage,places"); a name it does not know,
+// or one missing, keeps the default's place.
+side_order_read :: proc(app: ^App, text: string) {
+	order: [dynamic]Side_Section
+	order.allocator = context.temp_allocator
+	for word in strings.split(text, ",", context.temp_allocator) {
+		for title, sec in SECTION_TITLES {
+			if strings.to_lower(title, context.temp_allocator) == strings.trim_space(word) && !slice_has(order[:], sec) { append(&order, sec) }
+		}
+	}
+	for sec in Side_Section { if !slice_has(order[:], sec) { append(&order, sec) } }
+	for sec, i in order[:len(Side_Section)] { app.side_order[i] = sec }
+}
+
+@(private = "file")
+slice_has :: proc(list: []Side_Section, s: Side_Section) -> bool {
+	for x in list { if x == s { return true } }
+	return false
+}
+
+// The section `s` to place `to` (0: the top), the order kept in the preferences.
+side_move :: proc(app: ^App, s: Side_Section, to: int) {
+	from := 0
+	for x, i in app.side_order { if x == s { from = i } }
+	at := clamp(to, 0, len(Side_Section) - 1)
+	if from == at { return }
+	ui.list_move(app.side_order[:], from, at, 0)
+	b := strings.builder_make(context.temp_allocator)
+	for x, i in app.side_order {
+		if i > 0 { strings.write_byte(&b, ',') }
+		strings.write_string(&b, strings.to_lower(SECTION_TITLES[x], context.temp_allocator))
+	}
+	config.set_string(&app.prefs, config.ref_of(&app.prefs, "side.order"), strings.to_string(b))
+	prefs_save(app)
+}
+
+// The place a dragged heading goes: before the first heading whose middle is under the pointer, else at the end. While
+// it drags: the line where it lands, the pointer's; let go: the section moves there.
+@(private = "file")
+side_drag_end :: proc(app: ^App, em: f32) {
+	if !app.side_dragging { return }
+	y := ui.mouse_pos().y
+	slot := 0
+	for sec, i in app.side_order {
+		r := app.side_heads[sec]
+		if y > (r.min.y + r.max.y) * 0.5 { slot = i + 1 }
+	}
+	from := 0
+	for x, i in app.side_order { if x == app.side_drag { from = i } }
+	to := slot > from ? slot - 1 : slot
+	if app.side_held {
+		// the heading tinted, and the line where it lands: above the heading of its slot, or under the last section
+		line_y: f32
+		if slot < len(app.side_order) { line_y = app.side_heads[app.side_order[slot]].min.y } else { line_y = app.side_end_y }
+		head := app.side_heads[app.side_drag]
+		parent := ui.parent_box()
+		accent := ui.color("accent")
+		w := max(2, ui.scale() * 2)
+		ui.next({width = ui.px(head.max.x - head.min.x), height = ui.px(head.max.y - head.min.y), bg = accent * {1, 1, 1, 0.18}, radius = 0})
+		tint := ui.build_box({.Floating_X, .Floating_Y, .Draw_Background}, "###side_drag_tint")
+		tint.fixed_pos = head.min - parent.rect.min
+		ui.next({width = ui.px(head.max.x - head.min.x), height = ui.px(w), bg = accent, radius = 0})
+		line := ui.build_box({.Floating_X, .Floating_Y, .Draw_Background}, "###side_drag_line")
+		line.fixed_pos = ui.Vec2{head.min.x, line_y - w * 0.5} - parent.rect.min
+		return
+	}
+	app.side_dragging = false
+	side_move(app, app.side_drag, to)
+}
+
+// A section's menu: where it goes.
+side_menu_open :: proc(app: ^App, s: Side_Section) {
+	if app.side_menu_key == 0 { app.side_menu_key = ui.key_from_string(0, "classeur_side_menu") }
+	app.side_menu_of = s
+	ui.ctx_menu_open(app.side_menu_key, ui.mouse_pos())
+}
+
+side_menu_build :: proc(app: ^App, em: f32) {
+	if app.side_menu_key == 0 { return }
+	if ui.ctx_menu(app.side_menu_key) {
+		s := app.side_menu_of
+		at := 0
+		for x, i in app.side_order { if x == s { at = i } }
+		last := len(Side_Section) - 1
+		if ui.menu_item("Move up", icon = lucide.ARROW_UP, enabled = at > 0).clicked { side_move(app, s, at - 1) }
+		if ui.menu_item("Move down", icon = lucide.ARROW_DOWN, enabled = at < last).clicked { side_move(app, s, at + 1) }
+		ui.menu_separator()
+		if ui.menu_item("Move to the top", enabled = at > 0).clicked { side_move(app, s, 0) }
+		if ui.menu_item("Move to the bottom", enabled = at < last).clicked { side_move(app, s, last) }
+		ui.menu_separator()
+		if ui.menu_item(app.side_open[s] ? "Close the section" : "Open the section", icon = app.side_open[s] ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN).clicked { app.side_open[s] = !app.side_open[s] }
+	}
 }
 
 @(private = "file")

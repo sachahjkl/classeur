@@ -1585,3 +1585,35 @@ test_column_filters :: proc(t: ^testing.T) {
 	folder_all_ranks(&tab.folder, .Date)
 	testing.expect_value(t, len(tab.folder.shown), n - 3)
 }
+
+// The sidebar's sections are moved: a heading's menu (Move to the top), a heading dragged under another (a line says
+// where it lands); the order is kept in side.order.
+@(test)
+test_side_order :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 700})
+	context.allocator = runtime.heap_allocator()
+	testing.expect_value(t, app.side_order[0], Side_Section.Recents)
+	// the menu: Places to the top (Move up, Move down, -, Move to the top: Places is last, Move down is not offered)
+	session.click(s, "sec_Places", .Right)
+	session.frames(s, 2)
+	session.key(s, .Down)   // (Move up)
+	session.key(s, .Down)   // (Move to the top: Move down is disabled)
+	session.key(s, .Return)
+	session.frames(s, 2)
+	testing.expect_value(t, app.side_order[0], Side_Section.Places)
+	testing.expect_value(t, config.string_of(&app.prefs, "side.order"), "places,recents,bookmarks,storage")
+	// a drag: Places, now first, let go under Storage's heading (the last)
+	from := session.center(session.get(s, "sec_Places"))
+	to := session.center(session.get(s, "sec_Storage")) + {0, 30}
+	session.press(s, from)
+	session.move(s, from + {0, 12})
+	session.move(s, to)
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "side_drag_line") != nil, "the line where it lands")
+	when SHOTS { session.save_png(s, "side_drag.png") }
+	session.release(s, to)
+	session.frames(s, 2)
+	testing.expect_value(t, app.side_order[len(Side_Section) - 1], Side_Section.Places)
+}

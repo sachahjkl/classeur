@@ -11,6 +11,8 @@ and the versions follow [semantic versioning](https://semver.org/).
   programs alone and their signed manifests.
 - Settings: the rounding of the whole interface (a slider; the tabs' corners and classeur's own drawings too), the density, the animations,
   smooth scrolling, scroll bars that hide.
+- The sidebar's sections in the person's order: a heading dragged (a line says where it lands), or its menu's Move up,
+  Move down, Move to the top, Move to the bottom; kept between starts.
 - The columns' filters: a funnel on each column's title (over it, or lit while it filters): the dates of Modified and the
   sizes of Size as the groups have them, with their counts; the types of Type; the letters of Name.
 - The palette opens with Ctrl+K too (as in the other programs), and the "…" menu offers it and the settings first.

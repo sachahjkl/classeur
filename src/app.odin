@@ -49,6 +49,14 @@ App :: struct {
 	undo:        [dynamic]Undo_Step,   // what was done to files, the last at the end (undo.odin)
 	redo:        [dynamic]Undo_Step,   // what was undone, to do again (the last undone at the end)
 	side_open:   [Side_Section]bool,   // the sections of the sidebar that are open
+	side_order:  [len(Side_Section)]Side_Section,   // the sections in the person's order (side.order)
+	side_heads:  [Side_Section]ui.Rect,   // each section's heading, as last laid out (where a dragged one lands)
+	side_end_y:  f32,                   // the end of the last section (a heading dragged under it goes last)
+	side_drag:   Side_Section,          // the heading dragged ...
+	side_dragging: bool,                // ... while it is
+	side_held:     bool,                // ... and its button is still down (let go: it lands)
+	side_menu_key: ui.Key,              // a heading's menu: Move up, Move down...
+	side_menu_of:  Side_Section,
 	side_filter: ui.Text_Field,
 	volume_space: [dynamic]fs.Space,   // of each volume, read with the places
 	panel_rects: [dynamic]ui.Rect,  // each panel's box as last laid out (the tabs above are as wide)
