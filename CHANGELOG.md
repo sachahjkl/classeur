@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-10
+
 ### Added
 - File Pilot's zoom slider: a click on the footer's percent shows a vertical slider; dragged, the view goes step by step
   and the cards grow or shrink smoothly between the steps.
@@ -58,3 +60,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 [0.1.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.1.0
 [0.2.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.2.0
+[0.3.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.3.0
