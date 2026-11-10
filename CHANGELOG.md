@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-10
+
 ### Added
 - Panels split below (Ctrl+Shift+J, or a tab dragged to a panel's bottom quarter): columns of panels, each lower panel
   with its tabs at its top.
@@ -69,3 +71,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.1.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.1.0
 [0.2.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.2.0
 [0.3.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.3.0
+[0.4.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.4.0
