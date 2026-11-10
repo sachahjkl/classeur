@@ -262,32 +262,94 @@ crumbs :: proc(app: ^App, t: ^Tab, em: f32) {
 
 @(private = "file")
 address_field :: proc(app: ^App, t: ^Tab, em: f32) {
+	// the path's suggestions: the folders of the folder typed so far, found by the letters after it (GoTo's, read on a
+	// worker); Up and Down choose one, Tab completes the path to it, Enter goes there, a click too
+	text := strings.clone(ui.field_string(&t.address), context.temp_allocator)
+	rows := fs.looks_like_path(text) ? goto_rows(app, text) : nil
+	n := min(len(rows), ADDRESS_ROWS)
+	key: ui.Key
+	frame: ui.Rect
+	popover_id := fmt.tprintf("###addr_suggest%d", t.id)
+	over_suggestions := false
+	if r, shown := ui.popover_rect(popover_id); shown {
+		m := ui.mouse_pos()
+		over_suggestions = m.x >= r.min.x && m.x < r.max.x && m.y >= r.min.y && m.y < r.max.y
+	}
 	ui.next_merge({radius = em * 0.15})
 	if ui.field_frame("###address") {
+		frame = ui.parent_box().rect
 		if ui.tags("weak") { glyph(app, lucide.FOLDER_SEARCH, em * 1.7) }
-		key := ui.key_from_string(ui.parent_box().key, "###addr")
+		key = ui.key_from_string(ui.parent_box().key, "###addr")
+		if ui.focus_key() == key && n > 0 {
+			// (none chosen until Up or Down: Enter goes to the path typed)
+			if ui.key_press(.Down) { t.address_sel = t.address_moved ? (t.address_sel + 1) % n : 0; t.address_moved = true }
+			if ui.key_press(.Up) { t.address_sel = t.address_moved ? (t.address_sel + n - 1) % n : n - 1; t.address_moved = true }
+			if ui.key_press(.Tab) {
+				ui.field_set(&t.address, fmt.tprintf("%s%s", home_path(app, rows[clamp(t.address_sel, 0, n - 1)].path), fs.SEPARATOR_STRING))
+				t.address_sel, t.address_moved = 0, false
+			}
+		}
+		t.address_sel = clamp(t.address_sel, 0, max(n - 1, 0))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		res: ui.Edit_Result
-		if ui.tags("bare") { res = ui.line_edit("###addr", &t.address, "A folder's path") }
+		if ui.tags("bare") { res = ui.line_edit("###addr", &t.address, "A folder's path (Tab completes it)") }
+		if res.changed { t.address_sel, t.address_moved = 0, false }
 		note_text_field(app, key)
 		if t.focus_due == .Address {
 			ui.set_focus(key)
 			t.focus_due = .None
-		} else if !res.focused && ui.focus_key() != key {
-			t.address_open = false   // (the keyboard went elsewhere: the crumbs again)
+		} else if !res.focused && ui.focus_key() != key && !over_suggestions {
+			t.address_open = false   // (the keyboard went elsewhere: the crumbs again; not a press on a suggestion)
 		}
 		if res.cancelled {
 			t.address_open = false
 			t.focus_due = .List
 		}
 		if res.committed {
-			// (a file's path, a path that is gone: the read, on a worker, goes to the folder that holds it)
+			// (the suggestion chosen, else the path typed: a file's path or one that is gone, the read on a worker goes
+			// to the folder that holds it)
 			t.address_open = false
 			t.focus_due = .List
-			tab_go(app, t, ui.field_string(&t.address))
+			tab_go(app, t, t.address_moved && n > 0 ? rows[t.address_sel].path : ui.field_string(&t.address))
+			t.address_moved = false
+		}
+	}
+	if !t.address_open || n == 0 { return }
+	if ui.popover(popover_id, frame, frame.max.x - frame.min.x, .Below, false) {
+		for r, i in rows[:n] {
+			on := t.address_moved && i == t.address_sel
+			if on { ui.push_tags("selected") }
+			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0)), radius = 0})
+			flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects}
+			if on { flags += {.Draw_Background} }
+			sig: ui.Signal
+			if ui.row(.Center, flags, fmt.tprintf("###sugg%d", i)) {
+				sig = ui.signal(ui.parent_box())
+				ui.spacer(ui.px(em * 0.6))
+				path_icon(app, r.path, true, em * 1.6)
+				ui.spacer(ui.px(em * 0.4))
+				ui.next({width = ui.fill(), height = ui.pct(1)})
+				// (the folder's name, the letters typed lit: the path before it is the field's)
+				ui.label_fuzzy(shown_text(r.label), r.ranges)
+			}
+			if on { ui.pop_tags() }
+			if sig.clicked {
+				t.address_open = false
+				t.focus_due = .List
+				tab_go(app, t, r.path)
+			}
+		}
+		if len(rows) > n {
+			if ui.tags("weak") {
+				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.7)), font_size = em * 0.85})
+				ui.label(fmt.tprintf("   and %d more: type a few more letters###sugg_more", len(rows) - n))
+			}
 		}
 	}
 }
+
+// The suggestions shown under the path field, at most.
+ADDRESS_ROWS :: 8
 
 @(private = "file")
 list_move :: proc(t: ^Tab, by: int) {

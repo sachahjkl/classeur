@@ -54,7 +54,6 @@ act_goto_popup :: proc(app: ^App) {
 	g.asked = ""
 }
 
-@(private = "file")
 Goto_Row :: struct {
 	path:   string,
 	label:  string,     // what the row shows (the fuzzy ranges are on it)
@@ -130,7 +129,8 @@ goto_read_done :: proc(data: rawptr, word: u64) {
 	app_frames(app)
 }
 
-@(private = "file")
+// The rows of GoTo for `text` (the path typed's folders, or the places found by its words); the path field's
+// suggestions too (view_panel.odin).
 goto_rows :: proc(app: ^App, text: string) -> []Goto_Row {
 	g := &app.goto
 	rows := make([dynamic]Goto_Row, context.temp_allocator)

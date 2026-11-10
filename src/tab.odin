@@ -25,6 +25,8 @@ Tab :: struct {
 	filter_open: bool,
 	address:      ui.Text_Field,     // the path typed in place of the crumbs (Ctrl+L)
 	address_open: bool,
+	address_sel:  int,               // the suggestion chosen under the path field
+	address_moved: bool,             // the person chose one (Up, Down): Enter goes there, not to the path typed
 	focus_due:    Focus_Due,         // a field to give the keyboard at the next build
 	space:        fs.Space,          // the volume's free and total bytes, read with the folder
 	has_space:    bool,

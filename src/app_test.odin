@@ -1362,3 +1362,36 @@ test_jobs_background :: proc(t: ^testing.T) {
 	testing.expect(t, app.jobs_view.open, "back")
 	when SHOTS { session.save_png(s, "jobs_open.png") }
 }
+
+// The path field's suggestions: the folders of the path typed, Down then Enter goes to one; a click too.
+@(test)
+test_address_suggest :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 700})
+	tab := current_tab(app)
+	session.key(s, .L, {.Ctrl})
+	session.frames(s, 1)
+	session.key(s, .A, {.Ctrl})
+	session.type_text(s, fmt.tprintf("%s%s", dir, fs.SEPARATOR_STRING))
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return len((^App)(s.user).goto.names) > 0 }, "the folder read")
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "sugg0") != nil, "the suggestions shown")
+	when SHOTS { session.save_png(s, "address.png") }
+	// Down twice: Photos (Documents, Photos, Projects)
+	session.key(s, .Down)
+	session.key(s, .Down)
+	session.key(s, .Return)
+	wait_read(s)
+	testing.expect_value(t, tab.path, fs.join(dir, "Photos", context.temp_allocator))
+	// a click on one
+	session.key(s, .L, {.Ctrl})
+	session.frames(s, 1)
+	session.key(s, .A, {.Ctrl})
+	session.type_text(s, fmt.tprintf("%s%sPro", dir, fs.SEPARATOR_STRING))
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return strings.has_suffix((^App)(s.user).goto.dir, fs.base((^App)(s.user).home)) || len((^App)(s.user).goto.names) > 0 }, "read")
+	session.frames(s, 3)
+	session.click(s, "sugg0")
+	wait_read(s)
+	testing.expect_value(t, tab.path, fs.join(dir, "Projects", context.temp_allocator))
+}
