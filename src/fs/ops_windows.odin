@@ -200,6 +200,8 @@ untrash :: proc(in_trash: string, allocator := context.allocator) -> (original: 
 
 // Whether `a` and `b` are on one volume (their drive or share is the same).
 same_volume :: proc(a, b: string) -> bool {
+	// (as on Linux: a path that is not there is on no volume)
+	if !exists(a) || !exists(b) { return false }
 	ra, rb := root_length(a), root_length(b)
 	if ra == 0 || ra != rb { return false }
 	return strings.equal_fold(a[:ra], b[:rb])
