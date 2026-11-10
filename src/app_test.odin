@@ -1017,6 +1017,11 @@ test_zoom_slider :: proc(t: ^testing.T) {
 	session.release(s, {from.x, r.min.y + 2})
 	session.frames(s, 2)
 	testing.expect_value(t, tab.zoom, len(ZOOMS) - 1)
+	// a click on a step's row: that step
+	session.click(s, "zstep2")
+	session.frames(s, 2)
+	testing.expect_value(t, tab.zoom, 2)
+	when SHOTS { session.save_png(s, "zoom_steps.png") }
 }
 
 // A panel below another: its own column, its tabs at its top; the session keeps it; a tab dragged to a panel's bottom

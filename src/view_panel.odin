@@ -901,29 +901,38 @@ zoom_pill :: proc(app: ^App, t: ^Tab, em: f32) {
 }
 
 @(private = "file")
-Slider_Draw :: struct { at: f32, steps: int, track, fill, tick, knob: ui.Color }
+Slider_Draw :: struct { at: f32, steps: int, step_h: f32, track, fill, tick, knob: ui.Color }
 
+// The slider's track: from the middle of the top step's row to the middle of the bottom one's, a tick at each, the
+// part below the zoom in the accent, the knob where it is (moving smoothly).
 @(private = "file")
 slider_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Slider_Draw)(user)
 	r := b.rect
 	cx := (r.min.x + r.max.x) * 0.5
-	w := max(4, (r.max.x - r.min.x) * 0.18)
-	top, bottom := r.min.y + 8, r.max.y - 8
+	w := max(3, (r.max.x - r.min.x) * 0.14)
+	top, bottom := r.min.y + d.step_h * 0.5, r.max.y - d.step_h * 0.5
 	draw.rect(dc, {{cx - w * 0.5, top}, {cx + w * 0.5, bottom}}, d.track)
 	y := bottom - (bottom - top) * d.at
 	draw.rect(dc, {{cx - w * 0.5, y}, {cx + w * 0.5, bottom}}, d.fill)
-	// a tick per step, the knob where the zoom is
 	for i in 0 ..< d.steps {
 		ty := bottom - (bottom - top) * f32(i) / f32(max(d.steps - 1, 1))
-		draw.rect(dc, {{cx + w, ty - 0.5}, {cx + w * 2.2, ty + 0.5}}, d.tick)
+		draw.rect(dc, {{cx - w * 1.6, ty - 0.5}, {cx - w, ty + 0.5}}, d.tick)
+		draw.rect(dc, {{cx + w, ty - 0.5}, {cx + w * 1.6, ty + 0.5}}, d.tick)
 	}
-	k := w * 1.6
-	draw.rect(dc, {{cx - k, y - k * 0.45}, {cx + k, y + k * 0.45}}, d.knob)
+	k := w * 2.2
+	draw.rect(dc, {{cx - k, y - k * 0.4}, {cx + k, y + k * 0.4}}, d.knob)
 }
 
-// The slider of the zoom (a menu over the footer's percent): up is larger; it moves step by step as it is dragged, the
-// view following smoothly.
+// What each step of the zoom is called, and its icon.
+@(rodata)
+ZOOM_NAMES := [?]string{"Details", "Names", "Columns", "Small cards", "Cards", "Large cards", "Huge cards"}
+@(rodata)
+ZOOM_ICONS := [?]string{lucide.TABLE_2, lucide.LIST, lucide.COLUMNS_2, lucide.LAYOUT_GRID, lucide.LAYOUT_GRID, lucide.IMAGE, lucide.IMAGE}
+
+// The slider of the zoom (a panel over the footer's percent): a row per step, from the largest at the top to the
+// details at the bottom, its icon, its name and its percent; a click on a row goes to that step, the track at the left
+// is dragged from step to step (the view following smoothly), the wheel and Up, Down too.
 zoom_slider_open :: proc(app: ^App, t: ^Tab, at: ui.Rect) {
 	if app.zoom_slider_key == 0 { app.zoom_slider_key = ui.key_from_string(0, "classeur_zoom_slider") }
 	app.zoom_slider_tab = t.id
@@ -932,24 +941,55 @@ zoom_slider_open :: proc(app: ^App, t: ^Tab, at: ui.Rect) {
 
 zoom_slider_build :: proc(app: ^App, em: f32) {
 	if app.zoom_slider_key == 0 { return }
-	if ui.ctx_menu(app.zoom_slider_key, em * 4.4) {
+	w := em * 16
+	if ui.ctx_menu(app.zoom_slider_key, w) {
 		t := find_tab(app, app.zoom_slider_tab)
 		if t == nil { ui.ctx_menu_close(); return }
 		n := len(ZOOMS)
-		ui.next({width = ui.px(em * 4.4), height = ui.px(em * 1.6), text_align = .Center})
-		ui.label(fmt.tprintf("%d%%###slider_pct", ZOOMS[t.zoom].percent))
-		d := ui.frame_new(Slider_Draw)
-		d^ = {ui.anim(ui.key_from_string(0, "classeur_slider_at"), f32(t.zoom) / f32(n - 1), 22), n, ui.color("border"), selection_color(app), ui.color("weak text"), ui.color("text")}
-		ui.next({width = ui.px(em * 4.4), height = ui.px(em * 12)})
-		b := ui.custom("###slider", slider_draw, d, {.Clickable})
-		sig := ui.signal(b)
-		if sig.pressed || sig.dragging {
-			top, bottom := b.rect.min.y + 8, b.rect.max.y - 8
-			f := clamp((bottom - ui.mouse_pos().y) / max(bottom - top, 1), 0, 1)
-			step := int(f * f32(n - 1) + 0.5)
-			if step != t.zoom { tab_set_zoom(app, t, step) }
+		step_h := ui.dense(em * 2.2)
+		ui.next({width = ui.px(w), height = ui.px(step_h * f32(n))})
+		if ui.row(.Start, {}, "###zoom_steps") {
+			d := ui.frame_new(Slider_Draw)
+			d^ = {ui.anim(ui.key_from_string(0, "classeur_slider_at"), f32(t.zoom) / f32(n - 1), 22), n, step_h, ui.color("border"), selection_color(app), ui.color("weak text"), ui.color("text")}
+			ui.next({width = ui.px(em * 2.6), height = ui.pct(1)})
+			b := ui.custom("###slider", slider_draw, d, {.Clickable})
+			sig := ui.signal(b)
+			if sig.pressed || sig.dragging {
+				top, bottom := b.rect.min.y + step_h * 0.5, b.rect.max.y - step_h * 0.5
+				f := clamp((bottom - ui.mouse_pos().y) / max(bottom - top, 1), 0, 1)
+				step := int(f * f32(n - 1) + 0.5)
+				if step != t.zoom { tab_set_zoom(app, t, step) }
+			}
+			if sig.scrolled.y != 0 { tab_set_zoom(app, t, t.zoom + (sig.scrolled.y < 0 ? 1 : -1)) }
+			// the steps, the largest at the top
+			ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
+			if ui.column(.Start, {}, "###zoom_names") {
+				for k in 0 ..< n {
+					step := n - 1 - k
+					on := step == t.zoom
+					if on { ui.push_tags("selected") }
+					ui.next({width = ui.fill(), height = ui.px(step_h), radius = 0})
+					flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects}
+					if on { flags += {.Draw_Background} }
+					rsig: ui.Signal
+					if ui.row(.Center, flags, fmt.tprintf("###zstep%d", step)) {
+						rsig = ui.signal(ui.parent_box())
+						if !on { ui.push_tags("weak") }
+						glyph(app, ZOOM_ICONS[step], em * 1.7)
+						if !on { ui.pop_tags() }
+						ui.spacer(ui.px(em * 0.3))
+						ui.next({width = ui.fill(), height = ui.pct(1)})
+						ui.label(fmt.tprintf("%s###zn", ZOOM_NAMES[step]))
+						ui.push_tags("weak")
+						ui.next({width = ui.text_size(em * 0.5), height = ui.pct(1), font_size = em * 0.85})
+						ui.label(fmt.tprintf("%d%%###zp", ZOOMS[step].percent))
+						ui.pop_tags()
+					}
+					if on { ui.pop_tags() }
+					if rsig.clicked { tab_set_zoom(app, t, step) }
+				}
+			}
 		}
-		if sig.scrolled.y != 0 { tab_set_zoom(app, t, t.zoom + (sig.scrolled.y > 0 ? 1 : -1)) }
 		if ui.key_press(.Up) { tab_set_zoom(app, t, t.zoom + 1) }
 		if ui.key_press(.Down) { tab_set_zoom(app, t, t.zoom - 1) }
 	}
