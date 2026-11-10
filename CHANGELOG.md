@@ -6,7 +6,14 @@ and the versions follow [semantic versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- The Setup is classeur's own screen over the toolkit's controller: a head with the state in its colour, sections as the
+  settings page has them (Location, Options, On this system), the buttons in a bar at the foot.
 - The menus' search is a field at their top, from edge to edge: a magnifier, what is typed, a caret (the toolkit's).
+
+### Fixed
+- On Windows, an install in the default folder asked to be repaired after its restart (the toolkit took the record of
+  the default folder for no record).
+- The Setup's test wrote its answer in the person's config: a headless run keeps no answer.
 
 ## [0.10.0] - 2026-11-10
 

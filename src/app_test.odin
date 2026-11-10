@@ -1434,7 +1434,8 @@ test_palette_groups :: proc(t: ^testing.T) {
 	session.key(s, .Escape)
 }
 
-// The Setup opens over the window (it only reads where an install would go: nothing is installed).
+// classeur's Setup screen opens over the window (it only reads where an install would go: nothing is installed, no
+// answer is written).
 @(test)
 test_setup_dialog :: proc(t: ^testing.T) {
 	files := FIXTURE
@@ -1444,9 +1445,14 @@ test_setup_dialog :: proc(t: ^testing.T) {
 	act_setup(app)
 	session.frames(s, 4)
 	testing.expect(t, app.setup.open, "open")
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return (^App)(s.user).setup.known }, "the install read")
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "setup_install") != nil, "an install offered")
 	when SHOTS { session.save_png(s, "setup.png") }
+	// Escape closes it without an answer (headless: nothing kept in the person's config)
 	session.key(s, .Escape)
 	session.frames(s, 2)
+	testing.expect(t, !app.setup.open, "closed")
 	// the entry's menu, with its icons
 	entry_menu_open(app, current_tab(app), {300, 200})
 	session.frames(s, 3)

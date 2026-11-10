@@ -20,6 +20,10 @@ import "gt:process"
 import "gt:render"
 import setup "gt:setup"
 import "fs"
+import "core:math"
+import "gt:draw"
+import lucide "gt:lucide"
+import "gt:ui"
 
 ICON_PNGS := [?]desktop.Icon{
 	{16, #load("../assets/logo_16.png")},
@@ -143,19 +147,42 @@ setup_offer :: proc(app: ^App, asked: bool) {
 
 act_setup :: proc(app: ^App) { setup.open(&app.setup, setup_config()) }
 
+// classeur's own Setup screen over the toolkit's controller (gt:setup: the state, what is offered, the work on its
+// thread): a head (the mark, what is offered, the versions, the state in its colour), then sections as the settings
+// page has them (a small title, lines under a rule, no frame in a frame), and the buttons in a bar at the foot.
 setup_build :: proc(app: ^App, em: f32) {
-	if !app.setup.open { return }
-	if !app.logo_made {
-		img, ok := platform.clipboard_image_decode("image/png", ICON_PNGS[3].png, context.temp_allocator)
-		if ok {
-			app.logo = render.create_texture_rgba(&app.shared.r, img.size.x, img.size.y)
-			render.update_texture_rgba(&app.shared.r, app.logo, 0, 0, img.size.x, img.size.y, img.rgba)
-			app.logo_made = true
+	d := &app.setup
+	c := setup_config()
+	ev := setup.update(d, c)
+	if d.open {
+		if !app.logo_made {
+			img, ok := platform.clipboard_image_decode("image/png", ICON_PNGS[3].png, context.temp_allocator)
+			if ok {
+				app.logo = render.create_texture_rgba(&app.shared.r, img.size.x, img.size.y)
+				render.update_texture_rgba(&app.shared.r, app.logo, 0, 0, img.size.x, img.size.y, img.rgba)
+				app.logo_made = true
+			}
+		}
+		was_open := d.open
+		if ui.modal_sized("setup", SETUP_PREFERRED_EM * em, &d.size, &d.open, SETUP_MIN_EM * em) {
+			setup_head(app, c, em)
+			ui.hline(ui.fill())
+			ui.next({width = ui.fill(), height = ui.fill()})
+			if ui.scroll_y("###setup_body") {
+				if d.known { setup_body(app, c, em) }
+			}
+			ui.hline(ui.fill())
+			if bev := setup_buttons(app, c, em); bev != .None { ev = bev }
+		}
+		// (Escape, a click outside: closed without an answer; the controller says what to keep)
+		if was_open && !d.open && ev == .None {
+			d.open = true
+			ev = setup.close(d, .Close)
 		}
 	}
-	logo: Maybe(setup.Logo)
-	if app.logo_made { logo = setup.Logo{app.logo, {128, 128}} }
-	switch setup.dialog(&app.setup, setup_config(), em, logo) {
+	// (the answer is kept in the person's config: never by the tests)
+	if app.headless { return }
+	switch ev {
 	case .Installed:       setup_choice_write(setup.CHOICE_INSTALLED)
 	case .Kept_Standalone: setup_choice_write(setup.CHOICE_STANDALONE)
 	case .Dismissed:       setup_choice_write(setup.choice_dismissed(APP_VERSION))
@@ -167,3 +194,187 @@ setup_build :: proc(app: ^App, em: f32) {
 	case .Uninstalled, .None:
 	}
 }
+
+// Its size when first opened, and the least it can be made (em).
+SETUP_PREFERRED_EM :: [2]f32{44, 31}
+SETUP_MIN_EM :: [2]f32{30, 18}
+
+@(private = "file")
+setup_head :: proc(app: ^App, c: setup.Config, em: f32) {
+	d := &app.setup
+	f := &d.facts
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 5.2))})
+	if ui.row(.Center, {}, "###setup_head") {
+		ui.spacer(ui.px(em * 1.2))
+		if app.logo_made {
+			side := em * 3.2
+			ui.next({width = ui.px(side), height = ui.px(side)})
+			tex := ui.frame_new(render.Texture)
+			tex^ = app.logo
+			ui.custom("###setup_logo", proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) { draw.image(dc, (^render.Texture)(user)^, b.rect) }, tex)
+			ui.spacer(ui.px(em * 0.9))
+		}
+		title, badge := "Reading the install…", ""
+		if d.known { title, badge = setup.headline(f^, c) }
+		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+		if ui.column(id = "###setup_words") {
+			ui.next({width = ui.fill(), height = ui.px(em * 1.9), font_size = math.round(em * 1.35), text_pad = 0})
+			ui.label(fmt.tprintf("%s###setup_title", title))
+			installed := "none"
+			if d.known && f.state != .Not_Installed && f.state != .Nix_Package { installed = f.version != "" ? fmt.tprintf("v%s", f.version) : "a copy" }
+			if ui.tags("weak") {
+				ui.next({width = ui.fill(), height = ui.px(em * 1.4), font_size = math.round(em * 0.9), text_pad = 0})
+				ui.label(fmt.tprintf("This copy: v%s   Installed copy: %s   %s###setup_versions", c.version, installed, c.identity.vendor))
+			}
+		}
+		if badge != "" {
+			_, tone := setup.state_words(f^, c)
+			if ui.tags(tone == "accent" ? "" : tone) {
+				ui.next({width = ui.text_size(em * 0.4), height = ui.pct(1), text_pad = 0})
+				ui.label(fmt.tprintf("%s###setup_badge", badge))
+			}
+		}
+		ui.spacer(ui.px(em * 1.2))
+		if ui.tags("weak") { if icon_action(app, "setup_close_x", lucide.X, "Close (Escape)", em) { d.open = false } }
+		ui.spacer(ui.px(em * 0.6))
+	}
+}
+
+@(private = "file")
+setup_body :: proc(app: ^App, c: setup.Config, em: f32) {
+	d := &app.setup
+	f := &d.facts
+	// the state in a sentence, and what the last action said
+	words, tone := setup.state_words(f^, c)
+	ui.spacer(ui.px(em * 0.8))
+	setup_paragraph("setup_state", words, tone == "accent" ? "" : tone, em)
+	if d.note != "" || setup.busy(d) {
+		setup_paragraph("setup_note", setup.busy(d) ? "Working…" : d.note, setup.busy(d) ? "weak" : d.note_good ? "good" : "bad", em)
+	}
+	setup_section("Location", em)
+	setup_line(app, "setup_where", "Installed program", f.exe, true, em)
+	if !f.from_nix {
+		setup_section("Options", em)
+		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.3))})
+		if ui.row(.Center, {.Draw_Side_Bottom}, "###setup_opt_desk") {
+			ui.spacer(ui.px(em * 1.2))
+			ui.checkbox("###setup_shortcut", "Shortcut on the Desktop", &d.shortcut)
+		}
+		for ch, i in setup_choices() {
+			if i >= len(d.choices) { break }
+			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.3))})
+			if ui.row(.Center, {.Draw_Side_Bottom}, fmt.tprintf("###setup_opt_%d", i)) {
+				ui.spacer(ui.px(em * 1.2))
+				ui.checkbox(fmt.tprintf("###setup_choice_%d", i), ch.label, &d.choices[i])
+			}
+		}
+	}
+	setup_section("On this system", em)
+	// (missing: of an install that is there; none: no install)
+	absent := f.state == .Not_Installed || f.state == .Nix_Package ? "none" : "missing"
+	setup_line(app, "setup_menu", setup.WORDS_MENU, f.start_lnk ? "in place" : absent, false, em)
+	setup_line(app, "setup_record", setup.WORDS_RECORD, f.record ? "in place" : absent, false, em)
+	setup_line(app, "setup_desk", "Desktop shortcut", f.desk_lnk ? "in place" : "none", false, em)
+	setup_line(app, "setup_running", "This copy", f.running, true, em)
+	if f.nixos && f.state != .Nix_Package && f.state != .This_Copy {
+		ui.spacer(ui.px(em * 0.6))
+		setup_paragraph("setup_nixos", "On NixOS, a Nix package is the better install: Nix updates it. An install here makes this copy run by itself (nix-build makes the libraries it needs).", "weak", em)
+	}
+	ui.spacer(ui.px(em * 0.8))
+}
+
+// A section's title, as the settings page has them: small capitals, weak, a rule under it.
+@(private = "file")
+setup_section :: proc(title: string, em: f32) {
+	ui.spacer(ui.px(em * 1.0))
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.8))})
+	if ui.row(.Center, {.Draw_Side_Bottom}, fmt.tprintf("###setup_sec_%s", title)) {
+		ui.spacer(ui.px(em * 1.2))
+		if ui.tags("weak") {
+			ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 0.8), text_pad = 0})
+			ui.label(fmt.tprintf("%s###t", strings.to_upper(title, context.temp_allocator)))
+		}
+	}
+}
+
+// A line of a section: what, weak at a fixed width, then its value (a path in the mono face, copied by its button).
+@(private = "file")
+setup_line :: proc(app: ^App, id, key, value: string, path: bool, em: f32) {
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.2))})
+	if ui.row(.Center, {.Draw_Side_Bottom}, fmt.tprintf("###%s", id)) {
+		ui.spacer(ui.px(em * 1.2))
+		if ui.tags("weak") {
+			ui.next({width = ui.px(em * 10), height = ui.pct(1), text_pad = 0})
+			ui.label(fmt.tprintf("%s###k", key))
+		}
+		if path {
+			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0, font = app.mono, font_size = math.round(em * 0.88)})
+		} else {
+			ui.next({width = ui.fill(), height = ui.pct(1), text_pad = 0})
+		}
+		ui.label(fmt.tprintf("%s###v", value))
+		if path && value != "" {
+			if ui.tags("weak") {
+				if icon_action(app, fmt.tprintf("%s_copy", id), lucide.COPY, "Copy the path", em) {
+					ui.window_clipboard_set(value)
+					say(app, "Copied: %s", value)
+				}
+			}
+		}
+		ui.spacer(ui.px(em * 0.8))
+	}
+}
+
+@(private = "file")
+setup_paragraph :: proc(id, text, tone: string, em: f32) {
+	ui.next({width = ui.fill(), height = ui.children_sum()})
+	if ui.row(.Start, {}, fmt.tprintf("###%s_row", id)) {
+		ui.spacer(ui.px(em * 1.2))
+		if tone != "" { ui.push_tags(tone) }
+		ui.next({width = ui.fill(), text_pad = 0})
+		ui.paragraph(fmt.tprintf("%s###%s", text, id))
+		if tone != "" { ui.pop_tags() }
+		ui.spacer(ui.px(em * 1.2))
+	}
+}
+
+// The bar of the buttons: Uninstall at the left (a second click does it), then what closes, what opens the copy just
+// installed, what installs.
+@(private = "file")
+setup_buttons :: proc(app: ^App, c: setup.Config, em: f32) -> (ev: setup.Event) {
+	d := &app.setup
+	button :: proc(id, label, tags: string, em: f32) -> bool {
+		ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
+		ui.push_tags(tags)
+		defer ui.pop_tags()
+		return ui.button(fmt.tprintf("%s###%s", label, id)).clicked
+	}
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 3.4))})
+	if ui.row(.Center, {}, "###setup_buttons") {
+		ui.spacer(ui.px(em * 1.2))
+		if setup.can_uninstall(d) {
+			if button("setup_uninstall", d.confirm ? "Click again to uninstall" : "Uninstall", "danger_button", em) && !setup.busy(d) {
+				if d.confirm { setup.start_uninstall(d, c) } else { d.confirm = true }
+			}
+		}
+		ui.spacer(ui.fill())
+		how := setup.closing(d, c)
+		CLOSING_WORDS := [setup.Closing]string{.Close = "Close", .Not_Now = "Not now", .Keep_Standalone = "Keep standalone"}
+		CLOSING_IDS := [setup.Closing]string{.Close = "setup_close", .Not_Now = "setup_later", .Keep_Standalone = "setup_standalone"}
+		if button(CLOSING_IDS[how], CLOSING_WORDS[how], "button", em) { ev = setup.close(d, how) }
+		if d.installed != "" && d.facts.state != .This_Copy {
+			ui.spacer(ui.px(em * 0.5))
+			if button("setup_launch", "Open the installed copy", "accent_button", em) { ev = setup.open_installed(d) }
+		}
+		if label := setup.install_label(d, c); label != "" {
+			ui.spacer(ui.px(em * 0.5))
+			if button("setup_install", label, "accent_button", em) && !setup.busy(d) { setup.start_install(d, c) }
+		}
+		ui.spacer(ui.px(em * 1.2))
+	}
+	if d.confirm && ui.key_press(.Escape) { d.confirm = false }
+	return
+}
+
+@(private = "file")
+setup_choices :: proc() -> []setup.Choice { return SETUP_CHOICES[:] }
