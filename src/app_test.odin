@@ -1544,3 +1544,44 @@ test_palette_keys :: proc(t: ^testing.T) {
 	testing.expect(t, session.find_text(s, "Command palette") != nil && session.find_text(s, "Ctrl+K") != nil, "the menu's line and its keys")
 	session.key(s, .Escape)
 }
+
+// The columns' filters: the Size column's funnel leaves the folders out, its menu counts each group; the Modified column's
+// leaves out today's; the funnels are lit while they filter. (A menu's lines are chosen by the keyboard.)
+@(test)
+test_column_filters :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1200, 700})
+	tab := current_tab(app)
+	tab.zoom = 0
+	wait_read(s)
+	session.frames(s, 2)
+	n := len(tab.folder.shown)
+	session.hover(s, "col_Size")
+	session.frames(s, 2)
+	session.click(s, "filter_Size")
+	session.frames(s, 2)
+	testing.expect(t, session.find_text(s, "Tiny (under 16 KB)") != nil, "the size groups")
+	when SHOTS { session.save_png(s, "filter_size.png") }
+	session.key(s, .Down, repeat = 2)   // (Every size, Folders)
+	session.key(s, .Return)
+	session.frames(s, 2)
+	testing.expect_value(t, len(tab.folder.shown), n - 3)
+	session.key(s, .Escape)
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "filter_Size") != nil, "lit while it filters")
+	// today's rows out: none left (the fixture is made now)
+	session.hover(s, "col_Modified")
+	session.frames(s, 2)
+	session.click(s, "filter_Modified")
+	session.frames(s, 2)
+	session.key(s, .Down, repeat = 2)   // (Every date, Today)
+	session.key(s, .Return)
+	session.frames(s, 2)
+	testing.expect_value(t, len(tab.folder.shown), 0)
+	session.key(s, .Escape)
+	session.frames(s, 2)
+	testing.expect(t, session.find_text(s, "No row fits the filters") != nil, "said")
+	folder_all_ranks(&tab.folder, .Date)
+	testing.expect_value(t, len(tab.folder.shown), n - 3)
+}

@@ -420,6 +420,17 @@ column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: 
 		ui.label(fmt.tprintf("%s###t", title))
 		if align == .Left { ui.spacer(ui.fill()) }
 		if on { glyph(app, s.descending ? lucide.ARROW_DOWN : lucide.ARROW_UP, em * 1.4) } else { ui.spacer(ui.px(em * 0.4)) }
+		// the column's filter (File Pilot's and Explorer's): its funnel, over the column or lit while it filters
+		active := column_filtered(&t.folder, key)
+		if active || ui.hot_within(ui.parent_box().key) {
+			if !active { ui.push_tags("weak") }
+			if icon_action(app, fmt.tprintf("filter_%s", title), lucide.FILTER, fmt.tprintf("Filter by %s", title), em * 0.8, on = active) {
+				column_filter_open(app, t, key)
+			}
+			if !active { ui.pop_tags() }
+		} else {
+			ui.spacer(ui.px(em * 1.6))
+		}
 	}
 	moved := false
 	if c, ok := column.?; ok { moved = column_drag_signal(app, c, sig) }
@@ -428,6 +439,29 @@ column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: 
 		app.default_sort = t.folder.sort
 	}
 	hover_tip(sig, on ? (s.descending ? "Sorted down: a click sorts up" : "Sorted up: a click sorts down") : fmt.tprintf("Sort by %s", title))
+}
+
+// Whether the column's filter leaves rows out.
+@(private = "file")
+column_filtered :: proc(f: ^Folder, key: fs.Sort_Key) -> bool {
+	switch key {
+	case .Name:     return f.filter != ""
+	case .Modified: return f.dates_off != {}
+	case .Size:     return f.sizes_off != {}
+	case .Type:     return f.kinds != .All || len(f.types_off) > 0
+	}
+	return false
+}
+
+// A column's filter: the name's letters (the filter's field), the types' popup, the dates' or the sizes' menu.
+@(private = "file")
+column_filter_open :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key) {
+	switch key {
+	case .Name:     act_filter(app)
+	case .Type:     types_menu_open(app, t)
+	case .Modified: rank_menu_open(app, t, .Date, ui.mouse_pos())
+	case .Size:     rank_menu_open(app, t, .Size, ui.mouse_pos())
+	}
 }
 
 @(private = "file")
@@ -507,6 +541,7 @@ empty_state :: proc(app: ^App, t: ^Tab, em: f32) -> bool {
 	case f.listing.error != .None:     message = fs.ERROR_TEXT[f.listing.error]
 	case len(f.listing.entries) == 0:  message = "This folder is empty."
 	case f.filter != "":               message = "No name has these letters."
+	case folder_types_filtered(f):     message = "No row fits the filters (the funnels of the columns)."
 	case:                              message = "Only hidden files are here (Ctrl+H shows them)."
 	}
 	ui.next({width = ui.fill(), height = ui.fill()})

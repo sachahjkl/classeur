@@ -6,6 +6,7 @@ package classeur
 
 import "core:fmt"
 import "core:strings"
+import "core:time"
 import "gt:desktop"
 import lucide "gt:lucide"
 import "gt:ui"
@@ -147,6 +148,9 @@ Panel_Menus :: struct {
 	tab_key:     ui.Key,
 	types_key:   ui.Key,
 	types_tab:   u64,
+	ranks_key:   ui.Key,     // a column's filter: its dates or its sizes (rank_menu_open)
+	ranks_tab:   u64,
+	ranks_by:    Group_By,
 }
 
 // The types' popup (the filter's funnel): files and folders, or one of them; each extension of the folder with its
@@ -178,6 +182,53 @@ types_menu_build :: proc(app: ^App, em: f32) {
 			on := ty.ext not_in f.types_off
 			if ui.menu_item(fmt.tprintf("%s###ty%d", label, i), fmt.tprintf("%d", ty.count), checked = on, keep_open = true).clicked {
 				folder_toggle_type(f, ty.ext)
+			}
+		}
+	}
+}
+
+// The Modified column's filter (its dates: today, this week... as the date groups) or the Size column's (folders, tiny,
+// small... as the size groups): each group with its count, ticked when shown. It stays open while groups are ticked.
+rank_menu_open :: proc(app: ^App, t: ^Tab, by: Group_By, at: ui.Vec2) {
+	m := &app.panel_menus
+	if m.ranks_key == 0 { m.ranks_key = ui.key_from_string(0, "classeur_ranks_menu") }
+	m.ranks_tab, m.ranks_by = t.id, by
+	ui.ctx_menu_open(m.ranks_key, at)
+}
+
+@(private = "file", rodata)
+RANK_TITLES := [Group_By][8]string{
+	.None = {},
+	.Type = {},
+	.Date = {"Today", "Yesterday", "This week", "This month", "This year", "Older", "", "No date"},
+	.Size = {"Folders", "Tiny (under 16 KB)", "Small (under 1 MB)", "Medium (under 128 MB)", "Large (under 1 GB)", "Huge (1 GB and more)", "", ""},
+}
+
+@(private = "file")
+rank_menu_build :: proc(app: ^App, em: f32) {
+	m := &app.panel_menus
+	if m.ranks_key == 0 { return }
+	if ui.ctx_menu(m.ranks_key) {
+		t := find_tab(app, m.ranks_tab)
+		if t == nil { ui.ctx_menu_close(); return }
+		f := &t.folder
+		by := m.ranks_by
+		off := by == .Date ? f.dates_off : f.sizes_off
+		now := time.now()._nsec
+		// (the count of each group among the rows the other filters keep: what a tick brings back)
+		counts: [8]int
+		for e in f.listing.entries {
+			if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { continue }
+			r, _ := group_rank(f, e, by, now)
+			counts[r] += 1
+		}
+		every := by == .Date ? "Every date###rall" : "Every size###rall"
+		if ui.menu_item(every, checked = off == {}, keep_open = true).clicked { folder_all_ranks(f, by) }
+		ui.menu_separator()
+		for title, r in RANK_TITLES[by] {
+			if title == "" || counts[r] == 0 && r not_in off { continue }
+			if ui.menu_item(fmt.tprintf("%s###r%d", title, r), fmt.tprintf("%d", counts[r]), checked = r not_in off, keep_open = true).clicked {
+				folder_toggle_rank(f, by, r, now, app.tz)
 			}
 		}
 	}
@@ -232,6 +283,7 @@ panel_menus_build :: proc(app: ^App, em: f32) {
 	panel_menu_build(app, em)
 	tab_menu_build(app, em)
 	types_menu_build(app, em)
+	rank_menu_build(app, em)
 }
 
 @(private = "file")

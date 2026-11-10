@@ -31,6 +31,9 @@ Folder :: struct {
 	filter:      string,            // owned; lower case; "" shows every row
 	kinds:       Kind_Filter,       // files and folders, or one of them (the types' popup)
 	types_off:   map[string]bool,   // the extensions left out, lower case, keys owned ("" the files with none)
+	dates_off:   Ranks,             // the date groups left out (the Modified column's filter: group_rank .Date)
+	sizes_off:   Ranks,             // the size groups left out (the Size column's filter: group_rank .Size)
+	filter_now:  i64,               // the date filter's "now" (ns), set with it
 	order:       [dynamic]u32,      // every entry, sorted
 	shown:       [dynamic]u32,      // the rows: `order` without what the filter and the hidden setting leave out
 	ids:         [dynamic]u64,      // a stable identity per row (the hash of its name): the virtual list's
@@ -188,7 +191,29 @@ folder_types :: proc(f: ^Folder, allocator := context.temp_allocator) -> []Type_
 }
 
 // Whether the types' popup leaves anything out.
-folder_types_filtered :: proc(f: ^Folder) -> bool { return f.kinds != .All || len(f.types_off) > 0 }
+folder_types_filtered :: proc(f: ^Folder) -> bool { return f.kinds != .All || len(f.types_off) > 0 || f.dates_off != {} || f.sizes_off != {} }
+
+// The groups of a column's filter (group_rank's ranks).
+Ranks :: bit_set[0 ..< 8; u8]
+
+// A date or size group shown or left out (the Modified and the Size columns' filters); `now` and `tz` place the days.
+folder_toggle_rank :: proc(f: ^Folder, by: Group_By, rank: int, now: i64, tz: ^datetime.TZ_Region) {
+	#partial switch by {
+	case .Date: f.dates_off ~= {rank}
+	case .Size: f.sizes_off ~= {rank}
+	}
+	f.filter_now, f.group_tz = now, tz
+	folder_refilter(f)
+}
+
+// Every date (or size) shown again.
+folder_all_ranks :: proc(f: ^Folder, by: Group_By) {
+	#partial switch by {
+	case .Date: f.dates_off = {}
+	case .Size: f.sizes_off = {}
+	}
+	folder_refilter(f)
+}
 
 folder_set_show_hidden :: proc(f: ^Folder, show: bool) {
 	if f.show_hidden == show { return }
@@ -221,6 +246,8 @@ folder_refilter :: proc(f: ^Folder) {
 		folder := e.kind == .Directory
 		if (f.kinds == .Files && folder) || (f.kinds == .Folders && !folder) { continue }
 		if !folder && len(f.types_off) > 0 && type_key(e) in f.types_off { continue }
+		if f.dates_off != {} { if r, _ := group_rank(f, e, .Date, f.filter_now); r in f.dates_off { continue } }
+		if f.sizes_off != {} { if r, _ := group_rank(f, e, .Size, 0); r in f.sizes_off { continue } }
 		if f.filter != "" {
 			if !fuzzy_holds(f.lowered[i], f.filter) { continue }
 			score, _, _ := ui.fuzzy_score(f.filter, fs.base(e.name))
@@ -416,8 +443,11 @@ folder_set_group :: proc(f: ^Folder, g: Group_By, now: i64, tz: ^datetime.TZ_Reg
 }
 
 // The group of an entry: its rank (the groups' order) and its key (its title, the order of equal ranks).
-group_of :: proc(f: ^Folder, e: fs.Entry) -> (rank: int, key: string) {
-	switch f.group {
+group_of :: proc(f: ^Folder, e: fs.Entry) -> (rank: int, key: string) { return group_rank(f, e, f.group, f.group_now) }
+
+// An entry's group `by` dates (days from `now`) or sizes, or types: what the groups and the columns' filters share.
+group_rank :: proc(f: ^Folder, e: fs.Entry, by: Group_By, now: i64) -> (rank: int, key: string) {
+	switch by {
 	case .None:
 	case .Type:
 		if e.kind == .Directory { return 0, "Folders" }
@@ -434,7 +464,7 @@ group_of :: proc(f: ^Folder, e: fs.Entry) -> (rank: int, key: string) {
 		return 5, "Huge (1 GB and more)"
 	case .Date:
 		day := day_number(e.mtime, f.group_tz)
-		today := day_number(f.group_now, f.group_tz)
+		today := day_number(now, f.group_tz)
 		switch {
 		case e.mtime == 0:         return 7, "No date"
 		case day >= today:         return 0, "Today"
