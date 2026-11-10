@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-10
+
 ### Added
 - Updates: the installed classeur checks its latest release once a day, downloads it, checks its signed manifest and puts
   it in place (the toolkit's Updater); the settings' Updates page checks now, installs, restarts. Releases publish the
@@ -189,3 +191,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.10.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.10.0
 [0.11.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.11.0
 [0.12.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.12.0
+[0.13.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.13.0
