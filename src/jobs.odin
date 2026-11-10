@@ -55,6 +55,7 @@ Job :: struct {
 	answered:   sync.Sema,
 
 	ended_ms:   f64,          // the interface's clock when job_ended ran (0: not yet: the job is not freed before)
+	started_ms: f64,          // the interface's clock when the jobs' view first saw it (jobs_view.odin)
 	app:        ^App,
 }
 

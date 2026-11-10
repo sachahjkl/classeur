@@ -1,8 +1,10 @@
 package classeur
 
-// The jobs' window (Ctrl+Alt+J, or the footer's button while a job runs or failed): every job of the session, the last
-// first: what it does, how far, what failed; Cancel for one that runs, Retry for one that failed or was cancelled (the
-// same job again: a name taken asks again).
+// The jobs' view: a panel over the footer's jobs button that leaves the rest of the window working (the jobs run on their
+// own thread whatever is shown). It opens by itself once for a job still running after JOBS_VIEW_AFTER_MS; Background
+// (or Escape) sends it away, the footer's button (its progress) or Ctrl+Alt+J brings it back. Every job of the session,
+// the last first: what it does, how far, what failed; Cancel for one that runs, Retry for one that failed or was
+// cancelled (the same job again: a name taken asks again).
 
 import "core:fmt"
 import "core:sync"
@@ -11,15 +13,43 @@ import "gt:ui"
 import "fs"
 
 JOBS_VIEW_ROWS :: 8
+JOBS_VIEW_AFTER_MS :: 700
 
 Jobs_View :: struct {
-	open:   bool,
-	scroll: int,
+	open:      bool,
+	anchor:    ui.Rect,   // the footer's jobs button, as last laid out (the panel stands over it)
+	shown_for: u64,       // the last job the panel opened by itself for (once per job)
 }
 
-act_jobs :: proc(app: ^App) {
-	app.jobs_view.open = !app.jobs_view.open
-	app.jobs_view.scroll = 0
+act_jobs :: proc(app: ^App) { app.jobs_view.open = !app.jobs_view.open }
+
+// Each frame: the panel opens by itself for a job that runs on (once per job; one sent to the background stays there).
+jobs_view_follow :: proc(app: ^App) {
+	v := &app.jobs_view
+	now := ui.now_ms()
+	for job in app.jobs.list {
+		if job.ended_ms != 0 || job.id <= v.shown_for { continue }
+		if job.started_ms == 0 { job.started_ms = now }
+		if now - job.started_ms >= JOBS_VIEW_AFTER_MS {
+			v.shown_for = job.id
+			v.open = true
+		} else {
+			ui.wake_within(&app.main.state, int(JOBS_VIEW_AFTER_MS - (now - job.started_ms)) + 1)
+		}
+	}
+}
+
+// The progress of the jobs that run (0..1), and whether one runs.
+jobs_progress :: proc(app: ^App) -> (t: f32, running: bool) {
+	total, done: i64
+	for job in app.jobs.list {
+		if job.ended_ms != 0 { continue }
+		running = true
+		total += sync.atomic_load(&job.bytes_total)
+		done += sync.atomic_load(&job.bytes_done)
+	}
+	if total > 0 { t = clamp(f32(f64(done) / f64(total)), 0, 1) }
+	return
 }
 
 // The same job again.
@@ -40,27 +70,32 @@ job_title :: proc(job: ^Job) -> string {
 
 jobs_view_build :: proc(app: ^App, em: f32) {
 	v := &app.jobs_view
+	jobs_view_follow(app)
 	if !v.open { return }
+	if ui.key_press(.Escape) { v.open = false; return }
 	w := min(em * 44, app.room * ui.scale() * 0.9)
 	list := app.jobs.list[:]
 	n := len(list)
-	if ui.key_press(.Down) { v.scroll += 1 }
-	if ui.key_press(.Up) { v.scroll -= 1 }
-	v.scroll = clamp(v.scroll, 0, max(n - JOBS_VIEW_ROWS, 0))
-	if ui.modal("jobs", w, &v.open, 0.1) {
+	anchor := v.anchor
+	if anchor == {} { anchor = {{app.window_px.x - em, app.window_px.y - em * 2}, {app.window_px.x - em, app.window_px.y - em * 2}} }
+	if ui.popover("###jobs_view", anchor, w, .Above, true) {
 		ui.next({width = ui.px(w), height = ui.px(ui.dense(em * 2.8))})
 		if ui.row(.Center, id = "###jobs_head") {
 			ui.spacer(ui.px(em * 0.9))
 			if ui.tags("weak") { glyph(app, lucide.LAYERS_2, em * 1.6) }
 			ui.next({width = ui.fill(), height = ui.pct(1)})
 			ui.label(n == 0 ? "No job yet###jobs_title" : fmt.tprintf("Jobs: %d###jobs_title", n))
+			// (the jobs go on: the panel alone goes, the footer's button brings it back)
+			ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 1.9))})
+			if ui.button("Background###jobs_bg").clicked { v.open = false }
+			ui.spacer(ui.px(em * 0.9))
 		}
 		ui.hline(ui.px(w))
 		ui.next({width = ui.px(w), height = ui.children_sum(), axis = .Y})
 		if ui.column(.Start, {}, "###jobs_rows") {
 			// (the last first)
 			for vi in 0 ..< min(n, JOBS_VIEW_ROWS) {
-				job := list[n - 1 - (v.scroll + vi)]
+				job := list[n - 1 - vi]
 				st := sync.atomic_load(&job.state)
 				ui.next({width = ui.px(w), height = ui.children_sum(), axis = .Y})
 				if ui.column(.Start, {.Draw_Side_Bottom}, fmt.tprintf("###job%d", job.id)) {
@@ -119,7 +154,7 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.9))
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), height = ui.pct(1), font_size = em * 0.85})
-				ui.label("Up, Down: the jobs before   Esc: close###jobs_help")
+				ui.label(n > JOBS_VIEW_ROWS ? fmt.tprintf("The last %d of %d   Esc: to the background###jobs_help", JOBS_VIEW_ROWS, n) : "They run on in the background   Esc: hide###jobs_help")
 			}
 		}
 	}

@@ -761,9 +761,15 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 			failed := 0
 			for job in app.jobs.list { if sync.atomic_load(&job.state) == .Failed { failed += 1 } }
 			if len(app.jobs.list) > 0 {
+				// (while jobs run: their progress beside the button that shows them)
+				if t, running := jobs_progress(app); running {
+					ui.next({width = ui.text_size(em * 0.3), height = ui.pct(1)})
+					ui.label(fmt.tprintf("%d%%###jobs_pct", int(t * 100)))
+				}
 				if ui.tags("weak") {
 					if icon_action(app, "jobs", lucide.LAYERS_2, failed > 0 ? fmt.tprintf("The jobs: %d failed (Ctrl+Alt+J)", failed) : command_tip("jobs"), em, on = failed > 0) { act_jobs(app) }
 				}
+				if b := ui.box_from_key(ui.key_from_string(ui.parent_box().key, "###jobs")); b != nil { app.jobs_view.anchor = b.rect }
 			}
 		}
 		cell_rule()

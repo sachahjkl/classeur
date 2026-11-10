@@ -78,7 +78,7 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 
 ## Next
 
-2. **A popover of the jobs**: every job, its errors, a retry. Undo of the Recycle Bin on Windows (`IFileOperation`).
+2. Undo of the Recycle Bin on Windows (`IFileOperation`).
 5. **The inspector, more**: its width dragged, a text highlighted by its language, PDF and videos, the permissions.
 6. **Sort by the measures** and a bar in the size column; the thumbnails' cache on the disk, more formats.
 7. **A progressive search**: the results shown as the walk reads them, on several threads.

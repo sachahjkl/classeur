@@ -1333,3 +1333,32 @@ test_jobs_view :: proc(t: ^testing.T) {
 	testing.expect(t, fs.exists(fs.join(dir, "Documents/later.txt", context.temp_allocator)), "retried: copied")
 	testing.expect_value(t, len(app.jobs.list), 2)
 }
+
+// The jobs' view goes to the background and comes back: it opens by itself for a job that runs on, Background sends it
+// away, Ctrl+Alt+J brings it back.
+@(test)
+test_jobs_background :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir})
+	context.allocator = runtime.heap_allocator()
+	// (notes.txt into Documents twice: the second asks, so it runs on)
+	documents := fs.join(dir, "Documents", context.temp_allocator)
+	notes := fs.join(dir, "notes.txt", context.temp_allocator)
+	job_add(app, .Copy, {notes}, documents)
+	wait_jobs(s)
+	job_add(app, .Copy, {notes}, documents)
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return (^App)(s.user).jobs_view.open }, "the view opened by itself")
+	// (the question answered: the job ends; the view stays until it is sent away)
+	session.wait_box(s, "skip")
+	session.click(s, "skip")
+	wait_jobs(s)
+	testing.expect(t, app.jobs_view.open, "still shown")
+	session.click(s, "jobs_bg")
+	session.frames(s, 1)
+	testing.expect(t, !app.jobs_view.open, "in the background")
+	session.key(s, .J, {.Ctrl, .Alt})
+	session.frames(s, 2)
+	testing.expect(t, app.jobs_view.open, "back")
+	when SHOTS { session.save_png(s, "jobs_open.png") }
+}
