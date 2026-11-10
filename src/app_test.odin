@@ -1050,3 +1050,47 @@ test_split_below :: proc(t: ^testing.T) {
 	panel_close(app, app.panels[0])
 	testing.expect(t, !app.panels[0].below)
 }
+
+// The details' columns: hidden and shown again from the header's menu, a title dragged to another place.
+@(test)
+test_columns :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1400, 700})
+	session.frames(s, 2)
+	testing.expect_value(t, columns_text(app), "Modified Type Counts Size")
+	// the header's menu: Type off
+	session.click(s, "header", .Right)
+	session.frames(s, 2)
+	testing.expect(t, ui.ctx_menu_any_open(), "the columns' menu")
+	// (its second item: Type)
+	session.key(s, .Down, repeat = 2)
+	session.key(s, .Return)
+	session.frames(s, 2)
+	testing.expect_value(t, columns_text(app), "Modified Counts Size")
+	testing.expect(t, session.find(s, "col_Type") == nil, "no Type column")
+	session.key(s, .Escape)
+	// Size's title dragged before Modified's
+	session.frames(s, 2)
+	size := session.get(s, "col_Size").rect
+	modified := session.get(s, "col_Modified").rect
+	from := (size.min + size.max) * 0.5
+	to := [2]f32{modified.min.x + 4, from.y}
+	session.press(s, from)
+	session.move(s, from - {20, 0})
+	session.move(s, to)
+	session.release(s, to)
+	session.frames(s, 2)
+	testing.expect_value(t, columns_text(app), "Size Modified Counts")
+	testing.expect_value(t, tab_folder_sort_key(app), fs.Sort_Key.Name)   // (a drag sorts nothing)
+}
+
+@(private = "file")
+columns_text :: proc(app: ^App) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	for c, i in app.columns_order { fmt.sbprintf(&b, i > 0 ? " %v" : "%v", c) }
+	return strings.to_string(b)
+}
+
+@(private = "file")
+tab_folder_sort_key :: proc(app: ^App) -> fs.Sort_Key { return current_tab(app).folder.sort.key }

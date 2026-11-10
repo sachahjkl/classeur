@@ -32,6 +32,8 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	dnd_frame(app)
 	app.tab_rects, app.tab_rects_last = app.tab_rects_last, app.tab_rects
 	clear(&app.tab_rects)
+	app.column_rects, app.column_rects_now = app.column_rects_now, app.column_rects
+	clear(&app.column_rects_now)
 	tab_drag_apply(app)
 	// (a band whose tab went, or whose press ended out of its list: over)
 	if app.band.active && (find_tab(app, app.band.tab) == nil || ui.active_key() == 0) { app.band.active = false }
@@ -60,6 +62,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	layouts_build(app, em)
 	setup_build(app, em)
 	zoom_slider_build(app, em)
+	columns_menu_build(app, em)
 	options_build(app)
 	dialogs_build(app, em)
 	jobs_tidy(app)

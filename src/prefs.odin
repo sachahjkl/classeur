@@ -19,6 +19,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "files.show_hidden", description = "Shows the hidden files (their names start with a dot; on Windows, their attribute).", kind = .Bool, default = {b = false}},
 	{name = "files.folders_first", description = "Lists the folders before the files, whatever the sort.", kind = .Bool, default = {b = true}},
 	{name = "files.measure_folders", description = "Measures the folders shown: what they hold all the way down, in the Folders, Files and Size columns.", kind = .Bool, default = {b = true}},
+	{name = "view.columns", description = "The columns of the details, in their order (modified, type, counts, size).", kind = .String, default = {s = "modified,type,counts,size"}, hidden = true},
 	{name = "open.single_click", description = "Opens an item with one click instead of two.", kind = .Bool, default = {b = false}},
 }
 
@@ -77,6 +78,7 @@ settings_apply :: proc(app: ^App) {
 	s.show_extensions = config.bool_of(p, "files.show_extensions")
 	s.measure_folders = config.bool_of(p, "files.measure_folders")
 	s.single_click = config.bool_of(p, "open.single_click")
+	columns_read(app, config.string_of(p, "view.columns"))
 	ui.set_rounding(&app.main.state, s.round_corners ? ROUNDING : 0)
 	hidden := config.bool_of(p, "files.show_hidden")
 	if hidden != app.show_hidden {

@@ -72,6 +72,11 @@ App :: struct {
 	band:        Band,              // the rectangle selection (band.odin)
 	layouts:     Layouts,           // the layouts saved by name (layouts.odin)
 	tab_drag:    Tab_Drag,          // a tab dragged (tab_drag.odin)
+	columns_order: [dynamic]Column, // the details' columns after Name, in their order, the ones shown (view.columns)
+	column_rects: [dynamic]Column_Rect,  // the columns' titles as last laid out (a title dragged is placed by them)
+	column_rects_now: [dynamic]Column_Rect,
+	column_drag:  Maybe(Column),    // a column's title being dragged
+	columns_menu_key: ui.Key,
 	zoom_slider_key: ui.Key,        // the zoom's slider over the footer (view_panel.odin)
 	zoom_slider_tab: u64,
 	tab_rects:   [dynamic]Tab_Rect, // the tabs' boxes of this frame
@@ -270,6 +275,9 @@ app_free :: proc(app: ^App) {
 	setup.destroy(&app.setup)
 	delete(app.launch_after)
 	delete(app.tab_rects)
+	delete(app.columns_order)
+	delete(app.column_rects)
+	delete(app.column_rects_now)
 	delete(app.tab_rects_last)
 	rename_free(&app.rename)
 	confirm_free(&app.confirm)

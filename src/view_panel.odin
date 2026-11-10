@@ -5,6 +5,9 @@ package classeur
 // same per frame), and its footer (the filter, the counts). Its tabs are in the row at the top of the window (view.odin).
 
 import "core:fmt"
+import "gt:platform"
+import config "gt:config"
+import "core:strings"
 import "core:slice"
 import "gt:draw"
 import lucide "gt:lucide"
@@ -39,15 +42,79 @@ ROW_FIXED_EM  :: 7
 Column :: enum u8 { Size, Type, Counts, Modified }
 Columns :: bit_set[Column]
 
-details_columns :: proc(room, em: f32) -> (cols: Columns) {
+// The columns shown in `room`: the person's (columns_order), as many as fit, the ones of Column's order first (Size is
+// the last to go).
+details_columns :: proc(app: ^App, room, em: f32) -> (cols: Columns) {
 	left := room / max(em, 1) - NAME_MIN_EM - ROW_FIXED_EM
-	widths := [Column]f32{.Size = COL_SIZE_EM, .Type = COL_TYPE_EM, .Counts = 2 * COL_COUNT_EM, .Modified = COL_MODIFIED_EM}
+	chosen: Columns
+	for c in app.columns_order { chosen += {c} }
 	for c in Column {
-		if left < widths[c] { break }
-		left -= widths[c]
+		if c not_in chosen { continue }
+		if left < COLUMN_WIDTH_EM[c] { break }
+		left -= COLUMN_WIDTH_EM[c]
 		cols += {c}
 	}
 	return
+}
+
+COLUMN_WIDTH_EM := [Column]f32{.Size = COL_SIZE_EM, .Type = COL_TYPE_EM, .Counts = 2 * COL_COUNT_EM, .Modified = COL_MODIFIED_EM}
+COLUMN_NAMES := [Column]string{.Size = "size", .Type = "type", .Counts = "counts", .Modified = "modified"}
+COLUMN_TITLES := [Column]string{.Size = "Size", .Type = "Type", .Counts = "Folders and files", .Modified = "Modified"}
+
+Column_Rect :: struct { column: Column, rect: ui.Rect }
+
+// view.columns ("modified,type,counts,size"): the columns shown, in their order.
+columns_read :: proc(app: ^App, text: string) {
+	clear(&app.columns_order)
+	for word in strings.split(text, ",", context.temp_allocator) {
+		w := strings.trim_space(word)
+		for c in Column {
+			if COLUMN_NAMES[c] == w && !slice.contains(app.columns_order[:], c) { append(&app.columns_order, c) }
+		}
+	}
+}
+
+@(private = "file")
+columns_save :: proc(app: ^App) {
+	b := strings.builder_make(context.temp_allocator)
+	for c, i in app.columns_order {
+		if i > 0 { strings.write_byte(&b, ',') }
+		strings.write_string(&b, COLUMN_NAMES[c])
+	}
+	config.set_string(&app.prefs, config.ref_of(&app.prefs, "view.columns"), strings.to_string(b))
+	prefs_save(app)
+}
+
+// A column shown or hidden (hidden: it leaves the order; shown again: at the end).
+column_toggle :: proc(app: ^App, c: Column) {
+	if i, found := slice.linear_search(app.columns_order[:], c); found {
+		ordered_remove(&app.columns_order, i)
+	} else {
+		append(&app.columns_order, c)
+	}
+	columns_save(app)
+}
+
+// The column `c` to the place `at` among the ones shown.
+column_move :: proc(app: ^App, c: Column, at: int) {
+	i, found := slice.linear_search(app.columns_order[:], c)
+	if !found { return }
+	ordered_remove(&app.columns_order, i)
+	inject_at(&app.columns_order, clamp(at > i ? at - 1 : at, 0, len(app.columns_order)), c)
+	columns_save(app)
+}
+
+// The header's menu (a right click on it): each column, ticked when shown; it stays open while columns are ticked.
+columns_menu_build :: proc(app: ^App, em: f32) {
+	if app.columns_menu_key == 0 { app.columns_menu_key = ui.key_from_string(0, "classeur_columns_menu") }
+	if ui.ctx_menu(app.columns_menu_key, em * MENU_WIDTH_EM) {
+		for c in ([]Column{.Modified, .Type, .Counts, .Size}) {
+			on := slice.contains(app.columns_order[:], c)
+			if ui.menu_item(fmt.tprintf("%s###colm_%s", COLUMN_TITLES[c], COLUMN_NAMES[c]), checked = on, keep_open = true).clicked { column_toggle(app, c) }
+		}
+		ui.menu_separator()
+		if ui.menu_item("The columns as they were###colm_reset").clicked { columns_read(app, "modified,type,counts,size"); columns_save(app) }
+	}
 }
 // The filter's width in the footer, in ems.
 FILTER_EM :: 18
@@ -78,7 +145,7 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 			if ui.row(.Start, {.Draw_Background}, "###below_tabs") { tab_region(app, p, index, ui.fill(), room, em) }
 		}
 		if app.inspector.open && focused { room -= app.inspector.width_px * ui.scale() }
-		wide := details_columns(room, em)
+		wide := details_columns(app, room, em)
 		toolbar(app, p, t, index, em)
 		// the list, and beside it the inspector in the panel that has the keyboard
 		ui.next({width = ui.fill(), height = ui.fill()})
@@ -233,7 +300,12 @@ list_move :: proc(t: ^Tab, by: int) {
 header :: proc(app: ^App, t: ^Tab, wide: Columns, em: f32) {
 	f := &t.folder
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * HEADER_EM)), bg = draw.hex(surfaces(app).head)})
-	if ui.row(.Center, {.Draw_Background, .Draw_Side_Bottom}, "###header") {
+	if ui.row(.Center, {.Draw_Background, .Draw_Side_Bottom, .Hot_Within}, "###header") {
+		// (a right click anywhere on it, its titles too: the columns' menu)
+		if ui.mouse_pressed(.Right) && ui.hot_within(ui.parent_box().key) {
+			if app.columns_menu_key == 0 { app.columns_menu_key = ui.key_from_string(0, "classeur_columns_menu") }
+			ui.ctx_menu_open(app.columns_menu_key, ui.mouse_pos())
+		}
 		ui.spacer(ui.px(em * ROW_INSET_EM))
 		// the box of every row: all, some or none of them selected
 		all := len(f.shown) > 0 && f.count == len(f.shown)
@@ -241,14 +313,23 @@ header :: proc(app: ^App, t: ^Tab, wide: Columns, em: f32) {
 			if f.count > 0 { folder_select_none(f) } else { folder_select_all(f) }
 		}
 		if ui.tags("weak") {
-			column_head(app, t, .Name, "Name", ui.fill(), .Left, em)
-			if .Modified in wide { column_head(app, t, .Modified, "Modified", ui.px(em * COL_MODIFIED_EM), .Left, em) }
-			if .Type in wide { column_head(app, t, .Type, "Type", ui.px(em * COL_TYPE_EM), .Left, em) }
-			if .Counts in wide {
-				plain_head("Folders", em * COL_COUNT_EM, em)
-				plain_head("Files", em * COL_COUNT_EM, em)
+			column_head(app, t, .Name, "Name", ui.fill(), .Left, em, nil)
+			for c in app.columns_order {
+				if c not_in wide { continue }
+				switch c {
+				case .Modified: column_head(app, t, .Modified, "Modified", ui.px(em * COL_MODIFIED_EM), .Left, em, c)
+				case .Type:     column_head(app, t, .Type, "Type", ui.px(em * COL_TYPE_EM), .Left, em, c)
+				case .Size:     column_head(app, t, .Size, "Size", ui.px(em * COL_SIZE_EM), .Right, em, c)
+				case .Counts:
+					ui.next({width = ui.px(em * 2 * COL_COUNT_EM), height = ui.pct(1)})
+					if ui.row(.Center, {.Clickable}, "###col_counts") {
+						box := ui.parent_box()
+						plain_head("Folders", em * COL_COUNT_EM, em)
+						plain_head("Files", em * COL_COUNT_EM, em)
+						column_drag_signal(app, c, ui.signal(box))
+					}
+				}
 			}
-			if .Size in wide { column_head(app, t, .Size, "Size", ui.px(em * COL_SIZE_EM), .Right, em) }
 		}
 		ui.spacer(ui.px(em * (ROW_INSET_EM + 0.5)))
 	}
@@ -256,7 +337,7 @@ header :: proc(app: ^App, t: ^Tab, wide: Columns, em: f32) {
 
 // A column's title, a line before it; the sort's arrow at its right end. A click sorts by it.
 @(private = "file")
-column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: ui.Size, align: ui.Text_Align, em: f32) {
+column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: ui.Size, align: ui.Text_Align, em: f32, column: Maybe(Column)) {
 	s := t.folder.sort
 	on := s.key == key
 	ui.next({width = width, height = ui.pct(1), radius = em * 0.2})
@@ -270,7 +351,9 @@ column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: 
 		if align == .Left { ui.spacer(ui.fill()) }
 		if on { glyph(app, s.descending ? lucide.ARROW_DOWN : lucide.ARROW_UP, em * 1.4) } else { ui.spacer(ui.px(em * 0.4)) }
 	}
-	if sig.clicked {
+	moved := false
+	if c, ok := column.?; ok { moved = column_drag_signal(app, c, sig) }
+	if sig.clicked && !moved {
 		folder_sort_by(&t.folder, key)
 		app.default_sort = t.folder.sort
 	}
@@ -503,29 +586,30 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, wi
 	if folder { m, measured = measure_of(app, t, e^) }
 	if !selected { ui.push_tags("weak") }
 	if ui.style({font_size = em * 0.92}) {
-		if .Modified in wide {
-			ui.next({width = ui.px(em * COL_MODIFIED_EM), height = ui.pct(1)})
-			ui.label(fmt.tprintf("%s###m", date_text(app, e.mtime)))
-		}
-		if .Type in wide {
-			ui.next({width = ui.px(em * COL_TYPE_EM), height = ui.pct(1)})
-			ui.label(fmt.tprintf("%s###k", type_text(e^)))
-		}
-		if .Counts in wide {
-			count := proc(n: i64, measured: bool) -> string {
-				if !measured || n == 0 { return "--" }
-				return count_text(n)
+		for c in app.columns_order {
+			if c not_in wide { continue }
+			switch c {
+			case .Modified:
+				ui.next({width = ui.px(em * COL_MODIFIED_EM), height = ui.pct(1)})
+				ui.label(fmt.tprintf("%s###m", date_text(app, e.mtime)))
+			case .Type:
+				ui.next({width = ui.px(em * COL_TYPE_EM), height = ui.pct(1)})
+				ui.label(fmt.tprintf("%s###k", type_text(e^)))
+			case .Counts:
+				count := proc(n: i64, measured: bool) -> string {
+					if !measured || n == 0 { return "--" }
+					return count_text(n)
+				}
+				ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1)})
+				ui.label(fmt.tprintf("%s###fo", folder ? count(m.folders, measured) : "--"))
+				ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1)})
+				ui.label(fmt.tprintf("%s###fi", folder ? count(m.files, measured) : "--"))
+			case .Size:
+				size := "--"
+				if e.size >= 0 { size = size_text(e.size) } else if measured && m.bytes > 0 { size = size_text(m.bytes) }
+				ui.next({width = ui.px(em * COL_SIZE_EM), height = ui.pct(1), text_align = .Right})
+				ui.label(fmt.tprintf("%s###s", size))
 			}
-			ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1)})
-			ui.label(fmt.tprintf("%s###fo", folder ? count(m.folders, measured) : "--"))
-			ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1)})
-			ui.label(fmt.tprintf("%s###fi", folder ? count(m.files, measured) : "--"))
-		}
-		if .Size in wide {
-			size := "--"
-			if e.size >= 0 { size = size_text(e.size) } else if measured && m.bytes > 0 { size = size_text(m.bytes) }
-			ui.next({width = ui.px(em * COL_SIZE_EM), height = ui.pct(1), text_align = .Right})
-			ui.label(fmt.tprintf("%s###s", size))
 		}
 	}
 	if !selected { ui.pop_tags() }
@@ -853,4 +937,33 @@ entry_tip :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, sig: ui.Signal) {
 	if t.folder.flat && fs.parent(e.name) != "" { where_ = fmt.tprintf("In %s", home_path(app, fs.join(t.path, fs.parent(e.name), context.temp_allocator))) }
 	facts := e.kind == .Directory ? fmt.tprintf("%s · %s", type_text(e^), date_text(app, e.mtime)) : fmt.tprintf("%s · %s · %s", type_text(e^), size_text(e.size), date_text(app, e.mtime))
 	hover_tip(sig, name, facts, where_)
+}
+
+// A column's title: its box noted (where a title dragged goes is read from them), a drag past the system's distance
+// moves it, placed where it is let go. True: it was moved (no sort).
+column_drag_signal :: proc(app: ^App, c: Column, sig: ui.Signal) -> bool {
+	append(&app.column_rects_now, Column_Rect{c, sig.box.rect})
+	th := platform.drag_threshold(app.main.win)
+	if sig.dragging && (abs(sig.drag_delta.x) >= th.x || abs(sig.drag_delta.y) >= th.y) { app.column_drag = c }
+	if dragged, ok := app.column_drag.?; ok && dragged == c {
+		if sig.dragging { drop_mark(sig.box) }
+		if sig.released {
+			app.column_drag = nil
+			x := ui.mouse_pos().x
+			// (the titles of this header in the last frame, in the order shown: the other panels' headers are elsewhere)
+			mine := make([dynamic]Column_Rect, context.temp_allocator)
+			for cr in app.column_rects { if abs(cr.rect.min.y - sig.box.rect.min.y) < 1 { append(&mine, cr) } }
+			at := 0
+			for cr, i in mine { if x > (cr.rect.min.x + cr.rect.max.x) * 0.5 { at = i + 1 } }
+			if at < len(mine) {
+				target := mine[at].column
+				j, _ := slice.linear_search(app.columns_order[:], target)
+				column_move(app, c, j)
+			} else {
+				column_move(app, c, len(app.columns_order))
+			}
+			return true
+		}
+	}
+	return false
 }
