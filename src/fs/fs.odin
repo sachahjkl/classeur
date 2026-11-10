@@ -115,6 +115,14 @@ keep_name :: proc(l: ^Listing, name: string) -> string {
 	return strings.clone(name, virtual.arena_allocator(&l.arena))
 }
 
+// What the inspector's properties say of a path (properties): what Info does not.
+Properties :: struct {
+	created:     i64,      // ns since 1970 UTC (0: the system does not say)
+	accessed:    i64,
+	permissions: string,   // Linux: "rwxr-xr-x (755)"; Windows: its attributes ("Read only, Hidden"); "" none
+	owner:       string,   // Linux: "user:group"; "" not known
+}
+
 // What a path is, its size and its time (links followed). ok is false when it cannot be read.
 Info :: struct {
 	kind:  Kind,

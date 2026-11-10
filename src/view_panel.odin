@@ -148,7 +148,7 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOP_EM)), bg = draw.hex(surfaces(app).top)})
 			if ui.row(.Start, {.Draw_Background}, "###below_tabs") { tab_region(app, p, index, ui.fill(), room, em) }
 		}
-		if app.inspector.open && focused { room -= app.inspector.width_px * ui.scale() }
+		if app.inspector.open && focused { room -= ui.pane_extent(&app.inspector.pane, .X, inspector_pane_options(app)) * ui.scale() }
 		wide := details_columns(app, room, em)
 		toolbar(app, p, t, index, em)
 		// the list, and beside it the inspector in the panel that has the keyboard

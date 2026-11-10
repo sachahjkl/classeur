@@ -5,6 +5,7 @@ package classeur
 // is read on the workers when the cursor stops on it; only the last one asked is kept.
 
 import "core:fmt"
+import config "gt:config"
 import "core:os"
 import "core:strings"
 import "core:unicode/utf8"
@@ -12,18 +13,20 @@ import "gt:draw"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:render"
+import syntax "gt:syntax"
 import "gt:ui"
 import "fs"
 
 INSPECTOR_TEXT_BYTES :: 64 * 1024
 INSPECTOR_PICTURE_PX :: 1600
 INSPECTOR_MIN_PX     :: 220
+INSPECTOR_DEFAULT_PX :: 380
 
 Inspect_Kind :: enum u8 { None, Picture, Text, Folder, Other }
 
 Inspector :: struct {
 	open:     bool,
-	width_px: f32,             // logical pixels
+	pane:     ui.Pane,         // its width, dragged by its edge (ui.pane_split), folded to a strip; kept in inspector.width
 	path:     string,          // owned: what is shown (or asked)
 	serial:   u64,             // the ask the pane waits for
 	ready:    bool,
@@ -33,6 +36,8 @@ Inspector :: struct {
 	has_tex:  bool,
 	size:     [2]int,
 	listing:  fs.Listing,
+	props:    fs.Properties,   // owned strings: what the system says of it besides its size and date
+	has_props: bool,
 }
 
 @(private = "file")
@@ -45,6 +50,8 @@ Inspect_Job :: struct {
 	rgba:    []u8,
 	size:    [2]int,
 	listing: fs.Listing,
+	props:   fs.Properties,    // owned strings
+	has_props: bool,
 }
 
 inspector_free :: proc(app: ^App) {
@@ -62,13 +69,32 @@ inspector_clear :: proc(app: ^App) {
 	if insp.has_tex { render.destroy_texture(&app.shared.r, insp.tex) }
 	insp.has_tex = false
 	fs.listing_destroy(&insp.listing)
-	insp.ready, insp.kind = false, .None
+	props_free(&insp.props)
+	insp.ready, insp.kind, insp.has_props = false, .None, false
+}
+
+@(private = "file")
+props_free :: proc(p: ^fs.Properties) {
+	delete(p.permissions)
+	delete(p.owner)
+	p^ = {}
+}
+
+// Its edge: dragged from INSPECTOR_MIN_PX to most of the panel, folded to a strip, saved when let go.
+inspector_pane_options :: proc(app: ^App) -> ui.Pane_Options {
+	return ui.Pane_Options{side = .After, default_size = INSPECTOR_DEFAULT_PX, min_size = INSPECTOR_MIN_PX, collapsible = true, title = "Inspector",
+		user = app, on_save = proc(user: rawptr, p: ^ui.Pane) {
+			app := (^App)(user)
+			config.set_int(&app.prefs, config.ref_of(&app.prefs, "inspector.width"), i64(p.size[.X]))
+			prefs_save(app)
+		}}
 }
 
 act_inspector :: proc(app: ^App) {
 	insp := &app.inspector
 	insp.open = !insp.open
-	if insp.width_px <= 0 { insp.width_px = 380 }
+	if insp.pane.size[.X] <= 0 { insp.pane.size[.X] = f32(config.int_of(&app.prefs, "inspector.width")) }
+	insp.pane.collapsed = false
 	if !insp.open {
 		inspector_clear(app)
 		delete(insp.path)
@@ -111,6 +137,11 @@ looks_textual :: proc(name: string, flags: fs.Flags) -> bool {
 inspect_run :: proc(data: rawptr) {
 	job := (^Inspect_Job)(data)
 	defer if !ui.post(&job.app.main.state, inspect_done, job) { inspect_free(job) }
+	// (what the system says of it, whatever it is)
+	if p, ok := fs.properties(job.path); ok {
+		job.props = {created = p.created, accessed = p.accessed, permissions = strings.clone(p.permissions), owner = strings.clone(p.owner)}
+		job.has_props = true
+	}
 	switch job.kind {
 	case .Folder:
 		fs.list(&job.listing, job.path)
@@ -142,6 +173,7 @@ inspect_free :: proc(job: ^Inspect_Job) {
 	delete(job.path)
 	delete(job.text)
 	delete(job.rgba)
+	props_free(&job.props)
 	fs.listing_destroy(&job.listing)
 	free(job)
 }
@@ -154,6 +186,8 @@ inspect_done :: proc(data: rawptr, word: u64) {
 	insp := &app.inspector
 	if job.serial != insp.serial || !insp.open { return }
 	insp.kind, insp.ready = job.kind, true
+	insp.props, insp.has_props = job.props, job.has_props
+	job.props = {}
 	switch job.kind {
 	case .Picture:
 		insp.tex = render.create_texture_rgba(&app.shared.r, job.size.x, job.size.y)
@@ -179,7 +213,10 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 	insp := &app.inspector
 	e := folder_cursor_entry(&t.folder)
 	if e != nil { inspector_ask(app, fs.join(t.path, e.name, context.temp_allocator), e^) }
-	ui.next({width = ui.px(insp.width_px * ui.scale()), height = ui.fill(), axis = .Y})
+	// (its edge, the toolkit's: dragged, folded to a strip, Enter and the arrows)
+	r := ui.pane_split("###insp_split", .X, &insp.pane, inspector_pane_options(app))
+	if r.size <= 0 { return }
+	ui.next({width = ui.px(r.size * ui.scale()), height = ui.fill(), axis = .Y})
 	box := ui.build_box({.Clip, .Draw_Side_Left}, "###inspector")
 	if ui.parent(box) {
 		if e == nil { return }
@@ -205,6 +242,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 			if ui.tags("weak") { if icon_action(app, "insp_close", lucide.X, command_tip("inspector"), em) { act_inspector(app) } }
 			ui.spacer(ui.px(em * 0.3))
 		}
+		if insp.ready && insp.has_props { inspector_props(app, t, e^, em) }
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if !insp.ready {
 			if ui.tags("weak") {
@@ -232,7 +270,12 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 					ui.spacer(ui.px(em * 0.8))
 					ui.next({width = ui.fill()})
 					if ui.style({font = app.mono, font_size = em * 0.92}) {
-						ui.paragraph(fmt.tprintf("%s###insp_body", shown_text(insp.text)))
+						// (a source file in its language's colours: the toolkit's syntax lexer; plain text as it is)
+						if l, ok := syntax.language_of_file(insp.path); ok {
+							ui.rich_paragraph("###insp_body", code_runs(insp.text, l))
+						} else {
+							ui.paragraph(fmt.tprintf("%s###insp_body", shown_text(insp.text)))
+						}
 					}
 					ui.spacer(ui.px(em * 0.8))
 				}
@@ -283,4 +326,61 @@ inspect_picture_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	sz := d.size * scale
 	at := r.min + (room - sz) * 0.5
 	draw.image(dc, d.tex, {at, at + sz}, radius = 3 * d.round)
+}
+
+// Its properties (File Pilot's): where it is, its dates, its permissions and its owner (Linux) or attributes (Windows).
+@(private = "file")
+inspector_props :: proc(app: ^App, t: ^Tab, e: fs.Entry, em: f32) {
+	insp := &app.inspector
+	p := insp.props
+	line :: proc(app: ^App, id, key, value: string, em: f32, mono := false) {
+		if value == "" { return }
+		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.8))})
+		if ui.row(.Center, {}, id) {
+			ui.spacer(ui.px(em * 0.8))
+			if ui.tags("weak") {
+				ui.next({width = ui.px(em * 6.5), height = ui.pct(1), font_size = em * 0.88})
+				ui.label(fmt.tprintf("%s###k", key))
+			}
+			if mono {
+				ui.next({width = ui.fill(), height = ui.pct(1), font = app.mono, font_size = em * 0.86})
+			} else {
+				ui.next({width = ui.fill(), height = ui.pct(1), font_size = em * 0.9})
+			}
+			ui.label(fmt.tprintf("%s###v", shown_text(value)))
+			ui.spacer(ui.px(em * 0.5))
+		}
+	}
+	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
+	if ui.column(.Start, {.Draw_Side_Bottom}, "###insp_props") {
+		ui.spacer(ui.px(em * 0.3))
+		line(app, "###p_where", "Where", home_path(app, fs.parent(insp.path)), em, mono = true)
+		line(app, "###p_modified", "Modified", date_text(app, e.mtime), em)
+		if p.created != 0 { line(app, "###p_created", "Created", date_text(app, p.created), em) }
+		if p.accessed != 0 { line(app, "###p_accessed", "Accessed", date_text(app, p.accessed), em) }
+		line(app, "###p_perm", PERMISSIONS_WORD, p.permissions, em, mono = true)
+		line(app, "###p_owner", "Owner", p.owner, em, mono = true)
+		ui.spacer(ui.px(em * 0.3))
+	}
+}
+
+// The runs of a source text in its language's colours (the theme's: keywords in the accent, strings good, comments weak,
+// types and numbers warm, calls the text's).
+@(private = "file")
+code_runs :: proc(text: string, l: syntax.Language) -> []ui.Rich_Run {
+	spans := make([dynamic]syntax.Span, context.temp_allocator)
+	syntax.spans(text, l, &spans)
+	colors := [syntax.Class]ui.Color{
+		.Plain = {}, .Keyword = ui.color("accent"), .Str = ui.color("good text"), .Comment = ui.color("weak text"),
+		.Func = {}, .Type = ui.color("warn text"),
+	}
+	runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
+	at := 0
+	for sp in spans {
+		if sp.start > at { append(&runs, ui.Rich_Run{text = text[at:sp.start]}) }
+		append(&runs, ui.Rich_Run{text = text[sp.start:sp.end], style = {color = colors[sp.class], bold = sp.class == .Func}})
+		at = sp.end
+	}
+	if at < len(text) { append(&runs, ui.Rich_Run{text = text[at:]}) }
+	return runs[:]
 }

@@ -10,6 +10,12 @@ stat :: proc(path: string) -> (info: Info, ok: bool) {
 	return stat_native(path)
 }
 
+// What the inspector says of a path besides its size and date (strings in temp memory). A path in an archive: none.
+properties :: proc(path: string) -> (p: Properties, ok: bool) {
+	if archive_holds(path) { return {}, false }
+	return properties_native(path)
+}
+
 // Copies the file `from` to `to` (a file of an archive: taken out of it).
 copy_file :: proc(from, to: string, p: ^Progress = nil) -> Error {
 	if archive_holds(to) { return .Read_Only }

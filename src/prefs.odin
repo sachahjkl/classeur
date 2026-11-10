@@ -28,6 +28,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "keys.aliases", description = "The aliases of the commands (palette: Alt+Enter).", kind = .String, default = {s = ""}, hidden = true},
 	{name = "palette.width", description = "The palette's width as last resized (logical pixels; 0: its own).", kind = .Int, default = {i = 0}, hidden = true},
 	{name = "palette.height", description = "The palette's height as last resized (logical pixels; 0: its own).", kind = .Int, default = {i = 0}, hidden = true},
+	{name = "inspector.width", description = "The inspector's width as last dragged (logical pixels).", kind = .Int, default = {i = INSPECTOR_DEFAULT_PX}, hidden = true},
 	{name = "side.order", description = "The sidebar's sections in their order.", kind = .String, default = {s = "recents,bookmarks,storage,places"}, hidden = true},
 	{name = "palette.recent", description = "The commands run last from the palette.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "open.single_click", description = "Opens an item with one click instead of two.", kind = .Bool, default = {b = false}},

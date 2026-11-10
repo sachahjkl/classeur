@@ -3,6 +3,8 @@ package fs
 // Linux: getdents64 into a large buffer, then one statx per entry relative to the folder's descriptor (no path is
 // built, no file is opened). A link costs a second statx, which follows it.
 
+import "core:fmt"
+import "core:os"
 import "core:strings"
 import "core:sys/linux"
 
@@ -95,4 +97,36 @@ space :: proc(path: string) -> (s: Space, ok: bool) {
 	if linux.statfs(strings.clone_to_cstring(path, context.temp_allocator), &st) != .NONE { return }
 	unit := st.frsize > 0 ? i64(st.frsize) : i64(st.bsize)
 	return Space{free = i64(st.bavail) * unit, total = i64(st.blocks) * unit}, true
+}
+
+// Its birth and access times, its permissions, its owner (the names of /etc/passwd and /etc/group, else the numbers).
+properties_native :: proc(path: string) -> (p: Properties, ok: bool) {
+	sx: linux.Statx
+	if linux.statx(linux.AT_FDCWD, strings.clone_to_cstring(path, context.temp_allocator), {}, {.MODE, .UID, .GID, .ATIME, .BTIME}, &sx) != .NONE { return }
+	if .BTIME in sx.mask { p.created = statx_time(sx.btime) }
+	p.accessed = statx_time(sx.atime)
+	bits := transmute(u32)sx.mode & 0o777
+	b := strings.builder_make(context.temp_allocator)
+	letters := "rwx"
+	for i in 0 ..< 9 {
+		on := bits & (1 << u32(8 - i)) != 0
+		strings.write_byte(&b, on ? letters[i % 3] : '-')
+	}
+	p.permissions = fmt.tprintf("%s (%o)", strings.to_string(b), bits)
+	p.owner = fmt.tprintf("%s:%s", id_name("/etc/passwd", u32(sx.uid)), id_name("/etc/group", u32(sx.gid)))
+	return p, true
+}
+
+// The name of a number in /etc/passwd or /etc/group ("name:x:number:..."), else the number.
+@(private = "file")
+id_name :: proc(file: string, id: u32) -> string {
+	data, err := os.read_entire_file(file, context.temp_allocator)
+	if err == nil {
+		text := string(data)
+		for line in strings.split_lines_iterator(&text) {
+			parts := strings.split_n(line, ":", 4, context.temp_allocator)
+			if len(parts) >= 3 && parts[2] == fmt.tprintf("%d", id) { return parts[0] }
+		}
+	}
+	return fmt.tprintf("%d", id)
 }

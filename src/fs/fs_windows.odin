@@ -93,3 +93,20 @@ space :: proc(path: string) -> (s: Space, ok: bool) {
 	if !win.GetDiskFreeSpaceExW(win.utf8_to_wstring(path, context.temp_allocator), &free, &total, &all_free) { return }
 	return Space{free = i64(free), total = i64(total)}, true
 }
+
+// Its creation and access times, its attributes (no owner: the security descriptor is not read).
+properties_native :: proc(path: string) -> (p: Properties, ok: bool) {
+	data: win.WIN32_FILE_ATTRIBUTE_DATA
+	if !win.GetFileAttributesExW(win.utf8_to_wstring(path, context.temp_allocator), win.GetFileExInfoStandard, &data) { return }
+	p.created, p.accessed = filetime_ns(data.ftCreationTime), filetime_ns(data.ftLastAccessTime)
+	words := make([dynamic]string, context.temp_allocator)
+	a := data.dwFileAttributes
+	if a & win.FILE_ATTRIBUTE_READONLY != 0 { append(&words, "Read only") }
+	if a & win.FILE_ATTRIBUTE_HIDDEN != 0 { append(&words, "Hidden") }
+	if a & win.FILE_ATTRIBUTE_SYSTEM != 0 { append(&words, "System") }
+	if a & win.FILE_ATTRIBUTE_ARCHIVE != 0 { append(&words, "Archive") }
+	if a & win.FILE_ATTRIBUTE_COMPRESSED != 0 { append(&words, "Compressed") }
+	if a & win.FILE_ATTRIBUTE_ENCRYPTED != 0 { append(&words, "Encrypted") }
+	p.permissions = strings.join(words[:], ", ", context.temp_allocator)
+	return p, true
+}

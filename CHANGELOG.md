@@ -6,6 +6,9 @@ and the versions follow [semantic versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- The inspector: its edge dragged (the toolkit's pane: folded to a strip, the arrows, kept between starts); a file's
+  properties (where it is, its dates of creation and access, its permissions and owner on Linux, its attributes on
+  Windows); a source file in its language's colours (the toolkit's syntax package).
 - Archives as folders (File Pilot's): a zip, a tar or a gzipped tar is entered as a folder (Enter; "Open with the
   system's application" still gives it to its program); what is in it is listed, sorted, searched, copied out of it (taken
   out), opened (taken out to a temporary folder first); a write in it is refused (read only). The toolkit's archive

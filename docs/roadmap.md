@@ -83,10 +83,9 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 ## Next
 
 2. Undo of the Recycle Bin on Windows (`IFileOperation`).
-5. **The inspector, more**: its width dragged, a text highlighted by its language, PDF and videos, the permissions.
+5. The inspector: PDF and videos.
 6. The thumbnails' cache on the disk, more formats.
 8. The window raised by a second start on Wayland (an xdg-activation token).
-9. The properties of a file (its permissions, its owner, its dates).
 
 ## Debts
 

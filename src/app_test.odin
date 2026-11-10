@@ -1856,3 +1856,49 @@ test_archive_folders :: proc(t: ^testing.T) {
 	taken, _ := os.read_entire_file(out, context.temp_allocator)
 	testing.expect_value(t, string(taken), "hello")
 }
+
+// The inspector's properties (where, dates, permissions, owner) and its edge: dragged left, it is wider, kept when let go.
+@(test)
+test_inspector_props :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1200, 700})
+	context.allocator = runtime.heap_allocator()
+	tab := current_tab(app)
+	tab.zoom = 0
+	wait_read(s)
+	point_at(t, tab, "notes.txt")
+	act_inspector(app)
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return (^App)(s.user).inspector.ready }, "the inspector")
+	session.frames(s, 3)
+	testing.expect(t, app.inspector.has_props, "its properties read")
+	testing.expect(t, session.find_text(s, PERMISSIONS_WORD) != nil, "its permissions")
+	when ODIN_OS != .Windows { testing.expect(t, strings.contains(app.inspector.props.permissions, "rw"), "rw") }
+	when SHOTS { session.save_png(s, "inspector_props.png") }
+	before := app.inspector.pane.size[.X]
+	h := session.get(s, "insp_split")
+	from := session.center(h)
+	session.drag(s, from, from - {120, 0})
+	session.frames(s, 2)
+	testing.expectf(t, app.inspector.pane.size[.X] > before + 50, "wider: %v from %v", app.inspector.pane.size[.X], before)
+	testing.expect_value(t, config.int_of(&app.prefs, "inspector.width"), i64(app.inspector.pane.size[.X]))
+}
+
+// The inspector shows a source file in its language's colours.
+@(test)
+test_inspector_code :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	testing.expect(t, os.write_entire_file(fs.join(dir, "main.odin", context.temp_allocator), "package main\n\n// the start\nmain :: proc() {\n\tfmt.println(\"hello\", 42)\n}\n") == nil)
+	s, app := start(t, {dir}, size = {1200, 700})
+	tab := current_tab(app)
+	tab.zoom = 0
+	wait_read(s)
+	point_at(t, tab, "main.odin")
+	act_inspector(app)
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return (^App)(s.user).inspector.ready }, "the inspector")
+	session.frames(s, 3)
+	testing.expect_value(t, app.inspector.kind, Inspect_Kind.Text)
+	testing.expect(t, session.find(s, "insp_body") != nil, "its text")
+	when SHOTS { session.save_png(s, "inspector_code.png") }
+}
