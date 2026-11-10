@@ -19,6 +19,7 @@ import "gt:platform"
 import "gt:process"
 import "gt:render"
 import setup "gt:setup"
+import "fs"
 
 ICON_PNGS := [?]desktop.Icon{
 	{16, #load("../assets/logo_16.png")},
@@ -125,7 +126,7 @@ setup_choice_read :: proc() -> string {
 @(private = "file")
 setup_choice_write :: proc(choice: string) {
 	path := setup_choice_file()
-	_ = os.make_directory_all(path[:strings.last_index_byte(path, '/')])
+	_ = os.make_directory_all(fs.parent(path))
 	_ = os.write_entire_file(path, transmute([]u8)choice)
 }
 

@@ -48,8 +48,6 @@ attributes_entry :: proc(attrs: win.DWORD, size_high, size_low: win.DWORD, mtime
 	e.mtime = filetime_ns(mtime)
 	if e.kind == .File { e.size = i64(size_high) << 32 | i64(size_low) }
 	if attrs & win.FILE_ATTRIBUTE_HIDDEN != 0 { e.flags += {.Hidden} }
-	// (a name that starts with a dot is hidden too, as on Linux: File Pilot puts dotfiles with the hidden files)
-	if len(e.name) > 0 && e.name[0] == '.' { e.flags += {.Hidden} }
 	if attrs & win.FILE_ATTRIBUTE_SYSTEM != 0 { e.flags += {.System} }
 	if attrs & win.FILE_ATTRIBUTE_READONLY != 0 { e.flags += {.Read_Only} }
 	if attrs & win.FILE_ATTRIBUTE_REPARSE_POINT != 0 { e.flags += {.Link} }
@@ -73,6 +71,8 @@ list_native :: proc(l: ^Listing, path: string) -> Error {
 			e := Entry{size = -1}
 			attributes_entry(data.dwFileAttributes, data.nFileSizeHigh, data.nFileSizeLow, data.ftLastWriteTime, &e)
 			e.name = keep_name(l, name)
+			// (a name that starts with a dot is hidden too, as on Linux: File Pilot puts dotfiles with the hidden files)
+			if len(name) > 0 && name[0] == '.' { e.flags += {.Hidden} }
 			append(&l.entries, e)
 		}
 		if !win.FindNextFileW(h, &data) { break }

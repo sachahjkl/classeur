@@ -185,7 +185,8 @@ batch_apply :: proc(app: ^App, news: []string) {
 		if n == b.names[i] { continue }
 		append(&pairs, [2]string{fs.join(b.dir, b.names[i], context.temp_allocator), fs.join(b.dir, n, context.temp_allocator)})
 	}
-	if t := find_tab(app, b.tab); t != nil { tab_load(app, t) }
+	// (read again after the renames, whatever came of them)
+	defer if t := find_tab(app, b.tab); t != nil { tab_load(app, t) }
 	if len(pairs) == 0 { return }
 	if !renames_swap(pairs[:], back = false) {
 		say(app, "The names could not all be given: nothing was renamed.")

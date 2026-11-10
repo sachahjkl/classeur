@@ -12,6 +12,7 @@ import "core:strings"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:ui"
+import "fs"
 
 Layout :: struct {
 	name, text: string,   // owned
@@ -74,7 +75,7 @@ layouts_save :: proc(app: ^App) {
 	if path == "" { return }
 	b := strings.builder_make(context.temp_allocator)
 	for x in app.layouts.list { fmt.sbprintf(&b, "layout %s\n%s", x.name, x.text) }
-	_ = os.make_directory_all(path[:strings.last_index_byte(path, '/')])
+	_ = os.make_directory_all(fs.parent(path))
 	_ = os.write_entire_file(path, transmute([]u8)strings.to_string(b))
 }
 
