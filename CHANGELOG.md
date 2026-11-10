@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-10
+
 ### Added
 - The columns view filled column by column, scrolled sideways (the wheel too); Up and Down along a column, Left and
   Right across.
@@ -98,3 +100,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.4.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.4.0
 [0.5.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.5.0
 [0.6.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.6.0
+[0.7.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.7.0
