@@ -77,6 +77,8 @@ drop_answer :: proc(app: ^App, kind: platform.Event_Kind, pos: [2]f32, mods: pla
 		app.drop_hover = ""
 		return nil
 	}
+	// (a classeur tab, from this window or another: tab_drag.odin)
+	if e, is_tab := tab_drop(app, data, pos, kind); is_tab { app_frames(app); return e }
 	dir := drop_target(app, pos)
 	effect := drop_effect(app, data.files[:], dir, allowed, mods)
 	delete(app.drop_hover)

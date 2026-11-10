@@ -4,7 +4,10 @@ package classeur
 // quarter of a panel to open a new panel beside it with the tab, onto its bottom quarter for a new panel below it. The tabs' boxes of the last frame (`tab_rects_last`)
 // and the panels' say where the pointer is; the move is made before the build that follows the release.
 
+import "core:strings"
 import "gt:draw"
+import "gt:process"
+import setup "gt:setup"
 import "gt:platform"
 import "gt:ui"
 
@@ -70,7 +73,16 @@ tab_drag_signal :: proc(app: ^App, panel, index: int, sig: ui.Signal) {
 		th := platform.drag_threshold(app.main.win)
 		if abs(sig.drag_delta.x) >= th.x || abs(sig.drag_delta.y) >= th.y { d.active, d.panel, d.index, d.tab = true, panel, index, app.panels[panel].tabs[index].id }
 	}
-	if d.active && d.panel == panel && d.index == index && sig.dragging { app_frames(app) }
+	if d.active && d.panel == panel && d.index == index && sig.dragging {
+		app_frames(app)
+		// out of the window: the drag of the system takes it (another classeur window, or a window of its own)
+		m := ui.mouse_pos()
+		size := app.window_px
+		if m.x < 0 || m.y < 0 || m.x >= size.x || m.y >= size.y {
+			d.active = false
+			app.tab_out = d.tab
+		}
+	}
 	if d.active && d.panel == panel && d.index == index && sig.released {
 		d.active = false
 		to, at, split, ok := tab_drop_place(app, ui.mouse_pos())
@@ -143,4 +155,74 @@ tab_drag_mark :: proc(b: ^ui.Box) {
 		draw.rect(dc, b.rect, ui.color("accent"), border = max(1, ui.scale()))
 	}
 	b.custom_user = m
+}
+
+TAB_MIME :: "application/x-classeur-tab"
+
+// Between frames: a tab dragged out of the window (tab_out) as a drag of the system, carrying its path. Dropped on another
+// classeur window, it moves there; dropped back here, it stays (drop_answer took it); dropped anywhere else, it becomes
+// a window of its own (classeur --window <path>), unless it is the window's only tab.
+tab_out_run :: proc(app: ^App) {
+	id := app.tab_out
+	if id == 0 { return }
+	app.tab_out, app.tab_out_home = 0, false
+	t := find_tab(app, id)
+	if t == nil { return }
+	path := strings.clone(t.path, context.temp_allocator)
+	data: platform.Drag_Data
+	append(&data.custom, platform.Drag_Entry{TAB_MIME, path})
+	data.text = path
+	defer { delete(data.custom) }
+	effect, started := platform.drag_start(app.main.win, data, {.Move})
+	if !started || app.tab_out_home { return }
+	alone := len(app.panels) == 1 && len(app.panels[0].tabs) == 1
+	if _, moved := effect.?; !moved {
+		if alone { return }
+		if !tab_window(app, path) { return }
+	}
+	if alone { return }
+	for p in app.panels {
+		for q, i in p.tabs { if q.id == id { tab_close(app, p, i); app_frames(app); return } }
+	}
+}
+
+// A window of its own on `path` (this program again, standalone).
+tab_window :: proc(app: ^App, path: string) -> bool {
+	if app.headless {
+		append(&app.opened, strings.concatenate({"window:", path}))
+		return true
+	}
+	return setup.launch(process.executable_path(), {"--window", path})
+}
+
+// A tab of a classeur window dropped here (Drop_* with TAB_MIME): it goes to the panel under the pointer. From this window
+// itself: moved there; from another: opened there (the other closes its own).
+tab_drop :: proc(app: ^App, data: ^platform.Drag_Data, pos: [2]f32, kind: platform.Event_Kind) -> (effect: Maybe(platform.Drop_Effect), is_tab: bool) {
+	path := ""
+	for e in data.custom { if e.mime == TAB_MIME { path = e.data } }
+	if path == "" { return nil, false }
+	if kind != .Drop { return .Move, true }
+	panel := app.focus
+	for pr, i in app.panel_rects {
+		if i < len(app.panels) && pos.x >= pr.min.x && pos.x < pr.max.x && pos.y >= pr.min.y && pos.y < pr.max.y { panel = i }
+	}
+	for tr in app.tab_rects_last {
+		if pos.x >= tr.rect.min.x && pos.x < tr.rect.max.x && pos.y >= tr.rect.min.y && pos.y < tr.rect.max.y { panel = tr.panel }
+	}
+	panel = clamp(panel, 0, len(app.panels) - 1)
+	if app.tab_out != 0 || platform.drag_sending(app.main.win) {
+		// (our own tab back home: moved to that panel, or left where it was)
+		app.tab_out_home = true
+		for p, pi in app.panels {
+			for q, ti in p.tabs {
+				if q.path == path && pi != panel { tab_move(app, pi, ti, panel, len(app.panels[panel].tabs), .None); return .Move, true }
+			}
+		}
+		return .Move, true
+	}
+	p := app.panels[panel]
+	tab_open(app, p, path, p.active + 1)
+	app.focus = panel
+	platform.raise_window(app.main.win)
+	return .Move, true
 }

@@ -25,7 +25,7 @@ import "fs"
 // Where the session is kept: <config>/classeur/session, unless the tests gave theirs.
 session_file :: proc(app: ^App, allocator := context.temp_allocator) -> string {
 	if app.session_path != "" { return strings.clone(app.session_path, allocator) }
-	if app.headless { return "" }
+	if app.headless || app.standalone { return "" }
 	return strings.concatenate({platform.config_dir(context.temp_allocator), "/", APP_NAME, "/session"}, allocator)
 }
 

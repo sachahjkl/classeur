@@ -1094,3 +1094,43 @@ columns_text :: proc(app: ^App) -> string {
 
 @(private = "file")
 tab_folder_sort_key :: proc(app: ^App) -> fs.Sort_Key { return current_tab(app).folder.sort.key }
+
+// A tab dragged out of the window: let go nowhere, it becomes a window of its own (headless: noted) and leaves this one;
+// a classeur tab dropped from another window opens here.
+@(test)
+test_tab_out :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1000, 700})
+	context.allocator = runtime.heap_allocator()
+	p := app.panels[0]
+	documents := strings.clone(fs.join(dir, "Documents", context.temp_allocator))
+	tab_open(app, p, documents, 1)
+	wait_read(s)
+	session.frames(s, 2)
+	var_rect: ui.Rect
+	for tr in app.tab_rects_last { if tr.index == 1 { var_rect = tr.rect } }
+	from := (var_rect.min + var_rect.max) * 0.5
+	// (the scripted drag of the system ends outside the window: no window of classeur takes it)
+	platform.drag_script(app.main.win, {{{-50, -50}, {}}, {{-60, -60}, {}}})
+	session.press(s, from)
+	session.move(s, from + {0, 30})
+	session.move(s, {from.x, -20})
+	session.frames(s, 3)
+	testing.expect_value(t, len(p.tabs), 1)
+	testing.expect(t, len(app.opened) > 0 && app.opened[len(app.opened) - 1] == strings.concatenate({"window:", documents}, context.temp_allocator), "a window of its own")
+	session.release(s, {from.x, -20})
+	// a tab of another window dropped on this one's tab row: opened here
+	photos := fs.join(dir, "Photos", context.temp_allocator)
+	data: platform.Drag_Data
+	append(&data.custom, platform.Drag_Entry{TAB_MIME, photos})
+	defer delete(data.custom)
+	at := (app.tab_rects_last[0].rect.min + app.tab_rects_last[0].rect.max) * 0.5
+	platform.drop_inject(app.main.win, .Drop_Enter, at, &data, {.Move})
+	platform.drop_inject(app.main.win, .Drop, at, nil, {.Move})
+	session.frames(s, 2)
+	wait_read(s)
+	testing.expect_value(t, len(p.tabs), 2)
+	testing.expect_value(t, current_tab(app).path, photos)
+	delete(documents)
+}

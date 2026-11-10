@@ -13,6 +13,7 @@ USAGE :: `classeur: a file manager
 
   classeur [folder...]        a window on these folders (one tab each), or on your home folder; a running classeur
                               opens them in tabs
+  classeur --window <folder>  a window of its own (a tab torn off), with no session
   classeur --setup            install classeur for you, repair or upgrade the install, or uninstall it
   classeur install [--no-path]
                               the launcher in the applications menu, the icons, classeur on the PATH
@@ -34,11 +35,14 @@ run :: proc(args: []string) -> int {
 		}
 	}
 	folders := make([dynamic]string, context.temp_allocator)
-	setup_asked := false
+	setup_asked, standalone := false, false
 	for a in args {
 		switch a {
 		case "--setup":
 			setup_asked = true
+			continue
+		case "--window":
+			standalone = true
 			continue
 		case "version", "--version":
 			fmt.printfln("classeur %s", APP_VERSION)
@@ -51,5 +55,5 @@ run :: proc(args: []string) -> int {
 		abs, err := filepath.abs(a, context.temp_allocator)
 		append(&folders, err == nil ? abs : a)
 	}
-	return app_run(folders[:], setup_asked)
+	return app_run(folders[:], setup_asked, standalone)
 }

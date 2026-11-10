@@ -85,6 +85,7 @@ App :: struct {
 	status:      string,            // a message for the status bar (owned), until status_until (ui clock, ms)
 	status_until: f64,
 	room:        f32,               // the window's width at this build, logical pixels
+	window_px:   [2]f32,            // the window's size at this build, frame pixels (a tab dragged out of it)
 	text_keys:   [dynamic]ui.Key,   // the text fields built in this frame (view.odin: the keys of the list are not theirs)
 	text_keys_before: [dynamic]ui.Key,   // and in the last one
 	menu:        Entry_Menu,        // the entries' menu (menu.odin)
@@ -109,6 +110,9 @@ App :: struct {
 	launch_after: string,           // owned: the installed copy, started once this one has ended ("": none)
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
 	session_path: string,           // owned: the tests' session file ("": the person's, none when headless)
+	standalone:  bool,              // a window of a torn-off tab (tab_drag.odin): no session
+	tab_out:     u64,               // a tab dragged out of the window: the drag of the system starts after this frame
+	tab_out_home: bool,             // that drag came back and was dropped in this window
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
 }
 
@@ -123,15 +127,21 @@ Open_Options :: struct {
 	size:     [2]int,     // 0: WINDOW_SIZE
 	home:     string,     // "": the person's (the tests give theirs)
 	session:  string,     // the session file ("": the person's; headless: none)
+	standalone: bool,     // a window of a torn-off tab: no session read or written
 }
 
-app_run :: proc(folders: []string, setup_asked := false) -> int {
+// `standalone`: a window of a tab torn off another (classeur --window): it owns nothing (no instance, no session).
+app_run :: proc(folders: []string, setup_asked := false, standalone := false) -> int {
 	// one window per person: a second start hands its folders to the first, which opens them in tabs, and ends
-	message := strings.join(folders, "\n", context.temp_allocator)
-	name := instance.key(ODIN_DEBUG ? "classeur.dev" : "classeur", platform.config_dir(context.temp_allocator))
-	outcome, owner := instance.acquire({name = name, wait_ms = 2000}, transmute([]u8)message)
-	if outcome == .Forwarded { return 0 }
-	app := app_open({folders = folders})
+	outcome := instance.Outcome.Other_Instance
+	owner: instance.Owner
+	if !standalone {
+		message := strings.join(folders, "\n", context.temp_allocator)
+		name := instance.key(ODIN_DEBUG ? "classeur.dev" : "classeur", platform.config_dir(context.temp_allocator))
+		outcome, owner = instance.acquire({name = name, wait_ms = 2000}, transmute([]u8)message)
+		if outcome == .Forwarded { return 0 }
+	}
+	app := app_open({folders = folders, standalone = standalone})
 	if app == nil {
 		if outcome == .First { instance.owner_stop(&owner) }
 		return 1
@@ -187,6 +197,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	if !o.headless { global_app = app }
 	app.headless = o.headless
 	app.session_path = strings.clone(o.session)
+	app.standalone = o.standalone
 	app.home = o.home != "" ? fs.clean(o.home) : fs.home()
 	app.sidebar = true
 	app.sidebar_px = 210
@@ -237,6 +248,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 app_frame :: proc(app: ^App) {
 	host.host_frame(&app.main)
 	drag_run(app)   // (between frames: it blocks until the drop)
+	tab_out_run(app)
 }
 
 app_close :: proc(app: ^App) {

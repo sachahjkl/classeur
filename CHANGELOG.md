@@ -5,6 +5,14 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Panels split below (Ctrl+Shift+J, or a tab dragged to a panel's bottom quarter): columns of panels, each lower panel
+  with its tabs at its top.
+- The details' columns: shown or hidden from the header's menu (a right click on it), their titles dragged to reorder
+  them.
+- Tabs torn off: a tab dragged out of the window becomes a window of its own (`classeur --window <folder>`); dragged onto
+  another classeur window, it joins its tabs there.
+
 ## [0.3.0] - 2026-11-10
 
 ### Added
