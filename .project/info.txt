@@ -1,0 +1,2 @@
+name=classeur
+description=A fast file manager for Linux and Windows, keyboard first: tabs in panels, a command palette, GoTo, batch rename, undo. Odin on gui_toolkit.
