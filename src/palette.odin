@@ -288,8 +288,10 @@ palette_build :: proc(app: ^App) {
 @(private = "file")
 palette_record :: proc(app: ^App) {
 	p := &app.palette
-	key, mods, ok := ui.key_take()
-	if !ok { return }
+	hk, ok := ui.key_take()
+	// (a key known only by its character, the French ù: classeur's shortcuts name keys)
+	if !ok || hk.key == .None { return }
+	key, mods := hk.key, hk.mods
 	c := &COMMANDS[p.recording]
 	switch {
 	case key == .Escape && mods == {}:

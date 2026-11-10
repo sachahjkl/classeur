@@ -5,6 +5,9 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The site's download button is the reader's system's (Windows or Linux), the other offered under it (the toolkit's).
+
 ## [0.12.0] - 2026-11-10
 
 ### Added
