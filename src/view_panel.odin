@@ -441,7 +441,7 @@ plain_head :: proc(title: string, width, em: f32) {
 }
 
 @(private = "file")
-Check_Draw :: struct { on, some: bool, line, fill, mark: ui.Color }
+Check_Draw :: struct { on, some: bool, line, fill, mark: ui.Color, round: f32 }
 
 @(private = "file")
 check_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
@@ -452,12 +452,12 @@ check_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	box := ui.Rect{c - s * 0.5, c + s * 0.5}
 	w := max(1, s * 0.09)
 	if d.on {
-		draw.rect(dc, box, d.fill, radius = s * 0.12)
+		draw.rect(dc, box, d.fill, radius = s * 0.12 * d.round)
 		// the tick
 		draw.line(dc, {box.min.x + s * 0.22, c.y + s * 0.02}, {box.min.x + s * 0.42, c.y + s * 0.22}, w * 1.6, d.mark)
 		draw.line(dc, {box.min.x + s * 0.42, c.y + s * 0.22}, {box.max.x - s * 0.2, c.y - s * 0.2}, w * 1.6, d.mark)
 	} else {
-		draw.rect(dc, box, d.line, radius = s * 0.12, border = w)
+		draw.rect(dc, box, d.line, radius = s * 0.12 * d.round, border = w)
 		if d.some { draw.rect(dc, {{box.min.x + s * 0.25, c.y - w}, {box.max.x - s * 0.25, c.y + w}}, d.line) }
 	}
 }
@@ -466,7 +466,7 @@ check_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 @(private = "file")
 check_box :: proc(app: ^App, id: string, on, some: bool, width: f32) -> bool {
 	d := ui.frame_new(Check_Draw)
-	d^ = {on, some, ui.color("text"), ui.color("accent"), {1, 1, 1, 1}}
+	d^ = {on, some, ui.color("text"), ui.color("accent"), {1, 1, 1, 1}, corner_k()}
 	ui.next({width = ui.px(width), height = ui.pct(1)})
 	b := ui.custom(fmt.tprintf("###%s", id), check_draw, d, {.Clickable})
 	return ui.signal(b).clicked
@@ -483,7 +483,7 @@ icon_check :: proc(app: ^App, t: ^Tab, e: fs.Entry, row: int, selected: bool, em
 	if ui.parent(cell) {
 		if sig.hovering || selected && t.folder.count > 1 {
 			d := ui.frame_new(Check_Draw)
-			d^ = {selected, false, ui.color("text"), ui.color("accent"), {1, 1, 1, 1}}
+			d^ = {selected, false, ui.color("text"), ui.color("accent"), {1, 1, 1, 1}, corner_k()}
 			ui.next({width = ui.px(width), height = ui.pct(1)})
 			ui.custom("###box", check_draw, d)
 		} else {
@@ -667,7 +667,7 @@ row_look :: proc(app: ^App, focused: bool, em: f32) -> ^Row_Look {
 	look := ui.frame_new(Row_Look)
 	sel := selection_color(app)
 	look^ = {
-		inset = em * ROW_INSET_EM, radius = max(1, ui.scale()) * 2,
+		inset = em * ROW_INSET_EM, radius = max(1, ui.scale()) * 2 * corner_k(),
 		line = ui.color("border") * {1, 1, 1, 0.7},
 		fill = focused ? sel : sel * {1, 1, 1, 0.35},
 		edge = focused ? draw.hex(app.theme_shown.light ? SELECTION_EDGE_LIGHT : SELECTION_EDGE_DARK) : draw.hex(app.theme_shown.light ? SELECTION_EDGE_LIGHT : SELECTION_EDGE_DARK) * {1, 1, 1, 0.45},

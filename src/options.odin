@@ -35,6 +35,7 @@ OPTIONS_PAGES := [?]prefs_page.Page_Info{
 	{category = "look", title = "Appearance", icon = lucide.PALETTE},
 	{category = "files", title = "Files", icon = lucide.FILE},
 	{category = "open", title = "Opening", icon = lucide.FOLDER_OPEN},
+	{category = "updates", title = "Updates", icon = lucide.DOWNLOAD},
 }
 
 options_build :: proc(app: ^App) {
@@ -55,6 +56,8 @@ options_build :: proc(app: ^App) {
 				prefs_save(app)
 				settings_apply(app)
 			},
+			updater = app.updater, update_pref = "update.auto",
+			restart = proc(user: rawptr) { updates_restart((^App)(user)) },
 			custom_names = {"look.theme"},
 			custom = proc(user: rawptr, name: string, em: f32) {
 				app := (^App)(user)

@@ -1496,3 +1496,30 @@ test_icon_checks :: proc(t: ^testing.T) {
 	session.frames(s, 1)
 	testing.expect_value(t, tab.folder.count, len(tab.folder.shown))
 }
+
+// The settings' rounding is the whole interface's (the toolkit's boxes and classeur's own drawings), the density too; the
+// Updates page has the line of update.auto.
+@(test)
+test_settings_look :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1200, 800})
+	context.allocator = runtime.heap_allocator()
+	testing.expect_value(t, ui.rounding(&app.main.state), f32(ROUNDING))
+	_ = config.set_from_string(&app.prefs, "look.rounding", "1.5", .User)
+	_ = config.set_from_string(&app.prefs, "look.density", "compact", .User)
+	settings_apply(app)
+	testing.expect_value(t, ui.rounding(&app.main.state), f32(1.5))
+	testing.expect(t, app.settings.compact, "compact")
+	session.click(s, "check1")
+	session.click(s, "check2")
+	session.key(s, .Comma, {.Ctrl})
+	session.frames(s, 3)
+	when SHOTS { session.save_png(s, "settings_round.png") }
+	session.type_text(s, "update")
+	session.frames(s, 3)
+	testing.expect(t, session.find_text(s, "Update") != nil, "the update line")
+	when SHOTS { session.save_png(s, "settings_update.png") }
+	session.key(s, .Escape)
+	session.key(s, .Escape)
+}

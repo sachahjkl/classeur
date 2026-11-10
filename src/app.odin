@@ -18,6 +18,7 @@ import lucide "gt:lucide"
 import "gt:platform"
 import "gt:render"
 import setup "gt:setup"
+import update "gt:update"
 import "gt:ui"
 import "fs"
 
@@ -110,6 +111,9 @@ App :: struct {
 	logo:        render.Texture,    // its logo, made at its first show
 	logo_made:   bool,
 	launch_after: string,           // owned: the installed copy, started once this one has ended ("": none)
+	updater:        ^update.Updater,   // checks, downloads and puts in place a new classeur (updates.odin; nil headless)
+	update_serial:  int,               // the updater's state last said
+	installed_copy: bool,              // this copy is the installed one: it updates itself by itself
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
 	session_path: string,           // owned: the tests' session file ("": the person's, none when headless)
 	standalone:  bool,              // a window of a torn-off tab (tab_drag.odin): no session
@@ -152,10 +156,12 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 	if outcome == .First { server = instance.serve_start(owner, app_message, app) }
 	platform.show_window(app.main.win)
 	setup_offer(app, setup_asked)
+	updates_start(app)
 	for !platform.is_closed(app.main.win) {
 		host.hosts_wait({&app.main})
 		app_frame(app)
 	}
+	updates_stop(app)
 	instance.serve_stop(server)
 	launch := strings.clone(app.launch_after, context.temp_allocator)
 	setup.finish(&app.setup, setup_config())
@@ -219,7 +225,6 @@ app_open :: proc(o: Open_Options) -> ^App {
 	h.state.icon_font = app.icons   // (the menus' icons are the commands' Lucide ones; the widgets keep the toolkit's marks)
 	h.after_input = FRAMES_AFTER_INPUT
 	dnd_start(app)
-	ui.set_density(&h.state, DENSITY)
 	prefs_open(app)
 	h.partial_redraw = true
 	h.params = app_params
@@ -329,6 +334,12 @@ app_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 		platform.set_dark_title(h.win, !app.theme_shown.light)
 	}
 	bp.disable_zoom = true
+	// (the interface's motion: the system's, unless the settings say always or never)
+	switch app.settings.animations {
+	case "on":  bp.animations = true
+	case "off": bp.animations = false
+	}
+	bp.smooth_scroll = app.settings.smooth_scroll ? .On : .Follow
 	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(26)}, font = app.shared.font, font_size = app.settings.font_size, text_pad = 5, cursor = .Arrow}
 }
 
@@ -358,7 +369,12 @@ THEME_CLASSEUR :: ui.Theme_Def{"Graphite",
 
 // How square the corners are (1: the toolkit's) and how dense the rows (1: the toolkit's).
 ROUNDING :: 0.25
+
+// How round classeur's own drawings are (the rows' pill, the boxes) against the default: 1 at look.rounding's default,
+// 0 square, 8 at the slider's end (the toolkit's boxes follow ui.set_rounding by themselves).
+corner_k :: proc() -> f32 { return ui.rounding(ui.current_state()) / ROUNDING }
 DENSITY  :: 1.0
+DENSITY_COMPACT :: 0.82
 
 // The selection's fill, solid as File Pilot's (the theme's own is a tint).
 SELECTION_DARK  :: 0x0a78a8ff

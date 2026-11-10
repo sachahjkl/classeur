@@ -6,6 +6,7 @@ package classeurtool
 
 import "core:os"
 import release "gt:release"
+import classeur_update "../../src/update"
 
 @(private = "file")
 release_config :: proc() -> release.Config {
@@ -17,6 +18,7 @@ release_config :: proc() -> release.Config {
 		name = "classeur", repository = REPOSITORY, changelog = CHANGELOG,
 		version_file = "src/main.odin", version_line = "APP_VERSION :: ",
 		program = PROGRAM, dist = "build/dist", files = files[:], check = proc() -> int { return run_check(nil) },
+		update = classeur_update.PRODUCT,
 	}
 }
 

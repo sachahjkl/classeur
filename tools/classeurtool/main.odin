@@ -11,6 +11,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 import toolbox "gt:toolbox"
+import classeur_update "../../src/update"
 
 EXIT_USAGE :: 2
 ROOT_MARK  :: "odin.version"
@@ -27,6 +28,7 @@ COMMANDS :: [?]Command{
 	{name = "logo", about = "assets/logo*.png, drawn by the toolkit's paint package", run = run_logo},
 	{name = "package", about = "[version]: build/dist, the archive of a release build and its SHA-256", run = run_package},
 	{name = "notes", about = "<version>: the changelog's section of that version (a release's notes)", run = run_notes},
+	{name = "update", about = "keygen <file> | pubkey | manifest <program> <version> - <out> | verify <manifest> -: classeur's update key and manifests", run = proc(args: []string) -> int { return toolbox.update_command(classeur_update.PRODUCT, args) }},
 	{name = "ship", about = "<version> [--dry-run]: from a clean master: the changelog, APP_VERSION, the checks, a commit, the tag, the push", run = run_ship},
 	{name = "site", about = "build <site> <out> | check: the site's pages from site/ and CHANGELOG.md", run = run_site},
 	{name = "shots", about = "[--out folder]: the pictures of the README, the program's own frames with no window of the system", run = run_shots},

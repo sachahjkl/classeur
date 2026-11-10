@@ -31,6 +31,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app.room = size.x / max(ui.scale(), 0.01)
 	app.window_px = size
 	app.frame += 1
+	updates_follow(app)
 	dnd_frame(app)
 	app.tab_rects, app.tab_rects_last = app.tab_rects_last, app.tab_rects
 	clear(&app.tab_rects)

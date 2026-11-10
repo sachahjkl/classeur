@@ -5,6 +5,18 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Updates: the installed classeur checks its latest release once a day, downloads it, checks its signed manifest and puts
+  it in place (the toolkit's Updater); the settings' Updates page checks now, installs, restarts. Releases publish the
+  programs alone and their signed manifests.
+- Settings: the rounding of the whole interface (a slider, classeur's own drawings too), the density, the animations,
+  smooth scrolling, scroll bars that hide.
+- A row's icon is its box (File Pilot's): the pointer over it, or the row checked among others, shows it; the header's
+  box is over the icons.
+
+### Removed
+- The Round corners switch: the rounding slider replaces it.
+
 ### Changed
 - The site's download button is the reader's system's (Windows or Linux), the other offered under it (the toolkit's).
 

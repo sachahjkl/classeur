@@ -1,7 +1,8 @@
 name: Release
 
 # A version tag vX.Y.Z (classeurtool ship makes it) builds classeur and publishes it: the Linux and the Windows archives,
-# each with its SHA-256, on a GitHub release whose notes are the changelog's section of that version. The Linux job makes
+# each with its SHA-256, the programs alone and their update manifests signed by the secret UPDATE_SIGNING_KEY (what
+# installed copies update themselves from), on a GitHub release whose notes are the changelog's section of that version. The Linux job makes
 # the release; the Windows job adds its archive. The tag must be APP_VERSION's (classeurtool package checks).
 on:
   push:
@@ -26,6 +27,8 @@ jobs:
           odin build tools/classeurtool -collection:gt=ext/gui_toolkit/src -out:build/classeurtool -vet
           build/classeurtool check
       - name: Package
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
         run: build/classeurtool package ${{ github.ref_name }}
       - name: Publish
         env:
@@ -49,6 +52,8 @@ jobs:
       - uses: ./ext/gui_toolkit/.github/actions/setup-odin
       - name: Build, test, package
         shell: pwsh
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
         run: |
           New-Item -ItemType Directory -Force build | Out-Null
           odin build tools/classeurtool -collection:gt=ext/gui_toolkit/src -out:build/classeurtool.exe -vet

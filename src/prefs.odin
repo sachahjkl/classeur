@@ -9,7 +9,11 @@ import "gt:platform"
 import "gt:ui"
 
 PREF_DEFS := [?]config.Def{
-	{name = "look.round_corners", description = "Applies rounding to the corners of the interface: popups, buttons, selections.", kind = .Bool, default = {b = true}},
+	{name = "look.rounding", description = "The rounding of every corner of the interface: buttons, fields, menus, dialogs, the rows' selection, the boxes (0: square).", kind = .Float, default = {f = ROUNDING}, min = 0, max = 2, bounded = true},
+	{name = "look.density", description = "Compact rows and bars fit more on the screen at the same text size.", kind = .String, default = {s = "comfortable"}, choices = {"comfortable", "compact"}},
+	{name = "look.animations", description = "The interface's animations: the system's setting, always, or never.", kind = .String, default = {s = "system"}, choices = {"system", "on", "off"}},
+	{name = "look.smooth_scroll", description = "Scrolling glides to where the wheel or the keys send it, even when the animations are off.", kind = .Bool, default = {b = true}},
+	{name = "look.autohide_scrollbars", description = "The scroll bars show only while the pointer is over what they scroll.", kind = .Bool, default = {b = false}},
 	{name = "look.follow_system", description = "Follows the system's light or dark scheme as it changes; off, classeur stays dark.", kind = .Bool, default = {b = false}},
 	{name = "look.theme", description = "The colours of every part of the window.", kind = .String, default = {s = "Graphite"}},
 	{name = "look.alternating_rows", description = "Paints every other row a shade lighter, to tell the rows apart.", kind = .Bool, default = {b = false}},
@@ -26,11 +30,15 @@ PREF_DEFS := [?]config.Def{
 	{name = "palette.height", description = "The palette's height as last resized (logical pixels; 0: its own).", kind = .Int, default = {i = 0}, hidden = true},
 	{name = "palette.recent", description = "The commands run last from the palette.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "open.single_click", description = "Opens an item with one click instead of two.", kind = .Bool, default = {b = false}},
+	{name = "update.auto", category = "updates", description = "The installed classeur checks for a newer one once a day and installs it; it runs at the next start. A copy installed by a package manager (Nix) is updated by it.", kind = .Bool, default = {b = true}},
 }
 
 // The values the program reads, copied out of the registry.
 Settings :: struct {
-	round_corners:    bool,
+	rounding:         f32,
+	compact:          bool,
+	animations:       string,   // "system", "on", "off" (in the registry)
+	smooth_scroll:    bool,
 	follow_system:    bool,
 	theme:            string,   // in the registry (valid until the next change)
 	alternating_rows: bool,
@@ -74,7 +82,10 @@ prefs_save :: proc(app: ^App) {
 settings_apply :: proc(app: ^App) {
 	p := &app.prefs
 	s := &app.settings
-	s.round_corners = config.bool_of(p, "look.round_corners")
+	s.rounding = f32(config.float_of(p, "look.rounding"))
+	s.compact = config.string_of(p, "look.density") == "compact"
+	s.animations = config.string_of(p, "look.animations")
+	s.smooth_scroll = config.bool_of(p, "look.smooth_scroll")
 	s.follow_system = config.bool_of(p, "look.follow_system")
 	s.theme = config.string_of(p, "look.theme")
 	s.alternating_rows = config.bool_of(p, "look.alternating_rows")
@@ -85,7 +96,10 @@ settings_apply :: proc(app: ^App) {
 	s.single_click = config.bool_of(p, "open.single_click")
 	columns_read(app, config.string_of(p, "view.columns"))
 	keymap_read(app, config.string_of(p, "keys.custom"), config.string_of(p, "keys.aliases"))
-	ui.set_rounding(&app.main.state, s.round_corners ? ROUNDING : 0)
+	ui.set_rounding(&app.main.state, s.rounding)
+	ui.set_density(&app.main.state, s.compact ? DENSITY_COMPACT : DENSITY)
+	ui.set_scrollbar_autohide(&app.main.state, config.bool_of(p, "look.autohide_scrollbars"))
+	updates_auto(app)
 	hidden := config.bool_of(p, "files.show_hidden")
 	if hidden != app.show_hidden {
 		app.show_hidden = hidden
