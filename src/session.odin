@@ -37,11 +37,7 @@ session_save :: proc(app: ^App, later := false) {
 	pl := platform.get_placement(app.main.win)
 	fmt.sbprintf(&b, "window %d %d %d %d %d\n", pl.rect[0], pl.rect[1], pl.rect[2], pl.rect[3], pl.maximized ? 1 : 0)
 	fmt.sbprintf(&b, "sidebar %d %d\n", app.sidebar ? 1 : 0, int(app.sidebar_px))
-	fmt.sbprintf(&b, "focus %d\n", app.focus)
-	for p in app.panels {
-		fmt.sbprintf(&b, "panel %d\n", p.active)
-		for t in p.tabs { fmt.sbprintf(&b, "tab %d %d %s\n", t.zoom, t.locked ? 1 : 0, t.path) }
-	}
+	panels_text(app, &b)
 	for p in app.bookmarks { fmt.sbprintf(&b, "bookmark %s\n", p) }
 	for p in app.recents { fmt.sbprintf(&b, "recent %s\n", p) }
 	if later {
@@ -58,6 +54,56 @@ session_save :: proc(app: ^App, later := false) {
 		return
 	}
 	session_write(path, strings.to_string(b))
+}
+
+// The panels and their tabs as lines (the session's, a layout's).
+panels_text :: proc(app: ^App, b: ^strings.Builder) {
+	fmt.sbprintf(b, "focus %d\n", app.focus)
+	for p in app.panels {
+		fmt.sbprintf(b, "panel %d\n", p.active)
+		for t in p.tabs { fmt.sbprintf(b, "tab %d %d %s\n", t.zoom, t.locked ? 1 : 0, t.path) }
+	}
+}
+
+// Opens the panels and tabs that `text`'s focus, panel and tab lines say, after the panels there are (none: the caller
+// closed them). True: a panel opened.
+panels_open :: proc(app: ^App, text: string) -> bool {
+	rest_text := text
+	panel: ^Panel
+	focus := 0
+	first := len(app.panels)
+	for line in strings.split_lines_iterator(&rest_text) {
+		word, _, rest := strings.partition(line, " ")
+		switch word {
+		case "focus":
+			focus, _ = strconv.parse_int(rest)
+		case "panel":
+			panel = new(Panel)
+			append(&app.panels, panel)
+			panel.active, _ = strconv.parse_int(rest)
+		case "tab":
+			if panel == nil { continue }
+			zoom_text, _, rest2 := strings.partition(rest, " ")
+			lock_text, _, dir := strings.partition(rest2, " ")
+			if dir == "" { continue }
+			zoom, _ := strconv.parse_int(zoom_text)
+			// (a folder gone since: the read, on a worker, goes up to the nearest one still there)
+			tab_open(app, panel, dir)
+			t := panel.tabs[len(panel.tabs) - 1]
+			t.zoom = clamp(zoom, 0, len(ZOOMS) - 1)
+			t.locked = lock_text == "1"
+		}
+	}
+	// (a panel left with no tab, a version's file cut short: dropped)
+	for i := len(app.panels) - 1; i >= first; i -= 1 {
+		if len(app.panels[i].tabs) == 0 {
+			panel_destroy(app.panels[i])
+			ordered_remove(&app.panels, i)
+		}
+	}
+	for p in app.panels { p.active = clamp(p.active, 0, len(p.tabs) - 1) }
+	app.focus = clamp(first + focus, 0, max(len(app.panels) - 1, 0))
+	return len(app.panels) > first
 }
 
 // (written beside, then renamed over: a crash while writing leaves the last session whole)
@@ -77,8 +123,7 @@ session_load :: proc(app: ^App, tabs: bool) -> (opened: bool) {
 	data, err := os.read_entire_file(path, context.temp_allocator)
 	if err != nil { return }
 	text := string(data)
-	panel: ^Panel
-	focus := 0
+	panel_lines := strings.builder_make(context.temp_allocator)
 	place: platform.Placement
 	has_place := false
 	for line in strings.split_lines_iterator(&text) {
@@ -95,39 +140,15 @@ session_load :: proc(app: ^App, tabs: bool) -> (opened: bool) {
 			if len(f) < 2 { continue }
 			app.sidebar = f[0] == "1"
 			if px, ok := strconv.parse_int(f[1]); ok { app.sidebar_px = clamp(f32(px), 140, 600) }
-		case "focus":
-			focus, _ = strconv.parse_int(rest)
-		case "panel":
-			if !tabs { continue }
-			panel = new(Panel)
-			append(&app.panels, panel)
-			panel.active, _ = strconv.parse_int(rest)
-		case "tab":
-			if !tabs || panel == nil { continue }
-			zoom_text, _, rest2 := strings.partition(rest, " ")
-			lock_text, _, dir := strings.partition(rest2, " ")
-			if dir == "" { continue }
-			zoom, _ := strconv.parse_int(zoom_text)
-			// (a folder gone since: the read, on a worker, goes up to the nearest one still there)
-			tab_open(app, panel, dir)
-			t := panel.tabs[len(panel.tabs) - 1]
-			t.zoom = clamp(zoom, 0, len(ZOOMS) - 1)
-			t.locked = lock_text == "1"
+		case "focus", "panel", "tab":
+			if tabs { fmt.sbprintf(&panel_lines, "%s\n", line) }
 		case "bookmark":
 			if rest != "" { append(&app.bookmarks, strings.clone(rest)) }
 		case "recent":
 			if rest != "" && len(app.recents) < RECENTS_MAX { append(&app.recents, strings.clone(rest)) }
 		}
 	}
-	// (a panel left with no tab, a version's file cut short: dropped)
-	for i := len(app.panels) - 1; i >= 0; i -= 1 {
-		if len(app.panels[i].tabs) == 0 {
-			panel_destroy(app.panels[i])
-			ordered_remove(&app.panels, i)
-		}
-	}
-	for p in app.panels { p.active = clamp(p.active, 0, len(p.tabs) - 1) }
-	app.focus = clamp(focus, 0, max(len(app.panels) - 1, 0))
+	opened = tabs && panels_open(app, strings.to_string(panel_lines))
 	if has_place && !app.headless { platform.set_placement(app.main.win, place) }
-	return len(app.panels) > 0
+	return
 }

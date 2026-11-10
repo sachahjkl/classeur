@@ -40,7 +40,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	append(&app.text_keys_before, ..app.text_keys[:])
 	clear(&app.text_keys)
 	typing := slice.contains(app.text_keys_before[:], ui.focus_key())
-	if !app.palette.open && !app.goto.open && !app.batch.open && !app.confirm.open && !app.conflict.open && !app.options.open {
+	if !app.palette.open && !app.goto.open && !app.batch.open && !app.layouts.naming && !app.confirm.open && !app.conflict.open && !app.options.open {
 		commands_keys(app, typing)
 		if !typing { list_keys(app) }
 	}
@@ -57,6 +57,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	palette_build(app)
 	goto_build(app)
 	batch_build(app, em)
+	layouts_build(app, em)
 	options_build(app)
 	dialogs_build(app, em)
 	jobs_tidy(app)
@@ -90,6 +91,19 @@ icon_action :: proc(app: ^App, id, g, tip: string, em: f32, enabled := true, on 
 		}
 	}
 	return enabled && sig.clicked
+}
+
+// A tooltip after the pointer rests on `sig`'s box: its lines, one under the other.
+hover_tip :: proc(sig: ui.Signal, lines: ..string) {
+	if !ui.hovered_for(sig, 0.5) || len(lines) == 0 { return }
+	if ui.tooltip() {
+		for l, i in lines {
+			if l == "" { continue }
+			if i > 0 { ui.push_tags("weak") }
+			ui.tooltip_text(fmt.tprintf("%s###tip%d", shown_text(l), i))
+			if i > 0 { ui.pop_tags() }
+		}
+	}
 }
 
 // A thin vertical line between groups of buttons.
@@ -210,6 +224,7 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 				}
 			}
 			if sig.pressed { p.active = i; app.focus = index }
+			if !app.tab_drag.active { hover_tip(sig, home_path(app, t.path), t.locked ? "Locked: folders open in a new tab" : "") }
 			append(&app.tab_rects, Tab_Rect{index, i, tab.rect})
 			tab_drag_signal(app, index, i, sig)
 			if app.tab_drag.active && app.tab_drag.panel == index && app.tab_drag.index == i { tab_drag_mark(tab) }

@@ -176,6 +176,7 @@ crumbs :: proc(app: ^App, t: ^Tab, em: f32) {
 			if ui.tags("ghost_button") { sig = ui.button(fmt.tprintf("%s###crumb%d", shown_text(c.name), at)) }
 			if !last { ui.pop_tags() }
 			if sig.clicked && !last { tab_go(app, t, c.path) }
+			hover_tip(sig, home_path(app, c.path), last ? "" : "A middle click opens it in a new tab")
 			if sig.middle_clicked { tab_open(app, current_panel(app), c.path, current_panel(app).active + 1) }
 		}
 		ui.spacer(ui.fill())
@@ -268,6 +269,7 @@ column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: 
 		folder_sort_by(&t.folder, key)
 		app.default_sort = t.folder.sort
 	}
+	hover_tip(sig, on ? (s.descending ? "Sorted down: a click sorts up" : "Sorted up: a click sorts down") : fmt.tprintf("Sort by %s", title))
 }
 
 @(private = "file")
@@ -369,6 +371,7 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 		check := false
 		if ui.parent(sig.box) { check = entry_row(app, t, e, row, selected, wide, names_only, em) }
 		if row == t.vl.sel { t.cursor_rect = sig.box.rect }
+		if !app.drag_started && !app.band.active { entry_tip(app, t, e, sig) }
 		if check {
 			clicked = true
 			folder_pick(f, row, toggle = true)
@@ -783,4 +786,15 @@ drop_mark :: proc(b: ^ui.Box) {
 		draw.rect(dc, b.rect, ui.color("accent"), border = max(2, ui.scale() * 2))
 	}
 	b.custom_user = m
+}
+
+// What a row says when the pointer rests on it: its whole name (cut short in the row), its type, size and date; in the
+// search of every folder below, the folder it is in.
+entry_tip :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, sig: ui.Signal) {
+	if !ui.hovered_for(sig, 0.8) { return }
+	name := fs.base(e.name)
+	where_ := ""
+	if t.folder.flat && fs.parent(e.name) != "" { where_ = fmt.tprintf("In %s", home_path(app, fs.join(t.path, fs.parent(e.name), context.temp_allocator))) }
+	facts := e.kind == .Directory ? fmt.tprintf("%s · %s", type_text(e^), date_text(app, e.mtime)) : fmt.tprintf("%s · %s · %s", type_text(e^), size_text(e.size), date_text(app, e.mtime))
+	hover_tip(sig, name, facts, where_)
 }

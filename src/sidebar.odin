@@ -141,6 +141,7 @@ side_folder :: proc(app: ^App, t: ^Tab, id, path, name: string, here: string, em
 		if app.drop_hover == path { drop_mark(ui.parent_box()) }
 	}
 	go_from(app, t, sig, path)
+	hover_tip(sig, home_path(app, path))
 }
 
 @(private = "file")
@@ -158,6 +159,7 @@ side_row :: proc(app: ^App, id, path: string, name: string, here: bool, em: f32)
 		drop_zone(app, ui.parent_box().rect, path)
 		if app.drop_hover == path { drop_mark(ui.parent_box()) }
 	}
+	hover_tip(sig, home_path(app, path))
 	return
 }
 
@@ -204,11 +206,6 @@ side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, e
 		}
 		ui.spacer(ui.px(em * 0.8))
 	}
-	if ui.hovered_for(sig, 0.5) && sp.total > 0 {
-		if ui.tooltip() {
-			ui.next({width = ui.text_size(em * 0.6), height = ui.px(ui.dense(em * 1.8))})
-			ui.label(fmt.tprintf("%s free of %s###tip", size_text(sp.free), size_text(sp.total)))
-		}
-	}
+	hover_tip(sig, v.path, sp.total > 0 ? fmt.tprintf("%s free of %s", size_text(sp.free), size_text(sp.total)) : "")
 	return sig.clicked
 }

@@ -106,6 +106,7 @@ item :: proc(app: ^App, t: ^Tab, row: int, look: ^Row_Look, line: bool, width, h
 		drop_zone(app, b.rect, dir)
 		if app.drop_hover == dir { drop_mark(b) }
 	}
+	if !app.drag_started && !app.band.active { entry_tip(app, t, e, sig) }
 	if sig.right_clicked {
 		if !folder_row_selected(f, row) { folder_pick(f, row) }
 		f.cursor = row

@@ -459,3 +459,51 @@ act_flat :: proc(app: ^App) {
 	tab_load(app, t)
 	if t.flat { t.focus_due = .Filter }
 }
+
+act_view_list :: proc(app: ^App) { if t := current_tab(app); t != nil { tab_set_zoom(app, t, 1) } }
+act_view_columns :: proc(app: ^App) { if t := current_tab(app); t != nil { tab_set_zoom(app, t, 2) } }
+
+act_types :: proc(app: ^App) { if t := current_tab(app); t != nil { types_menu_open(app, t) } }
+act_files_only :: proc(app: ^App) { if t := current_tab(app); t != nil { folder_set_kinds(&t.folder, .Files) } }
+act_folders_only :: proc(app: ^App) { if t := current_tab(app); t != nil { folder_set_kinds(&t.folder, .Folders) } }
+act_every_type :: proc(app: ^App) {
+	if t := current_tab(app); t != nil {
+		folder_set_kinds(&t.folder, .All)
+		folder_all_types(&t.folder, true)
+	}
+}
+
+// The names of the selection (or of the cursor's row), one per line.
+act_copy_name :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	b := strings.builder_make(context.temp_allocator)
+	targets := folder_targets(&t.folder)
+	for e, i in targets {
+		if i > 0 { strings.write_byte(&b, '\n') }
+		strings.write_string(&b, fs.base(e.name))
+	}
+	if len(targets) == 0 { return }
+	platform.set_clipboard(app.main.win, strings.to_string(b))
+	say(app, len(targets) > 1 ? "%d names copied." : "The name is copied.", len(targets))
+}
+
+// In the search of every folder below: the folder of the item at the cursor, the item at the cursor there.
+act_open_folder :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	e := folder_cursor_entry(&t.folder)
+	if e == nil { return }
+	full := fs.join(t.path, e.name, context.temp_allocator)
+	tab_go(app, t, fs.parent(full))
+	delete(t.reveal_name)
+	t.reveal_name = strings.clone(fs.base(full))
+}
+
+// The tab `i` of the current panel (-1: the last).
+tab_pick :: proc(app: ^App, i: int) {
+	p := current_panel(app)
+	if p == nil || len(p.tabs) == 0 { return }
+	at := i < 0 ? len(p.tabs) - 1 : i
+	if at < len(p.tabs) { p.active = at }
+}

@@ -924,3 +924,42 @@ test_tab_drag :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(app.panels[0].tabs), 2)
 	testing.expect_value(t, len(app.panels[1].tabs), 1)
 }
+
+// No two commands share a key; every command has one.
+@(test)
+test_keys :: proc(t: ^testing.T) {
+	seen := make(map[Shortcut]string, context.temp_allocator)
+	for c in COMMANDS {
+		testing.expectf(t, c.keys[0].key != .None, "%s has a key", c.id)
+		for k in c.keys {
+			if k.key == .None { continue }
+			if other, taken := seen[k]; taken { testing.expectf(t, false, "%s and %s share %s", other, c.id, shortcut_text(k)) }
+			seen[k] = c.id
+		}
+	}
+}
+
+@(test)
+test_layouts :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir})
+	context.allocator = runtime.heap_allocator()
+	app.session_path = strings.clone(fs.join(dir, ".session", context.temp_allocator))
+	// two panels saved as "work"
+	panel_open(app, fs.join(dir, "Documents", context.temp_allocator))
+	wait_read(s)
+	layout_save(app, "work")
+	// back to one panel, then the layout again
+	for len(app.panels) > 1 { panel_close(app, app.panels[len(app.panels) - 1]) }
+	testing.expect_value(t, len(app.panels), 1)
+	testing.expect(t, layout_open(app, "work"))
+	wait_read(s)
+	testing.expect_value(t, len(app.panels), 2)
+	testing.expect_value(t, panel_tab(app.panels[1]).path, fs.join(dir, "Documents", context.temp_allocator))
+	// read again from its file
+	layouts_free(&app.layouts)
+	testing.expect(t, layout_open(app, "work"))
+	wait_read(s)
+	testing.expect_value(t, len(app.panels), 2)
+}
