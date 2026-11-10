@@ -72,6 +72,7 @@ App :: struct {
 	band:        Band,              // the rectangle selection (band.odin)
 	layouts:     Layouts,           // the layouts saved by name (layouts.odin)
 	keymap:      Keymap,            // the person's keys and aliases (keymap.odin)
+	jobs_view:   Jobs_View,         // the jobs' window (jobs_view.odin)
 	tab_drag:    Tab_Drag,          // a tab dragged (tab_drag.odin)
 	columns_order: [dynamic]Column, // the details' columns after Name, in their order, the ones shown (view.columns)
 	column_rects: [dynamic]Column_Rect,  // the columns' titles as last laid out (a title dragged is placed by them)

@@ -5,6 +5,15 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The columns view filled column by column, scrolled sideways (the wheel too); Up and Down along a column, Left and
+  Right across.
+- The jobs' window (Ctrl+Alt+J, or the footer's button): every copy, move and trash of the session, what failed, Cancel,
+  Retry.
+
+### Fixed
+- The errors of the jobs' window and of batch rename in the theme's red, not a magenta.
+
 ## [0.6.0] - 2026-11-10
 
 ### Added

@@ -24,8 +24,6 @@ Conflict :: enum u8 { Ask, Replace, Skip, Keep_Both }
 JOB_VERB := [Job_Kind]string{.Copy = "Copying", .Move = "Moving", .Trash = "Moving to the trash", .Delete = "Deleting", .Restore = "Putting back"}
 JOB_DONE := [Job_Kind]string{.Copy = "copied", .Move = "moved", .Trash = "moved to the trash", .Delete = "deleted", .Restore = "put back"}
 
-// How long an ended job stays in the status bar.
-JOB_SHOWN_MS :: 4000
 
 Job :: struct {
 	id:      u64,
@@ -163,15 +161,20 @@ job_current :: proc(job: ^Job, allocator := context.temp_allocator) -> string {
 	return strings.clone(job.current, allocator)
 }
 
-// Forgets the jobs that ended some time ago (each frame).
+// The ended jobs kept for the jobs' window (jobs_view.odin): the oldest go past this many.
+JOBS_KEPT :: 50
+
+// Forgets the oldest ended jobs past JOBS_KEPT (each frame). (The status bar shows a job only while it runs.)
 jobs_tidy :: proc(app: ^App) {
-	now := ui.now_ms()
 	j := &app.jobs
-	for i := 0; i < len(j.list); {
+	ended := 0
+	for job in j.list { if job.ended_ms > 0 { ended += 1 } }
+	for i := 0; i < len(j.list) && ended > JOBS_KEPT; {
 		job := j.list[i]
-		if job.ended_ms > 0 && now - job.ended_ms > JOB_SHOWN_MS {
+		if job.ended_ms > 0 {
 			ordered_remove(&j.list, i)
 			job_free(job)
+			ended -= 1
 			continue
 		}
 		i += 1
@@ -469,5 +472,4 @@ job_ended :: proc(data: rawptr, word: u64) {
 	}
 	job.ended_ms = ui.now_ms()
 	app_frames(app)
-	ui.wake_within(&app.main.state, JOB_SHOWN_MS + 1)   // (then jobs_tidy forgets it)
 }

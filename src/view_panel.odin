@@ -5,6 +5,7 @@ package classeur
 // same per frame), and its footer (the filter, the counts). Its tabs are in the row at the top of the window (view.odin).
 
 import "core:fmt"
+import "core:sync"
 import "gt:platform"
 import config "gt:config"
 import "core:strings"
@@ -755,7 +756,16 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 		filter_field(app, t, em)
 		cell_rule()
 		ui.spacer(ui.fill())
-		if focused { job_status(app, em) }
+		if focused {
+			job_status(app, em)
+			failed := 0
+			for job in app.jobs.list { if sync.atomic_load(&job.state) == .Failed { failed += 1 } }
+			if len(app.jobs.list) > 0 {
+				if ui.tags("weak") {
+					if icon_action(app, "jobs", lucide.LAYERS_2, failed > 0 ? fmt.tprintf("The jobs: %d failed (Ctrl+Alt+J)", failed) : command_tip("jobs"), em, on = failed > 0) { act_jobs(app) }
+				}
+			}
+		}
 		cell_rule()
 		ui.next({width = ui.children_sum(), height = ui.pct(1)})
 		if ui.row(.Center, {}, "###stats") {

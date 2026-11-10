@@ -10,6 +10,7 @@ import "core:math"
 import "core:os"
 import "core:slice"
 import "core:strings"
+import "core:sync"
 import "core:testing"
 import "gt:platform"
 import config "gt:config"
@@ -1308,4 +1309,27 @@ test_columns_view :: proc(t: ^testing.T) {
 	session.wheel(s, (box.rect.min + box.rect.max) * 0.5, {0, 3})
 	session.frames(s, 2)
 	testing.expect(t, ui.box_from_key(tab.cols_key).view_target.x > before, "the wheel down: the next columns")
+}
+
+// The jobs' window: a copy that failed, its error shown; Retry once the file is there copies it.
+@(test)
+test_jobs_view :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir})
+	context.allocator = runtime.heap_allocator()
+	missing := fs.join(dir, "later.txt", context.temp_allocator)
+	job_add(app, .Copy, {missing}, fs.join(dir, "Documents", context.temp_allocator))
+	wait_jobs(s)
+	testing.expect_value(t, sync.atomic_load(&app.jobs.list[0].state), Job_State.Failed)
+	session.key(s, .J, {.Ctrl, .Alt})
+	session.frames(s, 2)
+	testing.expect(t, app.jobs_view.open)
+	testing.expect(t, session.find_text(s, "1 failed") != nil, "it says so")
+	when SHOTS { session.save_png(s, "jobs.png") }
+	_ = os.write_entire_file(missing, transmute([]u8)string("now"))
+	session.click(s, "retry")
+	wait_jobs(s)
+	testing.expect(t, fs.exists(fs.join(dir, "Documents/later.txt", context.temp_allocator)), "retried: copied")
+	testing.expect_value(t, len(app.jobs.list), 2)
 }

@@ -276,7 +276,7 @@ batch_build :: proc(app: ^App, em: f32) {
 						}
 						if ui.tags("weak") { glyph(app, lucide.ARROW_RIGHT, em * 1.4) }
 						ui.spacer(ui.px(em * 0.4))
-						ui.next({width = ui.fill(), height = ui.pct(1), fg = problem != "" ? ui.color("danger") : nil})
+						ui.next({width = ui.fill(), height = ui.pct(1), fg = problem != "" ? ui.color("bad text") : nil})
 						ui.label(problem != "" ? fmt.tprintf("%s (%s)###new", shown_text(news[i]), problem) : fmt.tprintf("%s###new", shown_text(news[i])))
 						ui.spacer(ui.px(em * 0.9))
 					}
