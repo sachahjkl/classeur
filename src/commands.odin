@@ -114,15 +114,11 @@ COMMANDS := [?]Command{
 // The keys of the commands, before the interface sees them. `typing`: a text field has the keyboard, and only the
 // commands marked `in_text` run.
 commands_keys :: proc(app: ^App, typing: bool) {
+	// (a sequence's first chord waits for its second a moment: SEQUENCE_MS)
+	if app.keymap.pending.key != .None && ui.now_ms() > app.keymap.pending_until { app.keymap.pending = {} }
 	for &c in COMMANDS {
 		if typing && !c.in_text { continue }
-		for k in c.keys {
-			if k.key == .None { continue }
-			if ui.key_press(k.key, k.mods) {
-				c.run(app)
-				break
-			}
-		}
+		if bindings_pressed(app, &c) { c.run(app) }
 	}
 }
 
@@ -153,7 +149,6 @@ KEY_NAMES := [?]string{
 	",", ".", "/", "-", "=",
 }
 
-@(private = "file")
 key_name :: proc(k: platform.Key) -> string {
 	i := int(k)
 	return i < len(KEY_NAMES) ? KEY_NAMES[i] : "?"

@@ -12,6 +12,7 @@ import "core:slice"
 import "core:strings"
 import "core:testing"
 import "gt:platform"
+import config "gt:config"
 import "gt:png"
 import "gt:testkit"
 import "gt:ui"
@@ -1133,4 +1134,45 @@ test_tab_out :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(p.tabs), 2)
 	testing.expect_value(t, current_tab(app).path, photos)
 	delete(documents)
+}
+
+// A key of one's own from the palette: a sequence (Ctrl+K, then T) bound to "New tab", which then opens one; an alias.
+@(test)
+test_own_keys :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir})
+	session.key(s, .P, {.Ctrl, .Shift})
+	session.type_text(s, "new tab")
+	session.frames(s, 2)
+	testing.expect_value(t, COMMANDS[palette_first(app)].id, "tab_new")
+	session.key(s, .Return, {.Ctrl})
+	session.frames(s, 1)
+	testing.expect(t, app.palette.recording >= 0, "recording")
+	session.key(s, .K, {.Ctrl})
+	session.key(s, .T)
+	session.key(s, .Return)
+	session.frames(s, 1)
+	testing.expect_value(t, app.palette.recording, -1)
+	testing.expect_value(t, binding_text(app.keymap.custom["tab_new"]), "Ctrl+K, T")
+	testing.expect_value(t, ui.field_string(&app.palette.field), "new tab")
+	// an alias: "nt" for it
+	ui.field_set(&app.palette.field, "nt")
+	session.frames(s, 1)
+	session.key(s, .Return, {.Alt})
+	session.key(s, .Escape)
+	testing.expect(t, alias_command(app, "nt") != nil && alias_command(app, "nt").id == "tab_new")
+	// the sequence opens a tab; Ctrl+T alone no longer does (its own keys gave way)
+	before := len(current_panel(app).tabs)
+	session.key(s, .K, {.Ctrl})
+	session.key(s, .T)
+	session.frames(s, 1)
+	testing.expect_value(t, len(current_panel(app).tabs), before + 1)
+	session.key(s, .T, {.Ctrl})
+	session.frames(s, 1)
+	testing.expect_value(t, len(current_panel(app).tabs), before + 1)
+	// the preference holds them, read again as they were
+	testing.expect_value(t, config.string_of(&app.prefs, "keys.custom"), "tab_new=Ctrl+K, T")
+	b, ok := binding_parse("Ctrl+K, T")
+	testing.expect(t, ok && b == app.keymap.custom["tab_new"])
 }

@@ -6,7 +6,9 @@ package classeur
 import "core:fmt"
 import "core:math"
 import "core:slice"
+import "core:strings"
 import "gt:draw"
+import lucide "gt:lucide"
 import "gt:ui"
 
 PALETTE_ROWS :: 10
@@ -18,6 +20,9 @@ Palette :: struct {
 	scroll:    int,
 	focus_due: bool,
 	mouse:     [2]f32,
+	recording: int,         // the command whose keys are recorded (-1: none; keymap.odin)
+	chords:    [2]Shortcut, // what was pressed so far
+	count:     int,
 }
 
 palette_free :: proc(p: ^Palette) {
@@ -31,6 +36,7 @@ palette_open :: proc(app: ^App) {
 	ui.field_clear(&p.field)
 	p.sel, p.scroll = 0, 0
 	p.focus_due = true
+	p.recording = -1
 }
 
 @(private = "file")
@@ -47,14 +53,28 @@ palette_build :: proc(app: ^App) {
 	pw := min(em * 44, app.room * ui.scale() * 0.92)
 
 	rows := make([dynamic]Palette_Row, context.temp_allocator)
-	needle := ui.field_string(&p.field)
+	needle := strings.clone(ui.field_string(&p.field), context.temp_allocator)
 	for c, i in COMMANDS {
 		score, ranges, ok := ui.fuzzy_score(needle, c.title)
 		if ok { append(&rows, Palette_Row{i, score, ranges}) }
 	}
 	slice.stable_sort_by(rows[:], proc(a, b: Palette_Row) -> bool { return a.score > b.score })
+	// (an alias typed whole: its command first)
+	if a := alias_command(app, needle); a != nil {
+		for &row, k in rows {
+			if COMMANDS[row.command].id != a.id { continue }
+			first := row
+			ordered_remove(&rows, k)
+			inject_at(&rows, 0, first)
+			break
+		}
+	}
 	n := len(rows)
-	if n > 0 {
+	// recording a command's keys: what is pressed is taken (Enter keeps it, Escape forgets it, Backspace first: its
+	// own keys again)
+	if p.recording >= 0 {
+		palette_record(app)
+	} else if n > 0 {
 		if ui.key_press(.Down) { p.sel = (p.sel + 1) % n }
 		if ui.key_press(.Up) { p.sel = (p.sel + n - 1) % n }
 		if ui.key_press(.Page_Down) { p.sel = min(p.sel + PALETTE_ROWS, n - 1) }
@@ -77,9 +97,19 @@ palette_build :: proc(app: ^App) {
 				input_key := ui.key_from_string(ui.parent_box().key, "###pal_input")
 				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.3))})
 				res := ui.line_edit("###pal_input", &p.field, "Type a command")
-				if res.changed { p.sel, p.scroll = 0, 0 }
+				if res.changed && p.recording >= 0 {
+					ui.field_set(&p.field, needle)   // (the keys recorded are not letters of the search)
+				} else if res.changed {
+					p.sel, p.scroll = 0, 0
+				}
 				if res.cancelled { p.open = false }
-				if res.committed && n > 0 { run = rows[p.sel].command }
+				if res.committed && n > 0 && p.recording < 0 { run = rows[p.sel].command }
+				// Ctrl+Enter: record the chosen command's keys; Alt+Enter: the letters typed, its alias
+				if p.recording < 0 && n > 0 && ui.key_press(.Return, {.Ctrl}) { p.recording, p.count = rows[p.sel].command, 0 }
+				if p.recording < 0 && n > 0 && ui.key_press(.Return, {.Alt}) && strings.trim_space(needle) != "" {
+					keymap_alias(app, needle, COMMANDS[rows[p.sel].command].id)
+					say(app, "%s: an alias of %s.", needle, COMMANDS[rows[p.sel].command].title)
+				}
 				if p.focus_due { ui.set_focus(input_key); p.focus_due = false }
 				ui.spacer(ui.px(em * 0.8))
 			}
@@ -103,10 +133,20 @@ palette_build :: proc(app: ^App) {
 						if ui.tags("weak") { glyph(app, c.icon, em * 1.8) }
 						ui.next({width = ui.fill(), height = ui.pct(1)})
 						ui.label_fuzzy(c.title, r.ranges)
-						for k, ki in c.keys {
-							if k.key == .None { continue }
-							if ki > 0 { ui.spacer(ui.px(em * 0.3)) }
-							ui.kbd(shortcut_text(k))
+						if p.recording == r.command {
+							ui.push_tags("selected")
+							ui.kbd(p.count == 0 ? "Press the keys…" : binding_text(Binding{p.chords}))
+							ui.pop_tags()
+						} else {
+							for b, bi in command_bindings(app, &COMMANDS[r.command]) {
+								if bi > 0 { ui.spacer(ui.px(em * 0.3)) }
+								ui.kbd(binding_text(b))
+							}
+						}
+						// File Pilot's +: a key of one's own for it
+						if selected || sig.hovering {
+							ui.spacer(ui.px(em * 0.3))
+							if icon_action(app, fmt.tprintf("bind_%s", c.id), lucide.PLUS, "A key of your own (Ctrl+Enter)", em) { p.recording, p.count = r.command, 0 }
 						}
 						ui.spacer(ui.px(em * 0.5))
 					}
@@ -128,7 +168,8 @@ palette_build :: proc(app: ^App) {
 				ui.spacer(ui.px(em * 0.9))
 				if ui.tags("weak") {
 					ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 0.85)})
-					ui.label(fmt.tprintf("%d of %d commands   Up, Down: choose   Enter: run   Esc: close###pal_count", n, len(COMMANDS)))
+					help := p.recording >= 0 ? "Press the keys (two for a sequence)   Enter: keep   Backspace: its own keys   Esc: cancel" : "Up, Down: choose   Enter: run   Ctrl+Enter: a key of your own   Alt+Enter: the letters typed, an alias"
+					ui.label(fmt.tprintf("%d of %d commands   %s###pal_count", n, len(COMMANDS), help))
 				}
 			}
 		}
@@ -138,4 +179,39 @@ palette_build :: proc(app: ^App) {
 		if t := current_tab(app); t != nil { t.focus_due = .List }
 		COMMANDS[run].run(app)
 	}
+}
+
+// The keys pressed while a command's keys are recorded.
+@(private = "file")
+palette_record :: proc(app: ^App) {
+	p := &app.palette
+	key, mods, ok := ui.key_take()
+	if !ok { return }
+	c := &COMMANDS[p.recording]
+	switch {
+	case key == .Escape && mods == {}:
+		p.recording = -1
+	case key == .Return && mods == {} && p.count > 0:
+		keymap_bind(app, c.id, Binding{p.chords})
+		say(app, "%s: %s.", c.title, binding_text(Binding{p.chords}))
+		p.recording = -1
+	case key == .Backspace && mods == {} && p.count == 0:
+		keymap_unbind(app, c.id)
+		say(app, "%s: its own keys again.", c.title)
+		p.recording = -1
+	case:
+		if p.count == 2 { p.count = 0; p.chords = {} }
+		p.chords[p.count] = Shortcut{key, mods}
+		p.count += 1
+	}
+}
+
+// The command of the palette's first row as last built (the tests).
+palette_first :: proc(app: ^App) -> int {
+	best, at := -1, -1
+	for c, i in COMMANDS {
+		score, _, ok := ui.fuzzy_score(ui.field_string(&app.palette.field), c.title)
+		if ok && score > best { best, at = score, i }
+	}
+	return at
 }
