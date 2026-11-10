@@ -63,7 +63,7 @@ COMMANDS := [?]Command{
 	{id = "trash", title = "Move to the trash", icon = lucide.TRASH_2, keys = {{.Delete, {}}, {}}, run = act_trash},
 	{id = "delete", title = "Delete for good", icon = lucide.TRASH_2, keys = {{.Delete, {.Shift}}, {}}, run = act_delete},
 	{id = "undo", title = "Undo the last change to files", icon = lucide.UNDO_2, keys = {{.Z, {.Ctrl}}, {}}, run = act_undo},
-	{id = "redo", title = "Redo: do again what was undone", icon = lucide.REFRESH_CW, keys = {{.Y, {.Ctrl}}, {.Z, {.Ctrl, .Shift}}}, run = act_redo},
+	{id = "redo", title = "Redo: do again what was undone", icon = lucide.REDO_2, keys = {{.Y, {.Ctrl}}, {.Z, {.Ctrl, .Shift}}}, run = act_redo},
 	{id = "jobs_cancel", title = "Cancel the copies and moves", icon = lucide.X, run = act_jobs_cancel},
 	{id = "rename", title = "Rename", icon = lucide.PENCIL, keys = {{.F2, {}}, {}}, run = act_rename},
 	{id = "new_folder", title = "New folder", icon = lucide.FOLDER_PLUS, keys = {{.N, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_new_folder},

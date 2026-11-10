@@ -35,6 +35,9 @@ App :: struct {
 	thumb_pool:  Pool,              // the thumbnails of the grid (thumbs.odin)
 	thumbs:      map[string]Thumb,  // by path (the keys owned)
 	icons_cache: map[string]Sys_Icon,   // the system's icons by key and size (icons.odin)
+	icon_keys:   map[string]string,     // a file's name -> its icon's key (both owned)
+	vol_from, vol_to: string,           // owned: the last pair asked whether on one volume (a drag), and the answer
+	vol_same:    bool,
 	frame:       u64,               // the frames built (what a thumbnail was last used in)
 	default_zoom: int,             // the measures of folders (measure.odin)
 	measures:    map[string]Measure,   // by path (the keys owned)
@@ -241,6 +244,7 @@ app_free :: proc(app: ^App) {
 	places_free(app)
 	delete(app.places)
 	palette_free(&app.palette)
+	entry_menu_free(&app.menu)
 	goto_free(&app.goto)
 	batch_free(&app.batch)
 	band_free(&app.band)
@@ -259,6 +263,8 @@ app_free :: proc(app: ^App) {
 	delete(app.bookmarks)
 	undo_free(app)
 	dnd_free(app)
+	delete(app.vol_from)
+	delete(app.vol_to)
 	ui.field_destroy(&app.side_filter)
 	delete(app.volume_space)
 	delete(app.panel_rects)

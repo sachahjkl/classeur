@@ -37,7 +37,7 @@ drop_target :: proc(app: ^App, pos: [2]f32) -> string {
 
 // What a drop of `files` into `dir` would do.
 @(private = "file")
-drop_effect :: proc(files: []string, dir: string, allowed: platform.Drop_Effects, mods: platform.Modifiers) -> Maybe(platform.Drop_Effect) {
+drop_effect :: proc(app: ^App, files: []string, dir: string, allowed: platform.Drop_Effects, mods: platform.Modifiers) -> Maybe(platform.Drop_Effect) {
 	if dir == "" || len(files) == 0 { return nil }
 	all_here := true
 	for f in files {
@@ -46,7 +46,7 @@ drop_effect :: proc(files: []string, dir: string, allowed: platform.Drop_Effects
 		if dir == f || strings.has_prefix(dir, strings.concatenate({f, fs.SEPARATOR_STRING}, context.temp_allocator)) { return nil }
 	}
 	if all_here { return nil }
-	want: platform.Drop_Effect = fs.same_volume(files[0], dir) ? .Move : .Copy
+	want: platform.Drop_Effect = same_volume_cached(app, files[0], dir) ? .Move : .Copy
 	if .Ctrl in mods { want = .Copy }
 	if .Shift in mods { want = .Move }
 	if .Alt in mods { return nil }
@@ -57,15 +57,28 @@ drop_effect :: proc(files: []string, dir: string, allowed: platform.Drop_Effects
 	return want
 }
 
+// Whether the files' folder and the target are on one volume, asked once per pair (a drag sends an event per move).
+@(private = "file")
+same_volume_cached :: proc(app: ^App, file, dir: string) -> bool {
+	from := fs.parent(file)
+	if app.vol_from == from && app.vol_to == dir { return app.vol_same }
+	delete(app.vol_from)
+	delete(app.vol_to)
+	app.vol_from, app.vol_to = strings.clone(from), strings.clone(dir)
+	app.vol_same = fs.same_volume(from, dir)
+	return app.vol_same
+}
+
 // The answer to a Drop_* at `pos`: the effect, and for a Drop the job.
 drop_answer :: proc(app: ^App, kind: platform.Event_Kind, pos: [2]f32, mods: platform.Modifiers, allowed: platform.Drop_Effects) -> Maybe(platform.Drop_Effect) {
 	data := platform.drop_data(app.main.win)
 	if kind == .Drop_Leave || data == nil {
+		delete(app.drop_hover)
 		app.drop_hover = ""
 		return nil
 	}
 	dir := drop_target(app, pos)
-	effect := drop_effect(data.files[:], dir, allowed, mods)
+	effect := drop_effect(app, data.files[:], dir, allowed, mods)
 	delete(app.drop_hover)
 	app.drop_hover = effect != nil ? strings.clone(dir) : ""
 	if kind == .Drop {
@@ -133,5 +146,5 @@ dnd_free :: proc(app: ^App) {
 
 // The tests' way to ask drop_effect.
 drop_effect_for_test :: proc(app: ^App, files: []string, dir: string) -> Maybe(platform.Drop_Effect) {
-	return drop_effect(files, dir, {.Copy, .Move}, {})
+	return drop_effect(app, files, dir, {.Copy, .Move}, {})
 }

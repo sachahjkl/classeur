@@ -13,7 +13,7 @@ package classeur
 //   recent <path>
 //
 // A line not understood is skipped (a file of another version loses that line only). A tab whose folder is gone opens
-// at the nearest folder above it that is still there.
+// at the nearest folder above it that is still there (the read of the tab goes up: tab.odin's load_done).
 
 import "core:fmt"
 import "core:os"
@@ -89,9 +89,10 @@ session_load :: proc(app: ^App, tabs: bool) -> (opened: bool) {
 			lock_text, _, dir := strings.partition(rest2, " ")
 			if dir == "" { continue }
 			zoom, _ := strconv.parse_int(zoom_text)
-			app.default_zoom = clamp(zoom, 0, len(ZOOMS) - 1)
-			tab_open(app, panel, nearest_folder(dir))
+			// (a folder gone since: the read, on a worker, goes up to the nearest one still there)
+			tab_open(app, panel, dir)
 			t := panel.tabs[len(panel.tabs) - 1]
+			t.zoom = clamp(zoom, 0, len(ZOOMS) - 1)
 			t.locked = lock_text == "1"
 		case "bookmark":
 			if rest != "" { append(&app.bookmarks, strings.clone(rest)) }
@@ -110,17 +111,4 @@ session_load :: proc(app: ^App, tabs: bool) -> (opened: bool) {
 	app.focus = clamp(focus, 0, max(len(app.panels) - 1, 0))
 	if has_place && !app.headless { platform.set_placement(app.main.win, place) }
 	return len(app.panels) > 0
-}
-
-// `path`, or the nearest folder above it that is still there (a folder removed since: its parent).
-@(private = "file")
-nearest_folder :: proc(path: string) -> string {
-	at := path
-	for at != "" {
-		if info, ok := fs.stat(at); ok && info.kind == .Directory { return at }
-		up := fs.parent(at)
-		if up == at { break }
-		at = up
-	}
-	return path
 }

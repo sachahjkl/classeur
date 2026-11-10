@@ -613,8 +613,13 @@ test_undo_names :: proc(t: ^testing.T) {
 test_session :: proc(t: ^testing.T) {
 	files := FIXTURE
 	dir := make_fixture(t, files[:])
-	file := fs.join(dir, ".session", context.temp_allocator)
-	documents := fs.join(dir, "Documents", context.temp_allocator)
+	// (kept on the heap: the frames below empty the temporary allocator)
+	dir = strings.clone(dir, runtime.heap_allocator())
+	defer delete(dir, runtime.heap_allocator())
+	file := fs.join(dir, ".session", runtime.heap_allocator())
+	defer delete(file, runtime.heap_allocator())
+	documents := fs.join(dir, "Documents", runtime.heap_allocator())
+	defer delete(documents, runtime.heap_allocator())
 	{
 		context.allocator = runtime.heap_allocator()
 		app := app_open({folders = {dir}, headless = true, session = file})
@@ -634,6 +639,13 @@ test_session :: proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		app := app_open({headless = true, session = file})
 		defer app_close(app)
+		// (the reads come: the tab of Projects, gone, goes up)
+		for _ in 0 ..< 400 {
+			app_frame(app)
+			loading := false
+			for p in app.panels { for tb in p.tabs { if tb.loading { loading = true } } }
+			if !loading { break }
+		}
 		testing.expect_value(t, len(app.panels), 2)
 		testing.expect_value(t, len(app.panels[0].tabs), 2)
 		testing.expect_value(t, app.panels[0].active, 1)
@@ -671,6 +683,15 @@ test_goto :: proc(t: ^testing.T) {
 	wait_read(s)
 	testing.expect(t, !app.goto.open)
 	testing.expect_value(t, tab.path, fs.join(dir, "Projects/classeur", context.temp_allocator))
+
+	// a whole path ended by a separator: Enter goes to it, not to its first folder
+	session.key(s, .G, {.Ctrl})
+	session.type_text(s, fmt.tprintf("%s/Projects/", dir))
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return strings.has_suffix((^App)(s.user).goto.dir, "Projects") }, "Projects read")
+	session.frames(s, 2)
+	session.key(s, .Return)
+	wait_read(s)
+	testing.expect_value(t, tab.path, fs.join(dir, "Projects", context.temp_allocator))
 
 	// words: a recent folder by a few letters of its path
 	context.allocator = runtime.heap_allocator()

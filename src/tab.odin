@@ -219,6 +219,22 @@ load_done :: proc(data: rawptr, word: u64) {
 	t := find_tab(job.app, job.tab)
 	if t != nil && t.walk == job { t.walk = nil }
 	if t == nil || t.serial != job.serial { return }
+	// a path that is not a folder (asked on the worker, never on this thread): a file's path is its folder with the file
+	// at the cursor; a folder that is gone (a session's tab, a folder removed) is the nearest folder above it still there
+	if !job.flat && (job.listing.error == .Not_A_Folder || job.listing.error == .Not_Found) {
+		up := fs.parent(t.path)
+		if up != "" && up != t.path {
+			if job.listing.error == .Not_A_Folder {
+				delete(t.reveal_name)
+				t.reveal_name = strings.clone(fs.base(t.path))
+			}
+			old := t.path
+			t.path = strings.clone(up)
+			delete(old)
+			tab_load(job.app, t)
+			return
+		}
+	}
 	t.loading = false
 	t.load_ms = job.ms
 	t.space, t.has_space = job.space, job.has_space

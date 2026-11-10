@@ -13,10 +13,11 @@ package classeur
 
 import "core:fmt"
 import "core:math/rand"
-import "core:os"
 import "core:strconv"
 import "core:strings"
 import "core:time"
+import "core:time/datetime"
+import "core:time/timezone"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:ui"
@@ -33,11 +34,13 @@ Batch :: struct {
 	names:     [dynamic]string,    // owned: the items, in the list's order
 	mtimes:    [dynamic]i64,
 	ids:       [dynamic]string,    // owned: each item's {id}, made once
+	taken:     map[string]bool,    // owned keys: the names of the folder that are not of the batch (read at the opening)
 	list:      [dynamic]string,    // owned: the names from the clipboard (empty: the pattern)
 	pattern:   ui.Text_Field,
 	find:      ui.Text_Field,
 	replace:   ui.Text_Field,
 	casing:    Batch_Case,
+	tz:        ^datetime.TZ_Region,   // the local time zone ({date}, {time}); the app's
 	focus_due: bool,
 	scroll:    int,
 }
@@ -47,6 +50,7 @@ batch_free :: proc(b: ^Batch) {
 	delete(b.names)
 	delete(b.mtimes)
 	delete(b.ids)
+	delete(b.taken)
 	delete(b.list)
 	ui.field_destroy(&b.pattern)
 	ui.field_destroy(&b.find)
@@ -61,6 +65,8 @@ batch_clear :: proc(b: ^Batch) {
 	for s in b.names { delete(s) }
 	for s in b.ids { delete(s) }
 	for s in b.list { delete(s) }
+	for k in b.taken { delete(k) }
+	clear(&b.taken)
 	clear(&b.names)
 	clear(&b.mtimes)
 	clear(&b.ids)
@@ -72,7 +78,11 @@ batch_open :: proc(app: ^App, t: ^Tab) {
 	batch_clear(b)
 	b.open, b.tab, b.focus_due, b.scroll, b.casing = true, t.id, true, 0, .Keep
 	b.dir = strings.clone(t.path)
+	b.tz = app.tz
 	alphabet := "abcdefghijkmnpqrstuvwxyz23456789"
+	mine := make(map[string]bool, context.temp_allocator)
+	for e in folder_targets(&t.folder) { mine[e.name] = true }
+	for e in t.folder.listing.entries { if e.name not_in mine { b.taken[name_key(e.name)] = true } }
 	for e in folder_targets(&t.folder) {
 		append(&b.names, strings.clone(e.name))
 		append(&b.mtimes, e.mtime)
@@ -135,29 +145,42 @@ batch_field :: proc(sb: ^strings.Builder, b: ^Batch, i: int, field, stem, ext: s
 		width, _ := strconv.parse_int(arg)
 		fmt.sbprintf(sb, "%0*d", max(width, 1), i + 1)
 	case "date", "time":
-		t := time.unix(0, b.mtimes[i])
-		y, mon, d := time.date(t)
-		h, mi, sec := time.clock(t)
-		if name == "date" { fmt.sbprintf(sb, "%04d-%02d-%02d", y, int(mon), d) } else { fmt.sbprintf(sb, "%02d-%02d-%02d", h, mi, sec) }
+		// (the local time, as the list shows it)
+		dt, _ := time.time_to_datetime(time.unix(0, b.mtimes[i]))
+		if b.tz != nil { if local, ok := timezone.datetime_to_tz(dt, b.tz); ok { dt = local } }
+		y, mon, d := int(dt.year), int(dt.month), int(dt.day)
+		h, mi, sec := int(dt.hour), int(dt.minute), int(dt.second)
+		if name == "date" { fmt.sbprintf(sb, "%04d-%02d-%02d", y, mon, d) } else { fmt.sbprintf(sb, "%02d-%02d-%02d", h, mi, sec) }
 	case:
 		return false
 	}
 	return true
 }
 
-// Why item `i`'s new name cannot be had ("": it can).
+// A name as the file systems compare it: as it is on Linux, its case folded on Windows (names that differ by their case
+// alone are one).
+name_key :: proc(name: string, allocator := context.allocator) -> string {
+	when ODIN_OS == .Windows { return strings.to_lower(name, allocator) }
+	return strings.clone(name, allocator)
+}
+
+// Why each new name cannot be had ("": it can). From the folder's names read at the opening: nothing is asked of the
+// file system while the pattern is typed.
 @(private = "file")
-batch_problem :: proc(b: ^Batch, news: []string, i: int) -> string {
-	n := news[i]
-	if n == "" { return "empty" }
-	if strings.contains_any(n, fs.SEPARATOR_STRING) || n == "." || n == ".." { return "not a name" }
-	for m, j in news { if j != i && m == n { return "twice" } }
-	if n != b.names[i] && fs.exists(fs.join(b.dir, n, context.temp_allocator)) {
-		// (taken by an item of the batch that moves away: free)
-		for old in b.names { if old == n { return "" } }
-		return "taken"
+batch_problems :: proc(b: ^Batch, news: []string) -> []string {
+	out := make([]string, len(news), context.temp_allocator)
+	seen := make(map[string]int, len(news), context.temp_allocator)
+	for n in news { seen[name_key(n, context.temp_allocator)] += 1 }
+	for n, i in news {
+		k := name_key(n, context.temp_allocator)
+		switch {
+		case n == "":                                                      out[i] = "empty"
+		case strings.contains_any(n, fs.SEPARATOR_STRING) || n == "." || n == "..": out[i] = "not a name"
+		case seen[k] > 1:                                                  out[i] = "twice"
+		case k in b.taken:                                                 out[i] = "taken"
+		}
 	}
-	return ""
+	return out
 }
 
 // The renames: each to a free name, then to its new one; one step of the undo.
@@ -167,11 +190,12 @@ batch_apply :: proc(app: ^App, news: []string) {
 	steps := make([dynamic][2]string, context.temp_allocator)
 	temps := make([]string, len(news), context.temp_allocator)
 	failed := 0
+	// (fs.rename never goes over a name: a name taken since the opening fails alone, nothing is lost)
 	for n, i in news {
 		if n == b.names[i] { continue }
 		from := fs.join(b.dir, b.names[i], context.temp_allocator)
 		temps[i] = fs.join(b.dir, fmt.tprintf(".classeur-rename-%s-%d", b.ids[i], i), context.temp_allocator)
-		if os.rename(from, temps[i]) != nil {
+		if fs.rename(from, temps[i]) != .None {
 			temps[i] = ""
 			failed += 1
 		}
@@ -179,9 +203,9 @@ batch_apply :: proc(app: ^App, news: []string) {
 	for n, i in news {
 		if temps[i] == "" { continue }
 		to := fs.join(b.dir, n, context.temp_allocator)
-		if os.rename(temps[i], to) != nil {
+		if fs.rename(temps[i], to) != .None {
 			// (back to its old name)
-			_ = os.rename(temps[i], fs.join(b.dir, b.names[i], context.temp_allocator))
+			_ = fs.rename(temps[i], fs.join(b.dir, b.names[i], context.temp_allocator))
 			failed += 1
 			continue
 		}
@@ -203,8 +227,9 @@ batch_build :: proc(app: ^App, em: f32) {
 	pw := min(em * 52, app.room * ui.scale() * 0.94)
 	news := make([]string, n, context.temp_allocator)
 	for i in 0 ..< n { news[i] = batch_name(b, i) }
+	problems := batch_problems(b, news)
 	bad := 0
-	for i in 0 ..< n { if batch_problem(b, news, i) != "" { bad += 1 } }
+	for p in problems { if p != "" { bad += 1 } }
 	apply := false
 
 	if ui.modal("batch_rename", pw, &b.open, 0.1) {
@@ -263,7 +288,7 @@ batch_build :: proc(app: ^App, em: f32) {
 			if ui.column(.Start, id = "###batch_rows") {
 				for vi in 0 ..< min(n, BATCH_ROWS) {
 					i := b.scroll + vi
-					problem := batch_problem(b, news, i)
+					problem := problems[i]
 					ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 2.0))})
 					if ui.row(.Center, id = fmt.tprintf("###brow%d", vi)) {
 						ui.spacer(ui.px(em * 0.9))

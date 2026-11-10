@@ -6,7 +6,6 @@ package classeur
 
 import "core:fmt"
 import "core:slice"
-import "core:strings"
 import "gt:draw"
 import lucide "gt:lucide"
 import "gt:ui"
@@ -68,8 +67,8 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 		if t == nil { return box.rect }
 		// the mouse's side buttons: back and forward in the panel under it
 		if ui.hot_within(box.key) {
-			if ui.mouse_pressed(.Back) { tab_back(app, t) }
-			if ui.mouse_pressed(.Forward) { tab_forward(app, t) }
+			if ui.mouse_pressed(.Back) { app.focus = index; command_find("back").run(app) }
+			if ui.mouse_pressed(.Forward) { app.focus = index; command_find("forward").run(app) }
 		}
 		drop_zone(app, box.rect, t.path)
 		room := box.rect.max.x - box.rect.min.x
@@ -205,23 +204,10 @@ address_field :: proc(app: ^App, t: ^Tab, em: f32) {
 			t.focus_due = .List
 		}
 		if res.committed {
-			path := fs.clean(ui.field_string(&t.address), context.temp_allocator)
-			info, ok := fs.stat(path)
-			switch {
-			case !ok:
-				say(app, "%s does not exist.", path)
-			case info.kind == .Directory:
-				t.address_open = false
-				t.focus_due = .List
-				tab_go(app, t, path)
-			case:
-				// a file: its folder, the file at the cursor
-				t.address_open = false
-				t.focus_due = .List
-				tab_go(app, t, fs.parent(path))
-				delete(t.reveal_name)
-				t.reveal_name = strings.clone(fs.base(path))
-			}
+			// (a file's path, a path that is gone: the read, on a worker, goes to the folder that holds it)
+			t.address_open = false
+			t.focus_due = .List
+			tab_go(app, t, ui.field_string(&t.address))
 		}
 	}
 }
@@ -629,8 +615,7 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 				for i in f.shown { if f.listing.entries[i].kind == .Directory { folders_shown += 1 } else { files_shown += 1 } }
 				if t.walk != nil { stat(app, "walk", lucide.LOADER, fmt.tprintf("%s…", count_text(i64(tab_walked(t)))), "Entries read so far", em) }
 				if f.count > 0 {
-					bytes: i64
-					for e in folder_targets(f) { if e.kind != .Directory && e.size > 0 { bytes += e.size } }
+					bytes, _ := folder_selection_size(f)
 					stat(app, "sel", lucide.LAYERS_2, bytes > 0 ? fmt.tprintf("%d · %s", f.count, size_text(bytes)) : fmt.tprintf("%d", f.count), "Selected, and the size of their files", em)
 				}
 				stat(app, "fol", lucide.FOLDER, fmt.tprintf("%d/%s", folders_shown, count_text(i64(folders))), "Folders shown, of all", em)

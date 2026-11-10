@@ -2,7 +2,7 @@ package fs
 
 // The trash of the freedesktop.org specification (Trash 1.0), which every Linux desktop reads: a file goes to the
 // home trash ($XDG_DATA_HOME/Trash) when it is on the same volume, else to the trash at the top of its own volume
-// (<top>/.Trash-<uid>). Beside it in info/ a <name>.trashinfo says in_trash it was and when it went, so that the desktop's
+// (<top>/.Trash-<uid>). Beside it in info/ a <name>.trashinfo says where it was and when it went, so that the desktop's
 // trash can put it back. The file is renamed, never copied: a trash is always on the file's volume.
 
 import "core:fmt"
@@ -57,23 +57,23 @@ trash :: proc(path: string, allocator := context.allocator) -> (in_trash: string
 	return to, .None
 }
 
-// Puts back what trash moved to `in_trash` (<trash>/files/<name>): to the path its .trashinfo names, which must be free.
-untrash :: proc(in_trash: string) -> Error {
+// Puts back what trash moved to `in_trash` (<trash>/files/<name>): to the path its .trashinfo names, which must be free
+// (fs.rename never goes over a name). `original`: where it is again.
+untrash :: proc(in_trash: string, allocator := context.allocator) -> (original: string, e: Error) {
 	dir := parent(parent(in_trash))
 	info_path := join(join(dir, "info", context.temp_allocator), strings.concatenate({base(in_trash), ".trashinfo"}, context.temp_allocator), context.temp_allocator)
 	data, err := os.read_entire_file(info_path, context.temp_allocator)
-	if err != nil { return .Not_Found }
+	if err != nil { return "", .Not_Found }
 	text := string(data)
-	original := ""
+	to := ""
 	for line in strings.split_lines_iterator(&text) {
-		if strings.has_prefix(line, "Path=") { original = url_decode(strings.trim_space(line[len("Path="):])) }
+		if strings.has_prefix(line, "Path=") { to = url_decode(strings.trim_space(line[len("Path="):])) }
 	}
-	if original == "" { return .Other }
-	if exists(original) { return .Exists }
-	_ = os.make_directory_all(parent(original))
-	if e := rename(in_trash, original); e != .None { return e }
+	if to == "" { return "", .Other }
+	_ = os.make_directory_all(parent(to))
+	if re := rename(in_trash, to); re != .None { return "", re }
 	linux.unlink(cpath_t(info_path))
-	return .None
+	return strings.clone(to, allocator), .None
 }
 
 // The bytes a %XX stands for, back.

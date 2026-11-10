@@ -117,6 +117,14 @@ make_folder :: proc(path: string) -> Error {
 	return .None
 }
 
+// An empty file at `path`, never over something (.Exists when the name is taken).
+make_file :: proc(path: string) -> Error {
+	h := win.CreateFileW(wide(path), win.GENERIC_WRITE, 0, nil, win.CREATE_NEW, win.FILE_ATTRIBUTE_NORMAL, nil)
+	if h == win.INVALID_HANDLE_VALUE { return op_error(win.GetLastError()) }
+	win.CloseHandle(h)
+	return .None
+}
+
 // Renames `from` to `to`, never over something: .Exists when the name is taken, .Cross_Volume when it is on another
 // volume.
 rename :: proc(from, to: string) -> Error {
@@ -181,7 +189,7 @@ trash :: proc(path: string, allocator := context.allocator) -> (in_trash: string
 	return "", .None
 }
 
-untrash :: proc(in_trash: string) -> Error { return .Other }
+untrash :: proc(in_trash: string, allocator := context.allocator) -> (original: string, e: Error) { return "", .Other }
 
 // Whether `a` and `b` are on one volume (their drive or share is the same).
 same_volume :: proc(a, b: string) -> bool {

@@ -11,7 +11,6 @@ package classeur
 // Ctrl+Shift+Z) until something else is done to files.
 
 import "core:fmt"
-import "core:os"
 import "core:slice"
 import "core:strings"
 import "fs"
@@ -71,7 +70,18 @@ undo_free :: proc(app: ^App) {
 	delete(app.redo)
 }
 
+// A job copies, moves or trashes: its step comes when it ends, so an undo now would undo the step before it.
+@(private = "file")
+job_running :: proc(app: ^App) -> bool {
+	for job in app.jobs.list { if job.ended_ms == 0 { return true } }
+	return false
+}
+
 act_undo :: proc(app: ^App) {
+	if job_running(app) {
+		say(app, "A copy or a move is running: undo once it has ended.")
+		return
+	}
 	if len(app.undo) == 0 {
 		say(app, "Nothing to undo.")
 		return
@@ -123,6 +133,10 @@ act_undo :: proc(app: ^App) {
 }
 
 act_redo :: proc(app: ^App) {
+	if job_running(app) {
+		say(app, "A copy or a move is running: redo once it has ended.")
+		return
+	}
 	if len(app.redo) == 0 {
 		say(app, "Nothing to do again.")
 		return
@@ -142,12 +156,7 @@ act_redo :: proc(app: ^App) {
 		undo_push(app, .Rename, step.pairs, redoing = true)
 		undo_reveal(app, afters[0])
 	case .New_Folder, .New_File:
-		e: fs.Error
-		if step.kind == .New_Folder {
-			e = fs.make_folder(afters[0])
-		} else if os.write_entire_file(afters[0], []u8{}) != nil {
-			e = .Denied
-		}
+		e := step.kind == .New_Folder ? fs.make_folder(afters[0]) : fs.make_file(afters[0])
 		if e != .None {
 			say(app, "%s cannot be made again.", fs.base(afters[0]))
 			return
@@ -174,26 +183,28 @@ afters_of :: proc(pairs: [][2]string) -> []string {
 	return out
 }
 
-// Renames each pair (before to after, or back), in two steps through free names: names of a batch can swap.
+// Renames each pair (before to after, or back), in two steps through free names: names of a batch can swap. Never
+// over a name (fs.rename); when one fails, every pair goes back to where it was: all or nothing.
 @(private = "file")
 renames_swap :: proc(pairs: [][2]string, back: bool) -> bool {
+	from_of :: proc(p: [2]string, back: bool) -> string { return back ? p[1] : p[0] }
+	to_of :: proc(p: [2]string, back: bool) -> string { return back ? p[0] : p[1] }
 	temps := make([]string, len(pairs), context.temp_allocator)
 	for p, i in pairs {
-		from := back ? p[1] : p[0]
-		temps[i] = fmt.tprintf("%s.classeur-undo-%d", from, i)
-		if os.rename(from, temps[i]) != nil {
-			for j in 0 ..< i { _ = os.rename(temps[j], back ? pairs[j][1] : pairs[j][0]) }
+		temps[i] = fmt.tprintf("%s.classeur-undo-%d", from_of(p, back), i)
+		if fs.rename(from_of(p, back), temps[i]) != .None {
+			for j in 0 ..< i { _ = fs.rename(temps[j], from_of(pairs[j], back)) }
 			return false
 		}
 	}
-	ok := true
 	for p, i in pairs {
-		if os.rename(temps[i], back ? p[0] : p[1]) != nil {
-			_ = os.rename(temps[i], back ? p[1] : p[0])
-			ok = false
-		}
+		if fs.rename(temps[i], to_of(p, back)) == .None { continue }
+		// (one cannot go: the ones done go back, then every one to its old name)
+		for j in 0 ..< i { _ = fs.rename(to_of(pairs[j], back), temps[j]) }
+		for j in 0 ..< len(pairs) { _ = fs.rename(temps[j], from_of(pairs[j], back)) }
+		return false
 	}
-	return ok
+	return true
 }
 
 // The tabs that show the folder of `path` read it again, the cursor on its name.

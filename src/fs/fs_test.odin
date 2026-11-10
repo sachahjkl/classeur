@@ -147,6 +147,14 @@ test_operations :: proc(t: ^testing.T) {
 	testing.expect_value(t, make_folder(join(dir, "sub", context.temp_allocator)), Error.Exists)
 	testing.expect_value(t, remove(join(dir, "sub", context.temp_allocator)), Error.None)
 	testing.expect_value(t, remove(c), Error.None)
+	// a new file never over another; one volume with itself
+	n := join(dir, "made.txt", context.temp_allocator)
+	testing.expect_value(t, make_file(n), Error.None)
+	testing.expect_value(t, make_file(b), Error.Exists)
+	got2, _ := os.read_entire_file(b, context.temp_allocator)
+	testing.expect_value(t, len(got2), len(data))   // (left whole)
+	testing.expect(t, same_volume(n, dir))
+	testing.expect(t, !same_volume(n, join(dir, "nowhere", context.temp_allocator)))
 
 	testing.expect_value(t, numbered_name("photo.jpg", 2, context.temp_allocator), "photo 2.jpg")
 	testing.expect_value(t, numbered_name("Projects", 3, context.temp_allocator), "Projects 3")

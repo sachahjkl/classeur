@@ -91,6 +91,14 @@ make_folder :: proc(path: string) -> Error {
 	return op_error(linux.mkdir(cpath(path), {.IRUSR, .IWUSR, .IXUSR, .IRGRP, .IWGRP, .IXGRP, .IROTH, .IWOTH, .IXOTH}))
 }
 
+// An empty file at `path`, never over something (.Exists when the name is taken).
+make_file :: proc(path: string) -> Error {
+	fd, err := linux.open(cpath(path), {.WRONLY, .CREAT, .EXCL, .CLOEXEC}, {.IRUSR, .IWUSR, .IRGRP, .IROTH})
+	if err != .NONE { return op_error(err) }
+	linux.close(fd)
+	return .None
+}
+
 // Renames `from` to `to`, never over something: .Exists when the name is taken, .Cross_Volume when it is on another
 // volume.
 rename :: proc(from, to: string) -> Error {
@@ -119,8 +127,10 @@ device_of :: proc(path: string) -> (dev: u64, ok: bool) {
 }
 
 // Whether `a` and `b` are on one volume (a move between them is a rename).
+// (a link is followed: a bookmark that links to another volume is that volume)
 same_volume :: proc(a, b: string) -> bool {
-	da, oka := device_of(a)
-	db, okb := device_of(b)
-	return oka && okb && da == db
+	sa, sb: linux.Statx
+	if linux.statx(linux.AT_FDCWD, cpath(a), {}, {.TYPE}, &sa) != .NONE { return false }
+	if linux.statx(linux.AT_FDCWD, cpath(b), {}, {.TYPE}, &sb) != .NONE { return false }
+	return sa.dev_major == sb.dev_major && sa.dev_minor == sb.dev_minor
 }

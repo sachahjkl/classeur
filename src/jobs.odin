@@ -208,10 +208,12 @@ job_run :: proc(job: ^Job) {
 		for s, i in job.sources {
 			if cancelled(job) { break }
 			target := job.targets != nil ? job.targets[i] : fs.join(job.dest, fs.base(s), context.temp_allocator)
+			// (a folder merged into one that was there: no step, its undo would take what was there before)
+			merged := fs.exists(target) && is_folder(s) && is_folder(target) && target != s
 			at: string
 			ok: bool
 			if job.kind == .Copy { at, ok = copy_one(job, s, target) } else { at, ok = move_one(job, s, target) }
-			if ok { job_did(job, s, at) }
+			if ok && !(merged && at == target) { job_did(job, s, at) }
 		}
 	case .Restore:
 		sync.atomic_store(&job.files_total, len(job.sources))
@@ -219,7 +221,8 @@ job_run :: proc(job: ^Job) {
 		for s in job.sources {
 			if cancelled(job) { break }
 			set_current(job, fs.base(s))
-			if e := fs.untrash(s); e != .None { job_error(job, s, e) }
+			original, e := fs.untrash(s, context.temp_allocator)
+			if e != .None { job_error(job, s, e) } else { job_did(job, s, original) }
 			sync.atomic_add(&job.files_done, 1)
 		}
 	case .Trash, .Delete:
@@ -245,6 +248,12 @@ job_run :: proc(job: ^Job) {
 
 @(private = "file")
 cancelled :: proc(job: ^Job) -> bool { return sync.atomic_load(&job.cancel) }
+
+@(private = "file")
+is_folder :: proc(path: string) -> bool {
+	info, ok := fs.stat(path)
+	return ok && info.kind == .Directory && .Link not_in info.flags
+}
 
 // A source done: where it is now.
 @(private = "file")
@@ -430,6 +439,7 @@ job_ended :: proc(data: rawptr, word: u64) {
 	if job.dest != "" { append(&touched, job.dest) }
 	for s in job.sources { append(&touched, fs.parent(s)) }
 	for s in job.targets { append(&touched, fs.parent(s)) }
+	for d in job.done { append(&touched, fs.parent(d[1])) }   // (a restore: where the items came back)
 	if !job.undoing { undo_push_job(app, job) }
 	for p in app.panels {
 		for t in p.tabs {

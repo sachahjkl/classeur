@@ -16,13 +16,64 @@ Entry_Menu :: struct {
 	key:      ui.Key,
 	tab:      u64,
 	on_entry: bool,   // opened on a row (else on the folder)
+	with_path: string,             // owned: the file "Open with" was asked for
+	handlers:  []desktop.Handler,  // its applications, read on a worker
+	handlers_ready: bool,          // they came
+}
+
+entry_menu_free :: proc(m: ^Entry_Menu) {
+	delete(m.with_path)
+	desktop.handlers_destroy(m.handlers)
+	m^ = {}
+}
+
+@(private = "file")
+Handlers_Read :: struct {
+	app:      ^App,
+	path:     string,
+	handlers: []desktop.Handler,
+}
+
+// The applications of the file at the cursor, asked on a worker (the system's associations are read from files).
+@(private = "file")
+handlers_ask :: proc(app: ^App, path: string) {
+	m := &app.menu
+	delete(m.with_path)
+	m.with_path = strings.clone(path)
+	desktop.handlers_destroy(m.handlers)
+	m.handlers, m.handlers_ready = nil, false
+	job := new(Handlers_Read)
+	job^ = {app = app, path = strings.clone(path)}
+	pool_submit(&app.pool, proc(data: rawptr) {
+		job := (^Handlers_Read)(data)
+		job.handlers = desktop.handlers_for_file(job.path)
+		if !ui.post(&job.app.main.state, proc(data: rawptr, word: u64) {
+			job := (^Handlers_Read)(data)
+			m := &job.app.menu
+			if m.with_path == job.path && !m.handlers_ready {
+				m.handlers, m.handlers_ready = job.handlers, true
+				app_frames(job.app)
+			} else {
+				desktop.handlers_destroy(job.handlers)
+			}
+			delete(job.path)
+			free(job)
+		}, job) {
+			desktop.handlers_destroy(job.handlers)
+			delete(job.path)
+			free(job)
+		}
+	}, job)
 }
 
 entry_menu_open :: proc(app: ^App, t: ^Tab, pos: ui.Vec2, from_keyboard := false, on_entry := true) {
 	m := &app.menu
 	if m.key == 0 { m.key = ui.key_from_string(0, "classeur_entry_menu") }
 	m.tab, m.on_entry = t.id, on_entry
-	ui.ctx_menu_open(m.key, pos, from_keyboard = from_keyboard)
+	if on_entry {
+		if e := folder_cursor_entry(&t.folder); e != nil && e.kind != .Directory { handlers_ask(app, fs.join(t.path, e.name, context.temp_allocator)) }
+	}
+	ui.ctx_menu_open(m.key, pos, from_keyboard = from_keyboard, search = true)
 }
 
 // An item that runs a command, with its first key.
@@ -230,8 +281,9 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 @(private = "file")
 open_with_menu :: proc(app: ^App, path: string) {
 	if ui.menu_submenu("Open with") {
-		hs := desktop.handlers_for_file(path, context.temp_allocator)
-		if len(hs) == 0 { _ = ui.menu_item("No application", enabled = false) }
+		ready := app.menu.with_path == path && app.menu.handlers_ready
+		hs := ready ? app.menu.handlers : nil
+		if !ready { _ = ui.menu_item("Reading…", enabled = false) } else if len(hs) == 0 { _ = ui.menu_item("No application", enabled = false) }
 		for h, i in hs {
 			label := h.default ? fmt.tprintf("%s (default)###ow%d", shown_text(h.name), i) : fmt.tprintf("%s###ow%d", shown_text(h.name), i)
 			if ui.menu_item(label).clicked {

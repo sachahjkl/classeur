@@ -288,8 +288,8 @@ act_new_file :: proc(app: ^App) {
 		name = fmt.tprintf("New file %d.txt", n)
 	}
 	path := fs.join(t.path, name, context.temp_allocator)
-	if err := os.write_entire_file(path, []u8{}); err != nil {
-		say(app, "The file cannot be made here: %v.", err)
+	if e := fs.make_file(path); e != .None {
+		say(app, "The file cannot be made here: %s.", fs.ERROR_REASON[e])
 		return
 	}
 	undo_push(app, .New_File, {{"", path}})

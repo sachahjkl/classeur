@@ -12,7 +12,6 @@ import "core:fmt"
 import "core:math"
 import "core:slice"
 import "core:strings"
-import "gt:draw"
 import lucide "gt:lucide"
 import "gt:ui"
 import "fs"
@@ -28,6 +27,8 @@ Goto :: struct {
 	mouse:     [2]f32,
 	dir:       string,     // owned: the folder whose folders `names` holds ("": none read)
 	names:     [dynamic]string,   // owned: its folders
+	files:     [dynamic]string,   // owned: its other entries (a path typed in full goes there, not to a folder like it)
+	moved:     bool,       // the person chose a row (Up, Down, the pointer): Enter goes there
 	asked:     string,     // owned: the folder asked last (its answer alone is taken)
 }
 
@@ -37,6 +38,8 @@ goto_free :: proc(g: ^Goto) {
 	delete(g.asked)
 	for n in g.names { delete(n) }
 	delete(g.names)
+	for n in g.files { delete(n) }
+	delete(g.files)
 	g^ = {}
 }
 
@@ -44,8 +47,11 @@ act_goto_popup :: proc(app: ^App) {
 	g := &app.goto
 	g.open = true
 	ui.field_clear(&g.field)
-	g.sel, g.scroll = 0, 0
+	g.sel, g.scroll, g.moved = 0, 0, false
 	g.focus_due = true
+	// (read again at each opening: a folder made since, a listing that failed)
+	delete(g.asked)
+	g.asked = ""
 }
 
 @(private = "file")
@@ -72,7 +78,7 @@ is_path_text :: proc(s: string) -> bool {
 // "~/x" with the home folder in full.
 @(private = "file")
 expand_home :: proc(app: ^App, s: string) -> string {
-	if s == "~" { return app.home }
+	if s == "~" { return strings.concatenate({app.home, fs.SEPARATOR_STRING}, context.temp_allocator) }   // (its folders)
 	if strings.has_prefix(s, "~/") || strings.has_prefix(s, "~\\") { return fs.join(app.home, s[2:], context.temp_allocator) }
 	return s
 }
@@ -82,6 +88,7 @@ Goto_Read :: struct {
 	app:   ^App,
 	dir:   string,
 	names: [dynamic]string,
+	files: [dynamic]string,
 }
 
 // Asks the folders of `dir` (once per folder).
@@ -98,7 +105,7 @@ goto_ask :: proc(app: ^App, dir: string) {
 		l: fs.Listing
 		defer fs.listing_destroy(&l)
 		if fs.list(&l, job.dir) == .None {
-			for e in l.entries { if e.kind == .Directory { append(&job.names, strings.clone(e.name)) } }
+			for e in l.entries { append(e.kind == .Directory ? &job.names : &job.files, strings.clone(e.name)) }
 		}
 		if !ui.post(&job.app.main.state, goto_read_done, job) { goto_read_free(job) }
 	}, job)
@@ -109,6 +116,8 @@ goto_read_free :: proc(job: ^Goto_Read) {
 	delete(job.dir)
 	for n in job.names { delete(n) }
 	delete(job.names)
+	for n in job.files { delete(n) }
+	delete(job.files)
 	free(job)
 }
 
@@ -123,7 +132,9 @@ goto_read_done :: proc(data: rawptr, word: u64) {
 	delete(g.dir)
 	for n in g.names { delete(n) }
 	delete(g.names)
-	g.dir, g.names = job.dir, job.names
+	for n in g.files { delete(n) }
+	delete(g.files)
+	g.dir, g.names, g.files = job.dir, job.names, job.files
 	slice.sort_by(g.names[:], proc(a, b: string) -> bool { return fs.name_compare(a, b) < 0 })
 	app := job.app
 	free(job)
@@ -173,25 +184,31 @@ goto_rows :: proc(app: ^App, text: string) -> []Goto_Row {
 	return rows[:]
 }
 
-// Goes to `path` in the current tab: a folder, or a file's folder with the file at the cursor.
+// Goes to `path` in the current tab (a file's path, or one that is gone: the read, on a worker, goes to the folder that
+// holds it, tab.odin's load_done).
 goto_path :: proc(app: ^App, path: string) -> bool {
 	t := current_tab(app)
 	if t == nil { return false }
-	clean := fs.clean(path, context.temp_allocator)
-	info, ok := fs.stat(clean)
-	if !ok {
-		say(app, "%s does not exist.", clean)
-		return false
-	}
 	t.focus_due = .List
-	if info.kind == .Directory {
-		tab_go(app, t, clean)
-	} else {
-		tab_go(app, t, fs.parent(clean))
-		delete(t.reveal_name)
-		t.reveal_name = strings.clone(fs.base(clean))
-	}
+	tab_go(app, t, path)
 	return true
+}
+
+// Whether Enter goes to the path as it is typed: it ends with a separator, or its last part is a name in the folder
+// read in full (File Pilot's: a row is taken when the person chose one, or the letters are a part of a name).
+@(private = "file")
+typed_is_whole :: proc(app: ^App, text: string) -> bool {
+	g := &app.goto
+	if !is_path_text(text) { return false }
+	full := expand_home(app, text)
+	if len(full) > 0 && fs.is_separator(full[len(full) - 1]) { return true }
+	cut := len(full)
+	for cut > 0 && !fs.is_separator(full[cut - 1]) { cut -= 1 }
+	rest := full[cut:]
+	if g.dir != fs.clean(full[:cut], context.temp_allocator) { return false }
+	for n in g.names { if n == rest { return true } }
+	for n in g.files { if n == rest { return true } }
+	return false
 }
 
 goto_build :: proc(app: ^App) {
@@ -203,8 +220,8 @@ goto_build :: proc(app: ^App) {
 	rows := goto_rows(app, text)
 	n := len(rows)
 	if n > 0 {
-		if ui.key_press(.Down) { g.sel = (g.sel + 1) % n }
-		if ui.key_press(.Up) { g.sel = (g.sel + n - 1) % n }
+		if ui.key_press(.Down) { g.sel = (g.sel + 1) % n; g.moved = true }
+		if ui.key_press(.Up) { g.sel = (g.sel + n - 1) % n; g.moved = true }
 		if ui.key_press(.Page_Down) { g.sel = min(g.sel + GOTO_ROWS, n - 1) }
 		if ui.key_press(.Page_Up) { g.sel = max(g.sel - GOTO_ROWS, 0) }
 		g.sel = clamp(g.sel, 0, n - 1)
@@ -232,11 +249,15 @@ goto_build :: proc(app: ^App) {
 				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.3))})
 				res: ui.Edit_Result
 				if ui.tags("bare") { res = ui.line_edit("###goto_input", &g.field, "Go to: a path, or a few letters of a folder") }
-				if res.changed { g.sel, g.scroll = 0, 0 }
+				if res.changed { g.sel, g.scroll, g.moved = 0, 0, false }
 				if res.cancelled { g.open = false }
 				if res.committed {
-					// (a row chosen, else the path typed as it is)
-					if n > 0 { go_to = rows[g.sel].path } else if is_path_text(text) { go_to = expand_home(app, text) }
+					// (the path as typed when it is whole, else the row chosen, else the path typed as it is)
+					switch {
+					case typed_is_whole(app, text) && !g.moved: go_to = expand_home(app, text)
+					case n > 0:                                 go_to = rows[g.sel].path
+					case is_path_text(text):                    go_to = expand_home(app, text)
+					}
 				}
 				if g.focus_due { ui.set_focus(input_key); g.focus_due = false }
 				ui.spacer(ui.px(em * 0.8))
@@ -268,7 +289,7 @@ goto_build :: proc(app: ^App) {
 					}
 					if selected { ui.pop_tags() }
 					if sig.clicked { go_to = r.path }
-					if sig.hovering && moved { g.sel = at }
+					if sig.hovering && moved { g.sel, g.moved = at, true }
 				}
 			}
 			if n == 0 {
@@ -292,5 +313,4 @@ goto_build :: proc(app: ^App) {
 		path := strings.clone(go_to, context.temp_allocator)
 		if goto_path(app, path) { g.open = false }
 	}
-	_ = draw.Color{}
 }

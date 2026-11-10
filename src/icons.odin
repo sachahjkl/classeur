@@ -15,10 +15,6 @@ import "gt:render"
 import "gt:ui"
 import "fs"
 
-// The extensions whose files have icons of their own on Windows (a program's, a shortcut's).
-@(private = "file", rodata)
-OWN_ICON_EXTS := [?]string{"exe", "lnk", "ico", "url", "scr", "cpl", "msc"}
-
 ICONS_KEPT :: 600
 
 Sys_Icon :: struct {
@@ -39,7 +35,9 @@ Icon_Job :: struct {
 	ok:     bool,
 }
 
-// The key of the icon of `path`: what decides its picture, here.
+// The key of the icon of `path`: what decides its picture. A file's is the toolkit's (desktop.file_icon_key: its type
+// from its name, or the file itself when it has an icon of its own), kept per name; a person's folder, a volume and the
+// root have their own icons, any other folder is "folder".
 @(private = "file")
 icon_key :: proc(app: ^App, path: string, folder: bool, px: int) -> string {
 	if folder {
@@ -49,12 +47,23 @@ icon_key :: proc(app: ^App, path: string, folder: bool, px: int) -> string {
 		when ODIN_OS == .Windows { if fs.is_root(path) { special = true } }
 		return special ? fmt.tprintf("dir:%s@%d", path, px) : fmt.tprintf("dir@%d", px)
 	}
-	ext := strings.to_lower(fs.extension(path), context.temp_allocator)
-	when ODIN_OS == .Windows {
-		for x in OWN_ICON_EXTS { if x == ext { return fmt.tprintf("file:%s@%d", path, px) } }
+	name := fs.base(path)
+	key, known := app.icon_keys[name]
+	if !known {
+		if len(app.icon_keys) > ICON_KEYS_KEPT { icon_keys_free(app) }
+		key = desktop.file_icon_key(path, false)
+		// (a file with an icon of its own, a program's on Windows: its key is its path, not to be kept by its name)
+		if strings.has_prefix(key, "file:") { return fmt.tprintf("%s@%d", key, px) }
+		app.icon_keys[strings.clone(name)] = key
 	}
-	if ext == "" { return fmt.tprintf("noext@%d", px) }
-	return fmt.tprintf("ext:%s@%d", ext, px)
+	return fmt.tprintf("%s@%d", key, px)
+}
+
+ICON_KEYS_KEPT :: 20000
+
+icon_keys_free :: proc(app: ^App) {
+	for k, v in app.icon_keys { delete(k); delete(v) }
+	clear(&app.icon_keys)
 }
 
 // The system's icon of `path` at `px` pixels, if it is made; else it is asked (once).
@@ -127,6 +136,8 @@ icons_free :: proc(app: ^App) {
 		delete(k)
 	}
 	delete(app.icons_cache)
+	icon_keys_free(app)
+	delete(app.icon_keys)
 }
 
 @(private = "file")
