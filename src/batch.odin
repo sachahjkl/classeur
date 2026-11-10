@@ -183,41 +183,23 @@ batch_problems :: proc(b: ^Batch, news: []string) -> []string {
 	return out
 }
 
-// The renames: each to a free name, then to its new one; one step of the undo.
+// The renames, all or nothing (undo.odin's renames_swap: through free names, never over a name); one step of the undo.
 @(private = "file")
 batch_apply :: proc(app: ^App, news: []string) {
 	b := &app.batch
-	steps := make([dynamic][2]string, context.temp_allocator)
-	temps := make([]string, len(news), context.temp_allocator)
-	failed := 0
-	// (fs.rename never goes over a name: a name taken since the opening fails alone, nothing is lost)
+	pairs := make([dynamic][2]string, context.temp_allocator)
 	for n, i in news {
 		if n == b.names[i] { continue }
-		from := fs.join(b.dir, b.names[i], context.temp_allocator)
-		temps[i] = fs.join(b.dir, fmt.tprintf(".classeur-rename-%s-%d", b.ids[i], i), context.temp_allocator)
-		if fs.rename(from, temps[i]) != .None {
-			temps[i] = ""
-			failed += 1
-		}
+		append(&pairs, [2]string{fs.join(b.dir, b.names[i], context.temp_allocator), fs.join(b.dir, n, context.temp_allocator)})
 	}
-	for n, i in news {
-		if temps[i] == "" { continue }
-		to := fs.join(b.dir, n, context.temp_allocator)
-		if fs.rename(temps[i], to) != .None {
-			// (back to its old name)
-			_ = fs.rename(temps[i], fs.join(b.dir, b.names[i], context.temp_allocator))
-			failed += 1
-			continue
-		}
-		append(&steps, [2]string{fs.join(b.dir, b.names[i], context.temp_allocator), to})
-	}
-	if len(steps) > 0 { undo_push(app, .Rename, steps[:]) }
 	if t := find_tab(app, b.tab); t != nil { tab_load(app, t) }
-	if failed > 0 {
-		say(app, "%d renamed, %d could not be.", len(steps), failed)
-	} else {
-		say(app, "%d item%s renamed.", len(steps), len(steps) == 1 ? "" : "s")
+	if len(pairs) == 0 { return }
+	if !renames_swap(pairs[:], back = false) {
+		say(app, "The names could not all be given: nothing was renamed.")
+		return
 	}
+	undo_push(app, .Rename, pairs[:])
+	say(app, "%d item%s renamed.", len(pairs), len(pairs) == 1 ? "" : "s")
 }
 
 batch_build :: proc(app: ^App, em: f32) {

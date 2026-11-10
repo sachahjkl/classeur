@@ -29,7 +29,8 @@ session_file :: proc(app: ^App, allocator := context.temp_allocator) -> string {
 	return strings.concatenate({platform.config_dir(context.temp_allocator), "/", APP_NAME, "/session"}, allocator)
 }
 
-session_save :: proc(app: ^App) {
+// `later`: written on a worker (a bookmark changed); else now (the window closes).
+session_save :: proc(app: ^App, later := false) {
 	path := session_file(app)
 	if path == "" { return }
 	b := strings.builder_make(context.temp_allocator)
@@ -43,10 +44,28 @@ session_save :: proc(app: ^App) {
 	}
 	for p in app.bookmarks { fmt.sbprintf(&b, "bookmark %s\n", p) }
 	for p in app.recents { fmt.sbprintf(&b, "recent %s\n", p) }
+	if later {
+		Write :: struct { path, text: string }
+		w := new(Write)
+		w^ = {strings.clone(path), strings.clone(strings.to_string(b))}
+		pool_submit(&app.pool, proc(data: rawptr) {
+			w := (^Write)(data)
+			session_write(w.path, w.text)
+			delete(w.path)
+			delete(w.text)
+			free(w)
+		}, w)
+		return
+	}
+	session_write(path, strings.to_string(b))
+}
+
+// (written beside, then renamed over: a crash while writing leaves the last session whole)
+@(private = "file")
+session_write :: proc(path, text: string) {
 	_ = os.make_directory_all(fs.parent(path))
-	// (written beside, then renamed over: a crash while writing leaves the last session whole)
 	tmp := strings.concatenate({path, ".new"}, context.temp_allocator)
-	if os.write_entire_file(tmp, transmute([]u8)strings.to_string(b)) != nil { return }
+	if os.write_entire_file(tmp, transmute([]u8)text) != nil { return }
 	_ = os.rename(tmp, path)
 }
 

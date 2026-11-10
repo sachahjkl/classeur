@@ -199,6 +199,11 @@ rename_free :: proc(r: ^Rename) {
 act_rename :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
+	// (the search of every folder below: its names are paths, renamed from their own folders only)
+	if t.folder.flat {
+		say(app, "Rename from the item's own folder: the search lists items of several folders.")
+		return
+	}
 	// several items: batch rename (batch.odin)
 	if t.folder.count > 1 {
 		batch_open(app, t)
@@ -427,13 +432,13 @@ bookmark_toggle :: proc(app: ^App, path: string) {
 		if p == path {
 			delete(p)
 			ordered_remove(&app.bookmarks, i)
-			session_save(app)
+			session_save(app, later = true)
 			say(app, "Bookmark removed.")
 			return
 		}
 	}
 	append(&app.bookmarks, strings.clone(path))
-	session_save(app)
+	session_save(app, later = true)
 	say(app, "%s is bookmarked.", fs.base(path))
 }
 

@@ -36,6 +36,7 @@ Job :: struct {
 	policy:  Conflict,     // for every conflict; Ask: the person says, then maybe for all
 	undoing: bool,         // an undo's job: what it does is not undone in turn
 	redoing: bool,         // a redo's job: its step goes back on the undo stack, what can be done again stays
+	redo_step: Undo_Step,  // an undo's job: the step undone, to the redo stack when the job ends well (else freed)
 
 	// written by the jobs' thread, read by the interface
 	state:       Job_State,   // atomic
@@ -128,6 +129,7 @@ job_free :: proc(job: ^Job) {
 	delete(job.targets)
 	for d in job.done { delete(d[0]); delete(d[1]) }
 	delete(job.done)
+	undo_step_free(&job.redo_step)
 	delete(job.current)
 	for e in job.errors { delete(e) }
 	delete(job.errors)
@@ -309,7 +311,11 @@ resolve :: proc(job: ^Job, target: string) -> Conflict {
 	delete(job.ask_name)
 	job.ask_name = strings.clone(target)
 	sync.atomic_store(&job.state, Job_State.Asking)
-	ui.post(&job.app.main.state, job_asks, job)
+	// (cancelled meanwhile, or nobody to ask: skipped; jobs_stop sets `cancel` before it looks for a job that asks)
+	if cancelled(job) || !ui.post(&job.app.main.state, job_asks, job) {
+		sync.atomic_store(&job.state, Job_State.Running)
+		return .Skip
+	}
 	sync.sema_wait(&job.answered)
 	sync.atomic_store(&job.state, Job_State.Running)
 	if job.answer_all { job.policy = job.answer }
@@ -441,6 +447,10 @@ job_ended :: proc(data: rawptr, word: u64) {
 	for s in job.targets { append(&touched, fs.parent(s)) }
 	for d in job.done { append(&touched, fs.parent(d[1])) }   // (a restore: where the items came back)
 	if !job.undoing { undo_push_job(app, job) }
+	if job.redo_step.pairs != nil && sync.atomic_load(&job.state) == .Done {
+		append(&app.redo, job.redo_step)
+		job.redo_step = {}
+	}
 	for p in app.panels {
 		for t in p.tabs {
 			for d in touched { if t.path == d { tab_load(app, t); break } }

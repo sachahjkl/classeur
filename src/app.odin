@@ -222,14 +222,15 @@ app_frame :: proc(app: ^App) {
 }
 
 app_close :: proc(app: ^App) {
-	session_save(app)
 	watcher_stop(app)
 	jobs_stop(app)
 	pool_stop(&app.pool, proc(data: rawptr) {})   // (a read left waiting: its memory goes with the process)
+	session_save(app)   // (after the workers: a bookmark's write on one of them never comes after this one)
 	sync.atomic_add(&app.measure_gen, 1)          // (the measures running end at their next folder)
 	pool_stop(&app.measure_pool, proc(data: rawptr) {})
 	pool_stop(&app.thumb_pool, proc(data: rawptr) {})
 	thumbs_free(app)
+	icons_free(app)
 	inspector_free(app)   // (before the renderer goes: the textures are its)
 	devtools.stop(app.devtools)
 	if global_app == app { global_app = nil }
@@ -368,6 +369,7 @@ app_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Event {
 		}
 		if e.kind == .Scroll && .Ctrl in e.mods {
 			for r, i in app.panel_rects {
+				if i >= len(app.panels) { break }
 				if e.pos.x < r.min.x || e.pos.x >= r.max.x || e.pos.y < r.min.y || e.pos.y >= r.max.y { continue }
 				if t := panel_tab(app.panels[i]); t != nil && e.delta.y != 0 {
 					tab_set_zoom(app, t, t.zoom + (e.delta.y < 0 ? 1 : -1))

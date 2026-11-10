@@ -16,6 +16,7 @@ Tab_Rect :: struct {
 Tab_Drag :: struct {
 	active:       bool,
 	panel, index: int,
+	tab:          u64,              // the tab's id (the tabs may shift while it is dragged: it is found again)
 	pending:      bool,             // released: the move is made before the next build (the panels are built now)
 	to, at:       int,
 	split:        bool,
@@ -26,7 +27,11 @@ tab_drag_apply :: proc(app: ^App) {
 	d := &app.tab_drag
 	if !d.pending { return }
 	d.pending = false
-	tab_move(app, d.panel, d.index, d.to, d.at, d.split)
+	for p, pi in app.panels {
+		for t, ti in p.tabs {
+			if t.id == d.tab { tab_move(app, pi, ti, d.to, d.at, d.split); return }
+		}
+	}
 }
 
 // Where a tab let go at `pos` goes: a panel and the place in its row, or a new panel after `panel` (`split`).
@@ -36,6 +41,7 @@ tab_drop_place :: proc(app: ^App, pos: [2]f32) -> (panel, at: int, split, ok: bo
 	for tr in app.tab_rects_last {
 		r := tr.rect
 		if pos.y < r.min.y || pos.y >= r.max.y { continue }
+		if tr.panel >= len(app.panels) || tr.panel >= len(app.panel_rects) { continue }
 		pr := app.panel_rects[tr.panel]
 		if pos.x < pr.min.x || pos.x >= pr.max.x { continue }
 		at = 0
@@ -45,6 +51,7 @@ tab_drop_place :: proc(app: ^App, pos: [2]f32) -> (panel, at: int, split, ok: bo
 		return tr.panel, at, false, true
 	}
 	for pr, i in app.panel_rects {
+		if i >= len(app.panels) { break }
 		if pos.x < pr.min.x || pos.x >= pr.max.x || pos.y < pr.min.y || pos.y >= pr.max.y { continue }
 		if pos.x > pr.max.x - (pr.max.x - pr.min.x) * 0.25 { return i, 0, true, true }
 		return i, len(app.panels[i].tabs), false, true
@@ -57,7 +64,7 @@ tab_drag_signal :: proc(app: ^App, panel, index: int, sig: ui.Signal) {
 	d := &app.tab_drag
 	if sig.dragging && !d.active {
 		th := platform.drag_threshold(app.main.win)
-		if abs(sig.drag_delta.x) >= th.x || abs(sig.drag_delta.y) >= th.y { d.active, d.panel, d.index = true, panel, index }
+		if abs(sig.drag_delta.x) >= th.x || abs(sig.drag_delta.y) >= th.y { d.active, d.panel, d.index, d.tab = true, panel, index, app.panels[panel].tabs[index].id }
 	}
 	if d.active && d.panel == panel && d.index == index && sig.dragging { app_frames(app) }
 	if d.active && d.panel == panel && d.index == index && sig.released {
@@ -94,6 +101,8 @@ tab_move :: proc(app: ^App, from, index, to, at: int, split: bool) {
 	dest := split ? 0 : clamp(at, 0, len(target.tabs))
 	inject_at(&target.tabs, dest, t)
 	target.active = dest
+	// (the tab shown stays shown: one left of it went)
+	if src.active > index { src.active -= 1 }
 	if src.active >= len(src.tabs) { src.active = len(src.tabs) - 1 }
 	// a panel left with no tab goes
 	if len(src.tabs) == 0 {

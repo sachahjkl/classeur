@@ -132,6 +132,10 @@ tab_go :: proc(app: ^App, t: ^Tab, path: string, history := true) {
 	ui.field_clear(&t.filter)
 	t.filter_open = false
 	folder_set_filter(&t.folder, "")
+	// (the types' popup is the folder's: another folder shows every type)
+	t.folder.kinds = .All
+	for k in t.folder.types_off { delete(k) }
+	clear(&t.folder.types_off)
 	tab_load(app, t)
 }
 

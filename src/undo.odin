@@ -52,6 +52,13 @@ undo_push_job :: proc(app: ^App, job: ^Job) {
 	undo_push(app, kind, job.done[:], job.redoing)
 }
 
+// Whether a job keeps `step` to hand it to the redo stack when it ends.
+@(private = "file")
+job_owns :: proc(app: ^App, step: Undo_Step) -> bool {
+	for job in app.jobs.list { if job.redo_step.pairs != nil && raw_data(job.redo_step.pairs) == raw_data(step.pairs) { return true } }
+	return false
+}
+
 redo_clear :: proc(app: ^App) {
 	for &s in app.redo { undo_step_free(&s) }
 	clear(&app.redo)
@@ -89,7 +96,7 @@ act_undo :: proc(app: ^App) {
 	step := pop(&app.undo)
 	n := len(step.pairs)
 	done := true
-	defer if done { append(&app.redo, step) } else { undo_step_free(&step) }
+	defer if done { append(&app.redo, step) } else if !job_owns(app, step) { undo_step_free(&step) }
 	switch step.kind {
 	case .Rename:
 		// (a batch: every name back, the last renamed first)
@@ -115,19 +122,23 @@ act_undo :: proc(app: ^App) {
 			return
 		}
 		undo_reveal(app, path)
+	// (a job's undo: the step can be done again once its job has ended well: job_ended hands it to the redo stack)
 	case .Copy:
 		copies := make([]string, n, context.temp_allocator)
 		for p, i in step.pairs { copies[i] = p[1] }
-		job_add(app, .Trash, copies, undoing = true)
+		job := job_add(app, .Trash, copies, undoing = true)
+		job.redo_step, done = step, false
 	case .Move:
 		sources := make([]string, n, context.temp_allocator)
 		targets := make([]string, n, context.temp_allocator)
 		for p, i in step.pairs { sources[i], targets[i] = p[1], p[0] }
-		job_add(app, .Move, sources, targets = targets, undoing = true)
+		job := job_add(app, .Move, sources, targets = targets, undoing = true)
+		job.redo_step, done = step, false
 	case .Trash:
 		in_trash := make([]string, n, context.temp_allocator)
 		for p, i in step.pairs { in_trash[i] = p[1] }
-		job_add(app, .Restore, in_trash, undoing = true)
+		job := job_add(app, .Restore, in_trash, undoing = true)
+		job.redo_step, done = step, false
 	}
 	say(app, "Undone: the %s%s.", UNDO_SAID[step.kind], n > 1 ? " of several items" : "")
 }
@@ -185,7 +196,6 @@ afters_of :: proc(pairs: [][2]string) -> []string {
 
 // Renames each pair (before to after, or back), in two steps through free names: names of a batch can swap. Never
 // over a name (fs.rename); when one fails, every pair goes back to where it was: all or nothing.
-@(private = "file")
 renames_swap :: proc(pairs: [][2]string, back: bool) -> bool {
 	from_of :: proc(p: [2]string, back: bool) -> string { return back ? p[1] : p[0] }
 	to_of :: proc(p: [2]string, back: bool) -> string { return back ? p[0] : p[1] }

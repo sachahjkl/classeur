@@ -33,6 +33,8 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app.tab_rects, app.tab_rects_last = app.tab_rects_last, app.tab_rects
 	clear(&app.tab_rects)
 	tab_drag_apply(app)
+	// (a band whose tab went, or whose press ended out of its list: over)
+	if app.band.active && (find_tab(app, app.band.tab) == nil || ui.active_key() == 0) { app.band.active = false }
 	// a text field had the keyboard at the end of the last build: only the commands that work while typing run
 	clear(&app.text_keys_before)
 	append(&app.text_keys_before, ..app.text_keys[:])

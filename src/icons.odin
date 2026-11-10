@@ -51,9 +51,10 @@ icon_key :: proc(app: ^App, path: string, folder: bool, px: int) -> string {
 	key, known := app.icon_keys[name]
 	if !known {
 		if len(app.icon_keys) > ICON_KEYS_KEPT { icon_keys_free(app) }
-		key = desktop.file_icon_key(path, false)
+		key = desktop.file_icon_key(path, false, context.temp_allocator)
 		// (a file with an icon of its own, a program's on Windows: its key is its path, not to be kept by its name)
 		if strings.has_prefix(key, "file:") { return fmt.tprintf("%s@%d", key, px) }
+		key = strings.clone(key)
 		app.icon_keys[strings.clone(name)] = key
 	}
 	return fmt.tprintf("%s@%d", key, px)
