@@ -37,3 +37,22 @@ jobs:
         run: |
           odin build tools/classeurtool -collection:gt=ext/gui_toolkit/src -out:build/classeurtool -vet
           build/classeurtool check
+
+  # Windows: the same checks (odin check -vet, the tests with no window of the system, a release build).
+  windows:
+    name: Windows x64
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./ext/gui_toolkit/.github/actions/setup-odin
+      - name: classeurtool check
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build | Out-Null
+          odin build tools/classeurtool -collection:gt=ext/gui_toolkit/src -out:build/classeurtool.exe -vet
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          build/classeurtool.exe check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

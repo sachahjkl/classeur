@@ -29,7 +29,8 @@ FIXTURE :: [?]string{
 
 @(private = "file")
 make_fixture :: proc(t: ^testing.T, files: []string) -> string {
-	dir := testkit.temp_folder(t, "classeur")
+	// (clean: the program's paths are; on Windows the temporary folder comes with '/' in it)
+	dir := fs.clean(testkit.temp_folder(t, "classeur"), context.temp_allocator)
 	for f in files {
 		path := fs.join(dir, f, context.temp_allocator)
 		if f[len(f) - 1] == '/' {
@@ -297,12 +298,12 @@ test_search :: proc(t: ^testing.T) {
 	session.key(s, .F, {.Ctrl, .Shift})
 	wait_read(s)
 	testing.expect(t, tab.folder.flat)
-	testing.expect(t, slice.contains(shown_names(tab), "Documents/letter.odt"), "what is in the folders below")
+	testing.expect(t, slice.contains(shown_names(tab), fs.join("Documents", "letter.odt", context.temp_allocator)), "what is in the folders below")
 	// the filter's letters, in order, anywhere in the path
 	session.type_text(s, "lettr")
 	names := shown_names(tab)
 	testing.expect_value(t, len(names), 2)
-	testing.expect(t, slice.contains(names, "Documents/letter.odt") && slice.contains(names, "Projects/site/notes/letter draft.txt"))
+	testing.expect(t, slice.contains(names, fs.join("Documents", "letter.odt", context.temp_allocator)) && slice.contains(names, fs.join("", "Projects/site/notes/letter draft.txt", context.temp_allocator)))
 	session.key(s, .Return)
 	testing.expect_value(t, len(app.opened), 1)
 	testing.expect_value(t, app.opened[0], fs.join(dir, names[0], context.temp_allocator))
@@ -526,16 +527,21 @@ test_jobs :: proc(t: ^testing.T) {
 	session.key(s, .Delete)
 	wait_jobs(s)
 	testing.expect(t, !fs.exists(fs.join(dir, "archive.zip", context.temp_allocator)), "archive.zip left")
-	testing.expect(t, fs.exists(fs.join(data, "Trash/files/archive.zip", context.temp_allocator)), "into the trash")
-	info, _ := os.read_entire_file(fs.join(data, "Trash/info/archive.zip.trashinfo", context.temp_allocator), context.temp_allocator)
-	testing.expect(t, strings.has_prefix(string(info), "[Trash Info]\nPath=/"), "with its .trashinfo")
-	testing.expect(t, strings.contains(string(info), "/archive.zip\nDeletionDate="), "where it was, and when")
+	// (Linux: the freedesktop.org trash of the test; Windows: the Recycle Bin, which gives no path back to undo with)
+	when ODIN_OS == .Linux {
+		testing.expect(t, fs.exists(fs.join(data, "Trash/files/archive.zip", context.temp_allocator)), "into the trash")
+		info, _ := os.read_entire_file(fs.join(data, "Trash/info/archive.zip.trashinfo", context.temp_allocator), context.temp_allocator)
+		testing.expect(t, strings.has_prefix(string(info), "[Trash Info]\nPath=/"), "with its .trashinfo")
+		testing.expect(t, strings.contains(string(info), "/archive.zip\nDeletionDate="), "where it was, and when")
+	}
 
-	// undo, step by step: the trash, the move, the second copy
-	session.key(s, .Z, {.Ctrl})
-	wait_jobs(s)
-	testing.expect(t, fs.exists(fs.join(dir, "archive.zip", context.temp_allocator)), "undo: archive.zip back from the trash")
-	testing.expect(t, !fs.exists(fs.join(data, "Trash/info/archive.zip.trashinfo", context.temp_allocator)), "its .trashinfo gone")
+	// undo, step by step: the trash (Linux), the move, the second copy
+	when ODIN_OS == .Linux {
+		session.key(s, .Z, {.Ctrl})
+		wait_jobs(s)
+		testing.expect(t, fs.exists(fs.join(dir, "archive.zip", context.temp_allocator)), "undo: archive.zip back from the trash")
+		testing.expect(t, !fs.exists(fs.join(data, "Trash/info/archive.zip.trashinfo", context.temp_allocator)), "its .trashinfo gone")
+	}
 	session.key(s, .Z, {.Ctrl})
 	wait_jobs(s)
 	testing.expect(t, fs.exists(fs.join(dir, "report 2.pdf", context.temp_allocator)), "undo: report 2.pdf moved back")
@@ -543,7 +549,7 @@ test_jobs :: proc(t: ^testing.T) {
 	session.key(s, .Z, {.Ctrl})
 	wait_jobs(s)
 	testing.expect(t, !fs.exists(fs.join(dir, "Documents/notes 2.txt", context.temp_allocator)), "undo: the copy to the trash")
-	testing.expect(t, fs.exists(fs.join(data, "Trash/files/notes 2.txt", context.temp_allocator)), "not deleted: trashed")
+	when ODIN_OS == .Linux { testing.expect(t, fs.exists(fs.join(data, "Trash/files/notes 2.txt", context.temp_allocator)), "not deleted: trashed") }
 	testing.expect(t, fs.exists(fs.join(dir, "Documents/notes.txt", context.temp_allocator)), "the first copy stays")
 
 	// for good, after the question
@@ -670,12 +676,12 @@ test_goto :: proc(t: ^testing.T) {
 	// a path: the folders in it, found by the letters after the last separator; Tab completes, Enter goes
 	session.key(s, .G, {.Ctrl})
 	testing.expect(t, app.goto.open)
-	session.type_text(s, fmt.tprintf("%s/proj", dir))
+	session.type_text(s, fs.join(dir, "proj", context.temp_allocator))
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return len((^App)(s.user).goto.names) > 0 }, "the folder read")
 	session.frames(s, 2)
 	session.key(s, .Tab)
 	session.frames(s, 2)
-	testing.expect_value(t, ui.field_string(&app.goto.field), fmt.tprintf("%s/Projects/", dir))
+	testing.expect_value(t, ui.field_string(&app.goto.field), fmt.tprintf("%s%s", fs.join(dir, "Projects", context.temp_allocator), fs.SEPARATOR_STRING))
 	session.type_text(s, "cla")
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return strings.has_suffix((^App)(s.user).goto.dir, "Projects") }, "Projects read")
 	session.frames(s, 2)
@@ -686,7 +692,7 @@ test_goto :: proc(t: ^testing.T) {
 
 	// a whole path ended by a separator: Enter goes to it, not to its first folder
 	session.key(s, .G, {.Ctrl})
-	session.type_text(s, fmt.tprintf("%s/Projects/", dir))
+	session.type_text(s, fmt.tprintf("%s%s", fs.join(dir, "Projects", context.temp_allocator), fs.SEPARATOR_STRING))
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return strings.has_suffix((^App)(s.user).goto.dir, "Projects") }, "Projects read")
 	session.frames(s, 2)
 	session.key(s, .Return)
@@ -765,7 +771,7 @@ test_batch_rename :: proc(t: ^testing.T) {
 	wait_read(s)
 	testing.expect(t, !app.batch.open)
 	names := shown_names(tab)
-	testing.expect(t, slice.contains(names, "doc 01.txt") || slice.contains(names, "doc 01.pdf"), "numbered")
+	testing.expectf(t, slice.contains(names, "doc 01.txt") || slice.contains(names, "doc 01.pdf"), "numbered (%s)", app.status)
 	testing.expect(t, !slice.contains(names, "notes.txt") && !slice.contains(names, "report 2.pdf"))
 	// undone at once: the three names back
 	session.key(s, .Z, {.Ctrl})
@@ -789,7 +795,7 @@ test_drag_and_drop :: proc(t: ^testing.T) {
 	testing.expect(t, folder_cursor_to_name(&tab.folder, "Documents"))
 	session.frames(s, 2)
 	at: [2]f32
-	for z in app.drop_zones_last { if strings.has_suffix(z.path, "/Documents") { at = (z.rect.min + z.rect.max) * 0.5 } }
+	for z in app.drop_zones_last { if strings.has_suffix(z.path, fs.SEPARATOR_STRING + "Documents") { at = (z.rect.min + z.rect.max) * 0.5 } }
 	testing.expect(t, at != {}, "Documents takes a drop")
 	data: platform.Drag_Data
 	append(&data.files, a, b)
@@ -799,7 +805,7 @@ test_drag_and_drop :: proc(t: ^testing.T) {
 	platform.drop_inject(app.main.win, .Drop_Enter, at, &data, {.Copy, .Move})
 	platform.drop_inject(app.main.win, .Drop_Over, at, nil, {.Copy, .Move})
 	session.frames(s, 1)
-	testing.expect(t, strings.has_suffix(app.drop_hover, "/Documents"), "the target marked")
+	testing.expect(t, strings.has_suffix(app.drop_hover, fs.SEPARATOR_STRING + "Documents"), "the target marked")
 	platform.drop_inject(app.main.win, .Drop, at, nil, {.Copy, .Move})
 	session.frames(s, 1)
 	wait_jobs(s)
@@ -820,7 +826,7 @@ test_drag_and_drop :: proc(t: ^testing.T) {
 	point_at(t, tab, "archive.zip")
 	session.frames(s, 2)
 	from, to: [2]f32
-	for z in app.drop_zones_last { if strings.has_suffix(z.path, "/Photos") { to = (z.rect.min + z.rect.max) * 0.5 } }
+	for z in app.drop_zones_last { if strings.has_suffix(z.path, fs.SEPARATOR_STRING + "Photos") { to = (z.rect.min + z.rect.max) * 0.5 } }
 	from = (tab.cursor_rect.min + tab.cursor_rect.max) * 0.5
 	from.x = tab.cursor_rect.min.x + 120
 	platform.drag_script(app.main.win, {{to, {}}, {to, {}}})

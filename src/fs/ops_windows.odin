@@ -6,6 +6,7 @@ package fs
 
 import "base:runtime"
 import "core:strings"
+import "core:time"
 import win "core:sys/windows"
 
 foreign import kernel32 "system:Kernel32.lib"
@@ -127,9 +128,15 @@ make_file :: proc(path: string) -> Error {
 
 // Renames `from` to `to`, never over something: .Exists when the name is taken, .Cross_Volume when it is on another
 // volume.
+// (a file the shell or an antivirus reads for a moment refuses to move: tried again a few times, as Explorer does)
 rename :: proc(from, to: string) -> Error {
-	if !win.MoveFileExW(wide(from), wide(to), 0) { return op_error(win.GetLastError()) }
-	return .None
+	for attempt in 0 ..< 10 {
+		if win.MoveFileExW(wide(from), wide(to), 0) { return .None }
+		e := win.GetLastError()
+		if e != win.ERROR_SHARING_VIOLATION && e != win.ERROR_ACCESS_DENIED || attempt == 9 { return op_error(e) }
+		time.sleep(20 * time.Millisecond)
+	}
+	return .Other
 }
 
 // A file, a link or an empty folder.

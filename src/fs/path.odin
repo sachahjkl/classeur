@@ -75,10 +75,15 @@ clean :: proc(path: string, allocator := context.allocator) -> string {
 	return strings.to_string(b)
 }
 
+// (a name with '/' in it, "Documents/letter.odt", gets the system's separators)
 join :: proc(dir, name: string, allocator := context.allocator) -> string {
-	if dir == "" { return strings.clone(name, allocator) }
-	if is_separator(dir[len(dir) - 1]) { return strings.concatenate({dir, name}, allocator) }
-	return strings.concatenate({dir, SEPARATOR_STRING, name}, allocator)
+	n := name
+	when ODIN_OS == .Windows {
+		if strings.contains_rune(name, '/') { n, _ = strings.replace_all(name, "/", "\\", context.temp_allocator) }
+	}
+	if dir == "" { return strings.clone(n, allocator) }
+	if is_separator(dir[len(dir) - 1]) { return strings.concatenate({dir, n}, allocator) }
+	return strings.concatenate({dir, SEPARATOR_STRING, n}, allocator)
 }
 
 // The folder that holds `path` (a slice of it), "" for a root.
