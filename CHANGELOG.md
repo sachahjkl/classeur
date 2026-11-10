@@ -5,6 +5,14 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- File Pilot's zoom slider: a click on the footer's percent shows a vertical slider; dragged, the view goes step by step
+  and the cards grow or shrink smoothly between the steps.
+
+### Fixed
+- Windows: names that start with a dot are hidden files; names joined with the system's separators; a rename tried again
+  while the shell reads the file; the batch's folder read after its renames. The tests and the checks run on Windows in CI.
+
 ## [0.2.0] - 2026-11-10
 
 ### Added

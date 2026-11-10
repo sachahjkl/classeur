@@ -59,6 +59,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	batch_build(app, em)
 	layouts_build(app, em)
 	setup_build(app, em)
+	zoom_slider_build(app, em)
 	options_build(app)
 	dialogs_build(app, em)
 	jobs_tidy(app)

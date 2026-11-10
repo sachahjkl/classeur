@@ -994,3 +994,25 @@ test_install :: proc(t: ^testing.T) {
 	testing.expect_value(t, cmd_uninstall({}), 0)
 	testing.expect(t, !fs.exists(entry), "taken away")
 }
+
+// The zoom's slider: a click on the percent shows it; dragged up, the view goes to the largest step.
+@(test)
+test_zoom_slider :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 700})
+	tab := current_tab(app)
+	session.frames(s, 2)
+	session.click(s, "zoom")
+	session.frames(s, 3)
+	slider := session.get(s, "slider")
+	r := slider.rect
+	from := [2]f32{(r.min.x + r.max.x) * 0.5, r.max.y - 10}
+	session.press(s, from)
+	session.move(s, {from.x, (r.min.y + r.max.y) * 0.5})
+	session.move(s, {from.x, r.min.y + 2})
+	when SHOTS { session.save_png(s, "zoom.png") }
+	session.release(s, {from.x, r.min.y + 2})
+	session.frames(s, 2)
+	testing.expect_value(t, tab.zoom, len(ZOOMS) - 1)
+}

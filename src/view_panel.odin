@@ -654,13 +654,14 @@ zoom_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	draw.rect(dc, {r.min, {r.min.x + w, r.max.y}}, d.fill, radius = rad)
 }
 
-// The zoom as File Pilot shows it: its percent on a bar of the accent; a click goes to the next view, a right click to
-// the one before.
+// The zoom as File Pilot shows it: its percent on a bar of the accent, moving smoothly; a click opens the vertical slider
+// above it (zoom_slider_build), a right click goes to the step before.
 @(private = "file")
 zoom_pill :: proc(app: ^App, t: ^Tab, em: f32) {
 	z := ZOOMS[clamp(t.zoom, 0, len(ZOOMS) - 1)]
 	d := ui.frame_new(Zoom_Draw)
-	d^ = {f32(z.percent) / 100, selection_color(app), ui.color("border")}
+	shown := ui.anim(ui.key_from_string(0, fmt.tprintf("classeur_zoom%d", t.id)), f32(z.percent) / 100, 22)
+	d^ = {shown, selection_color(app), ui.color("border")}
 	ui.next({width = ui.px(em * 3.4), height = ui.px(em * 1.5)})
 	b := ui.custom("###zoom", zoom_draw, d, {.Clickable})
 	// (the percent over the bar: a box of its own, drawn after the bar)
@@ -669,13 +670,63 @@ zoom_pill :: proc(app: ^App, t: ^Tab, em: f32) {
 		ui.label(fmt.tprintf("%d%%###pct", z.percent))
 	}
 	sig := ui.signal(b)
-	if sig.clicked { tab_set_zoom(app, t, (t.zoom + 1) % len(ZOOMS)) }
-	if sig.right_clicked { tab_set_zoom(app, t, (t.zoom + len(ZOOMS) - 1) % len(ZOOMS)) }
-	if ui.hovered_for(sig, 0.4) {
-		if ui.tooltip() {
-			ui.next({width = ui.text_size(em * 0.6), height = ui.px(ui.dense(em * 1.8))})
-			ui.label("The view: a click zooms in, a right click out (Ctrl+wheel, Ctrl+= and Ctrl+-)###tip")
+	if sig.clicked { zoom_slider_open(app, t, b.rect) }
+	if sig.right_clicked { tab_set_zoom(app, t, max(t.zoom - 1, 0)) }
+	hover_tip(sig, "The view: a click shows the slider (Ctrl+wheel, Ctrl+= and Ctrl+- too)")
+}
+
+@(private = "file")
+Slider_Draw :: struct { at: f32, steps: int, track, fill, tick, knob: ui.Color }
+
+@(private = "file")
+slider_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+	d := (^Slider_Draw)(user)
+	r := b.rect
+	cx := (r.min.x + r.max.x) * 0.5
+	w := max(4, (r.max.x - r.min.x) * 0.18)
+	top, bottom := r.min.y + 8, r.max.y - 8
+	draw.rect(dc, {{cx - w * 0.5, top}, {cx + w * 0.5, bottom}}, d.track)
+	y := bottom - (bottom - top) * d.at
+	draw.rect(dc, {{cx - w * 0.5, y}, {cx + w * 0.5, bottom}}, d.fill)
+	// a tick per step, the knob where the zoom is
+	for i in 0 ..< d.steps {
+		ty := bottom - (bottom - top) * f32(i) / f32(max(d.steps - 1, 1))
+		draw.rect(dc, {{cx + w, ty - 0.5}, {cx + w * 2.2, ty + 0.5}}, d.tick)
+	}
+	k := w * 1.6
+	draw.rect(dc, {{cx - k, y - k * 0.45}, {cx + k, y + k * 0.45}}, d.knob)
+}
+
+// The slider of the zoom (a menu over the footer's percent): up is larger; it moves step by step as it is dragged, the
+// view following smoothly.
+zoom_slider_open :: proc(app: ^App, t: ^Tab, at: ui.Rect) {
+	if app.zoom_slider_key == 0 { app.zoom_slider_key = ui.key_from_string(0, "classeur_zoom_slider") }
+	app.zoom_slider_tab = t.id
+	ui.ctx_menu_open_rect(app.zoom_slider_key, at)
+}
+
+zoom_slider_build :: proc(app: ^App, em: f32) {
+	if app.zoom_slider_key == 0 { return }
+	if ui.ctx_menu(app.zoom_slider_key, em * 4.4) {
+		t := find_tab(app, app.zoom_slider_tab)
+		if t == nil { ui.ctx_menu_close(); return }
+		n := len(ZOOMS)
+		ui.next({width = ui.px(em * 4.4), height = ui.px(em * 1.6), text_align = .Center})
+		ui.label(fmt.tprintf("%d%%###slider_pct", ZOOMS[t.zoom].percent))
+		d := ui.frame_new(Slider_Draw)
+		d^ = {ui.anim(ui.key_from_string(0, "classeur_slider_at"), f32(t.zoom) / f32(n - 1), 22), n, ui.color("border"), selection_color(app), ui.color("weak text"), ui.color("text")}
+		ui.next({width = ui.px(em * 4.4), height = ui.px(em * 12)})
+		b := ui.custom("###slider", slider_draw, d, {.Clickable})
+		sig := ui.signal(b)
+		if sig.pressed || sig.dragging {
+			top, bottom := b.rect.min.y + 8, b.rect.max.y - 8
+			f := clamp((bottom - ui.mouse_pos().y) / max(bottom - top, 1), 0, 1)
+			step := int(f * f32(n - 1) + 0.5)
+			if step != t.zoom { tab_set_zoom(app, t, step) }
 		}
+		if sig.scrolled.y != 0 { tab_set_zoom(app, t, t.zoom + (sig.scrolled.y > 0 ? 1 : -1)) }
+		if ui.key_press(.Up) { tab_set_zoom(app, t, t.zoom + 1) }
+		if ui.key_press(.Down) { tab_set_zoom(app, t, t.zoom - 1) }
 	}
 }
 

@@ -72,6 +72,8 @@ App :: struct {
 	band:        Band,              // the rectangle selection (band.odin)
 	layouts:     Layouts,           // the layouts saved by name (layouts.odin)
 	tab_drag:    Tab_Drag,          // a tab dragged (tab_drag.odin)
+	zoom_slider_key: ui.Key,        // the zoom's slider over the footer (view_panel.odin)
+	zoom_slider_tab: u64,
 	tab_rects:   [dynamic]Tab_Rect, // the tabs' boxes of this frame
 	tab_rects_last: [dynamic]Tab_Rect,   // and of the last one (what a released tab is tested against)
 	rename:      Rename,            // the rename in place (actions.odin)

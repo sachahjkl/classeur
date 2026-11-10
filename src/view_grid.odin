@@ -21,9 +21,11 @@ grid_list :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	if empty_state(app, t, em) { return }
 	z := ZOOMS[clamp(t.zoom, 0, len(ZOOMS) - 1)]
 	lines := z.mode == .Columns
-	// an item's size: a line of a column, or a card of the zoom's size
-	item_w := lines ? em * COLUMN_EM : em * z.card_em
-	item_h := lines ? em * ROW_EM : em * z.card_em * CARD_HEIGHT
+	// an item's size: a line of a column, or a card of the zoom's size, which goes from step to step smoothly (File
+	// Pilot's zoom: discrete steps, the cards growing between them)
+	card_em := ui.anim(ui.key_from_string(0, fmt.tprintf("classeur_card%d", t.id)), z.card_em > 0 ? z.card_em : ZOOMS[ZOOM_GRID - 1].card_em, 22)
+	item_w := lines ? em * COLUMN_EM : em * card_em
+	item_h := lines ? em * ROW_EM : em * card_em * CARD_HEIGHT
 	gap := lines ? em * ROW_INSET_EM : em * CARD_GAP_EM
 	// as many items in a row as the width laid out last time holds (the lines share it all)
 	width: f32 = item_w * 4
