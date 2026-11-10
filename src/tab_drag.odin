@@ -10,7 +10,6 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 import "gt:draw"
-import "gt:process"
 import "gt:render"
 import setup "gt:setup"
 import "gt:platform"
@@ -31,14 +30,19 @@ Tab_Drag :: struct {
 	grab:         [2]f32,           // where the pointer holds it: pointer minus the tab's corner (the ghost and the picture)
 	size:         [2]f32,           // the tab's size (the ghost's)
 	capture:      bool,             // a picture of the tab was asked of the renderer (the system's drag shows it)
+	panel_now:    int,              // the panel the dragged tab is in (found by its id each frame)
 }
 
 // Where a tab let go makes a new panel: none, a column at the right, a panel below.
 Split :: enum u8 { None, Right, Below }
 
-// Before a build: the move of a tab released in the last one.
+// Before a build: the move of a tab released in the last one. A drag whose tab went (closed while dragged) is over.
 tab_drag_apply :: proc(app: ^App) {
 	d := &app.tab_drag
+	if d.active && find_tab(app, d.tab) == nil {
+		d.active = false
+		tab_image_free(app)
+	}
 	if !d.pending { return }
 	d.pending = false
 	for p, pi in app.panels {
@@ -67,8 +71,12 @@ tab_drop_place :: proc(app: ^App, pos: [2]f32) -> (panel, at: int, split: Split,
 	for pr, i in app.panel_rects {
 		if i >= len(app.panels) { break }
 		if pos.x < pr.min.x || pos.x >= pr.max.x || pos.y < pr.min.y || pos.y >= pr.max.y { continue }
-		if pos.x > pr.max.x - (pr.max.x - pr.min.x) * 0.25 { return i, 0, .Right, true }
-		if pos.y > pr.max.y - (pr.max.y - pr.min.y) * 0.25 { return i, 0, .Below, true }
+		// (a panel's only tab beside itself: nothing to split)
+		alone := i == app.tab_drag.panel_now && len(app.panels[i].tabs) == 1
+		if pos.x > pr.max.x - (pr.max.x - pr.min.x) * 0.25 { return i, 0, .Right, !alone }
+		if pos.y > pr.max.y - (pr.max.y - pr.min.y) * 0.25 { return i, 0, .Below, !alone }
+		// (its own panel's body: it stays where it is)
+		if i == app.tab_drag.panel_now { return }
 		return i, len(app.panels[i].tabs), .None, true
 	}
 	return
@@ -80,7 +88,7 @@ tab_drag_signal :: proc(app: ^App, panel, index: int, sig: ui.Signal) {
 	if sig.dragging && !d.active {
 		th := platform.drag_threshold(app.main.win)
 		if abs(sig.drag_delta.x) >= th.x || abs(sig.drag_delta.y) >= th.y {
-			d.active, d.panel, d.index, d.tab = true, panel, index, app.panels[panel].tabs[index].id
+			d.active, d.panel, d.index, d.tab, d.panel_now = true, panel, index, app.panels[panel].tabs[index].id, panel
 			r := sig.box.rect
 			d.grab, d.size = ui.mouse_pos() - sig.drag_delta - r.min, r.max - r.min
 			// (its picture, read back from the next frame: what the system's drag shows out of the window)
@@ -88,7 +96,10 @@ tab_drag_signal :: proc(app: ^App, panel, index: int, sig: ui.Signal) {
 			d.capture = render.capture_request(&app.shared.r, {int(r.min.x), int(r.min.y), int(r.max.x - r.min.x), int(r.max.y - r.min.y)})
 		}
 	}
-	if d.active && d.panel == panel && d.index == index && sig.dragging {
+	// (the dragged tab is told by its id: the tabs may shift while it is dragged)
+	mine := d.active && app.panels[panel].tabs[index].id == d.tab
+	if mine { d.panel_now = panel }
+	if mine && sig.dragging {
 		app_frames(app)
 		// at the window's left, right or bottom edge, or out of it: the drag of the system takes it, started while the
 		// pointer is still in the window (the systems start a drag from a press of their window's), to another classeur
@@ -101,7 +112,7 @@ tab_drag_signal :: proc(app: ^App, panel, index: int, sig: ui.Signal) {
 			app.tab_out = d.tab
 		}
 	}
-	if d.active && d.panel == panel && d.index == index && sig.released {
+	if mine && d.active && sig.released {
 		d.active = false
 		tab_image_free(app)
 		to, at, split, ok := tab_drop_place(app, ui.mouse_pos())
@@ -206,6 +217,8 @@ tab_drag_poll :: proc(app: ^App) {
 	case .Ready:
 		d.capture = false
 		tab_image_free(app)
+		// (read back after the drag ended: no one to show it)
+		if !d.active && app.tab_out == 0 { delete(pixels); return }
 		app.tab_image = {pixels, size, {}}
 		platform.drag_image_fade(app.tab_image, 0.85)
 	case .Failed:
@@ -227,6 +240,11 @@ tab_image_free :: proc(app: ^App) {
 // window, a window of its own (said under the ghost).
 tab_drag_overlay :: proc(app: ^App, em: f32) {
 	d := &app.tab_drag
+	// (after the tabs' signals: a press that ended out of its tab's box, a capture lost, ends the drag)
+	if d.active && ui.active_key() == 0 {
+		d.active = false
+		tab_image_free(app)
+	}
 	if !d.active { return }
 	t := find_tab(app, d.tab)
 	if t == nil { return }
@@ -308,7 +326,7 @@ tab_out_run :: proc(app: ^App) {
 	path := strings.clone(t.path, context.temp_allocator)
 	data: platform.Drag_Data
 	append(&data.custom, platform.Drag_Entry{TAB_MIME, tab_mime_data(os.get_pid(), id, path)})
-	data.text = path
+	// (no text in it: a program that takes a text with Move would close the tab and open no window)
 	defer { delete(data.custom) }
 	// (its picture under the pointer, where it was held)
 	image: Maybe(platform.Drag_Image)
@@ -321,11 +339,16 @@ tab_out_run :: proc(app: ^App) {
 	effect, started := platform.drag_start(app.main.win, data, {.Move}, image)
 	if !started || app.tab_out_home { return }
 	alone := len(app.panels) == 1 && len(app.panels[0].tabs) == 1
-	if _, moved := effect.?; !moved {
+	_, moved := effect.?
+	if !moved {
 		if alone { return }
 		if !tab_window(app, path) { return }
 	}
-	if alone { return }
+	// (the window's only tab taken by another classeur window: this one has nothing left to show)
+	if alone {
+		if moved && !app.headless { platform.request_close(app.main.win) }
+		return
+	}
 	for p in app.panels {
 		for q, i in p.tabs { if q.id == id { tab_close(app, p, i); app_frames(app); return } }
 	}
@@ -337,7 +360,7 @@ tab_window :: proc(app: ^App, path: string) -> bool {
 		append(&app.opened, strings.concatenate({"window:", path}))
 		return true
 	}
-	return setup.launch(process.executable_path(), {"--window", path})
+	return setup.launch(app.exe, {"--window", path})
 }
 
 // A tab of a classeur window dropped here (Drop_* with TAB_MIME): it goes to the panel under the pointer. From this window

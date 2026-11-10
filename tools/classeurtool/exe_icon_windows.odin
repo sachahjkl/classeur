@@ -1,12 +1,17 @@
 package classeurtool
 
 import "core:fmt"
+import "core:path/filepath"
+import "core:strings"
 import win "core:sys/windows"
 
 // Windows: the release build carries its icon (res/classeur.rc's group 1, what Explorer and the window show): the
 // executable is opened as data and the group looked for.
 check_exe_icon :: proc() -> bool {
-	module := win.LoadLibraryExW(win.utf8_to_wstring(PROGRAM), nil, {.LOAD_LIBRARY_AS_DATAFILE, .LOAD_LIBRARY_AS_IMAGE_RESOURCE})
+	// (a full path with backslashes, as LoadLibraryEx asks)
+	full, _ := filepath.abs(PROGRAM, context.temp_allocator)
+	full, _ = strings.replace_all(full, "/", "\\", context.temp_allocator)
+	module := win.LoadLibraryExW(win.utf8_to_wstring(full), nil, {.LOAD_LIBRARY_AS_DATAFILE, .LOAD_LIBRARY_AS_IMAGE_RESOURCE})
 	if module == nil {
 		fmt.eprintfln("classeurtool: %s cannot be opened to read its resources", PROGRAM)
 		return false

@@ -1481,8 +1481,9 @@ test_icon_checks :: proc(t: ^testing.T) {
 	session.hover(s, "check1")
 	session.frames(s, 2)
 	testing.expect(t, session.find(s, "box") != nil, "the pointer over an icon shows its box")
-	session.click(s, "check1")
-	session.click(s, "check3")
+	// (a click on the icon itself: its row is the box clicked)
+	session.click_at(s, session.center(session.get(s, "check1")))
+	session.click_at(s, session.center(session.get(s, "check3")))
 	session.frames(s, 2)
 	testing.expect_value(t, tab.folder.count, 2)
 	session.leave(s)
@@ -1531,6 +1532,18 @@ test_settings_look :: proc(t: ^testing.T) {
 	session.release(s, to)
 	session.frames(s, 2)
 	testing.expect(t, config.float_of(&app.prefs, "look.rounding") < 0.2, "written at the release")
+	// held again, and the settings closed meanwhile: what it showed goes back to what is written
+	written := ui.rounding(&app.main.state)
+	session.press(s, to)
+	session.move(s, {sl.rect.max.x - 1, from.y})
+	session.frames(s, 2)
+	testing.expect(t, ui.rounding(&app.main.state) > 1.5, "shown")
+	app.options.open = false
+	session.frames(s, 2)
+	testing.expect_value(t, ui.rounding(&app.main.state), written)
+	session.release(s, {sl.rect.max.x - 1, from.y})
+	session.key(s, .Comma, {.Ctrl})
+	session.frames(s, 2)
 	session.type_text(s, "update")
 	session.frames(s, 3)
 	testing.expect(t, session.find_text(s, "Update") != nil, "the update line")
@@ -1595,6 +1608,11 @@ test_column_filters :: proc(t: ^testing.T) {
 	testing.expect(t, session.find_text(s, "No row fits the filters") != nil, "said")
 	folder_all_ranks(&tab.folder, .Date)
 	testing.expect_value(t, len(tab.folder.shown), n - 3)
+	// another folder: every row again (the columns' filters were this folder's)
+	context.allocator = runtime.heap_allocator()
+	tab_go(app, tab, fs.join(dir, "Documents", context.temp_allocator))
+	wait_read(s)
+	testing.expect(t, tab.folder.dates_off == {} && tab.folder.sizes_off == {}, "cleared")
 }
 
 // The sidebar's sections are moved: a heading's menu (Move to the top), a heading dragged under another (a line says
@@ -1698,4 +1716,44 @@ test_tab_drag_feedback :: proc(t: ^testing.T) {
 	session.frames(s, 2)
 	testing.expect(t, len(app.opened) > 0 && strings.has_prefix(app.opened[len(app.opened) - 1], "window:"), "a window of its own")
 	testing.expect_value(t, len(app.panels), 1)
+}
+
+// What a dragged tab carries, read back: a Windows path keeps its colon; a string that is not one is refused.
+@(test)
+test_tab_mime :: proc(t: ^testing.T) {
+	pid, id, path, ok := tab_mime_parse(tab_mime_data(42, 7, `C:\Users\me\Documents`))
+	testing.expect(t, ok)
+	testing.expect_value(t, pid, 42)
+	testing.expect_value(t, id, u64(7))
+	testing.expect_value(t, path, `C:\Users\me\Documents`)
+	_, _, _, ok = tab_mime_parse("/home/me")
+	testing.expect(t, !ok, "no process, no id")
+	_, _, _, ok = tab_mime_parse("x:y:/home/me")
+	testing.expect(t, !ok, "not numbers")
+	// the icons' sizes: the next one up, the largest past it
+	testing.expect_value(t, icon_size_for(22), 24)
+	testing.expect_value(t, icon_size_for(24), 24)
+	testing.expect_value(t, icon_size_for(1000), 256)
+}
+
+// A tab closed while it is dragged ends the drag (the next one starts again).
+@(test)
+test_tab_drag_closed :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1200, 700})
+	context.allocator = runtime.heap_allocator()
+	session.key(s, .T, {.Ctrl})
+	wait_read(s)
+	session.frames(s, 2)
+	first := app.tab_rects_last[1].rect
+	from := (first.min + first.max) * 0.5
+	session.press(s, from)
+	session.move(s, from + {30, 0})
+	session.frames(s, 2)
+	testing.expect(t, app.tab_drag.active, "dragging")
+	session.key(s, .W, {.Ctrl})
+	session.frames(s, 3)
+	testing.expect(t, !app.tab_drag.active, "over: its tab went")
+	session.release(s, from + {30, 0})
 }

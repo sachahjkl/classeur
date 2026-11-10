@@ -8,33 +8,36 @@ and the versions follow [semantic versioning](https://semver.org/).
 ### Added
 - Updates: the installed classeur checks its latest release once a day, downloads it, checks its signed manifest and puts
   it in place (the toolkit's Updater); the settings' Updates page checks now, installs, restarts. Releases publish the
-  programs alone and their signed manifests.
-- Settings: the rounding of the whole interface (a slider; the tabs' corners and classeur's own drawings too), the density, the animations,
-  smooth scrolling, scroll bars that hide.
+  programs alone and their signed manifests, public once both systems' files are there.
+- Settings: the rounding of the whole interface (a slider; the tabs' corners and classeur's own drawings too), the
+  density, the animations, smooth scrolling, scroll bars that hide.
 - Tabs dragged say where they go: the tab follows the pointer, a line between the tabs of a row, the half of the panel a
   new panel takes, the panel that takes it; at the window's edge the drag of the system starts (the pointer still in the
   window), with the tab's picture. A tab's menu sends it to a window of its own (Ctrl+Shift+Alt+N).
-- The sidebar's sections in the person's order: a heading dragged (a line says where it lands), or its menu's Move up,
-  Move down, Move to the top, Move to the bottom; kept between starts.
+- The sidebar's sections in the person's order: a heading dragged (a line says where it lands; Escape cancels), or its
+  menu's Move up, Move down, Move to the top, Move to the bottom; kept between starts.
 - The columns' filters: a funnel on each column's title (over it, or lit while it filters): the dates of Modified and the
-  sizes of Size as the groups have them, with their counts; the types of Type; the letters of Name.
+  sizes of Size as the groups have them, with their counts; the types of Type; the letters of Name. Another folder shows
+  every row again.
 - The palette opens with Ctrl+K too (as in the other programs), and the "…" menu offers it and the settings first.
-- A row's icon is its box (File Pilot's): the pointer over it, or the row checked among others, shows it; the header's
-  box is over the icons.
+- A row's icon is its box (File Pilot's): the pointer over it, or the row checked among others, shows it; a click on it
+  checks the row, a drag from it drags the row; the header's box is over the icons.
 
 ### Changed
-- The settings' sliders show their value while they are held (the rounding, the text size), written when let go.
+- The settings' sliders show their value while they are held (the rounding, the text size), written when let go; the
+  settings closed meanwhile, what was written is shown again.
+- The site's download button is the reader's system's (Windows or Linux), the other offered under it (the toolkit's).
 
 ### Fixed
-- A tab dragged back into its own window moves that tab, not another one showing the same folder.
+- A tab dragged back into its own window moves that tab, not another one showing the same folder; a tab dragged out no
+  longer goes to a program that takes its path as text; a drag whose tab was closed ends.
 - Ctrl+wheel no longer blinks the icons: they are made at a few sizes (drawn smaller), and a size not made yet shows the
   nearest one made.
+- After an update on Linux, Restart now and a torn-off tab start the new program (the program's path is read at the
+  start).
 
 ### Removed
 - The Round corners switch: the rounding slider replaces it.
-
-### Changed
-- The site's download button is the reader's system's (Windows or Linux), the other offered under it (the toolkit's).
 
 ## [0.12.0] - 2026-11-10
 

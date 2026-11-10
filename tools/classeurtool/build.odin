@@ -139,8 +139,8 @@ run_check :: proc(args: []string) -> int {
 SCOPES :: [?]string{"parent", "row", "column", "field_frame", "scroll_y", "style", "tags", "title_bar", "modal", "ctx_menu", "menu_submenu", "tooltip"}
 
 check_scopes :: proc() -> bool {
-	files, err := os.read_all_directory_by_path("src", context.temp_allocator)
-	if err != nil { return false }
+	files, ok_files := source_files("src")
+	if !ok_files { return false }
 	ok := true
 	scopes := SCOPES
 	for f in files {
@@ -166,8 +166,8 @@ check_scopes :: proc() -> bool {
 // differs between the systems, and says nothing of them itself. A difference of the program's own is a constant in a
 // file of the system's name (system_windows.odin, system_other.odin), never a `when ODIN_OS` in the interface.
 check_systems :: proc() -> bool {
-	files, err := os.read_all_directory_by_path("src", context.temp_allocator)
-	if err != nil { return false }
+	files, ok_files := source_files("src")
+	if !ok_files { return false }
 	ok := true
 	for f in files {
 		if !strings.has_suffix(f.name, ".odin") || strings.has_suffix(f.name, "_test.odin") || strings.has_prefix(f.name, "system_") { continue }
@@ -184,4 +184,24 @@ check_systems :: proc() -> bool {
 		}
 	}
 	return ok
+}
+
+// The program's sources: src/*.odin and those of its packages below (src/update...), src/fs aside (the system's own,
+// where ODIN_OS belongs; it builds no interface).
+@(private = "file")
+source_files :: proc(dir: string) -> (files: [dynamic]os.File_Info, ok: bool) {
+	files.allocator = context.temp_allocator
+	list, err := os.read_all_directory_by_path(dir, context.temp_allocator)
+	if err != nil { return files, false }
+	for f in list {
+		if f.type == .Directory {
+			if f.name == "fs" { continue }
+			sub, sub_ok := source_files(f.fullpath)
+			if !sub_ok { return files, false }
+			append(&files, ..sub[:])
+			continue
+		}
+		append(&files, f)
+	}
+	return files, true
 }

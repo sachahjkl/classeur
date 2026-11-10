@@ -133,7 +133,9 @@ section :: proc(app: ^App, s: Side_Section, em: f32) -> bool {
 	}
 	app.side_heads[s] = sig.box.rect
 	// dragged past a few pixels: the section moves where it is let go (side_drag_end); a right click: its menu
-	if sig.dragging && abs(sig.drag_delta.y) > em * 0.5 { app.side_drag, app.side_dragging = s, true }
+	// (a drag cancelled by Escape stays so until its button comes up)
+	if app.side_cancelled && s == app.side_drag && !sig.dragging { app.side_cancelled = false }
+	if sig.dragging && abs(sig.drag_delta.y) > em * 0.5 && !app.side_cancelled { app.side_drag, app.side_dragging = s, true }
 	if app.side_dragging && app.side_drag == s { app.side_held = sig.dragging }
 	if sig.clicked && !(app.side_dragging && app.side_drag == s) { app.side_open[s] = !open }
 	if sig.right_clicked { side_menu_open(app, s) }
@@ -182,6 +184,7 @@ side_move :: proc(app: ^App, s: Side_Section, to: int) {
 @(private = "file")
 side_drag_end :: proc(app: ^App, em: f32) {
 	if !app.side_dragging { return }
+	if ui.key_press(.Escape) { app.side_dragging, app.side_held, app.side_cancelled = false, false, true; return }   // (let go nowhere)
 	y := ui.mouse_pos().y
 	slot := 0
 	for sec, i in app.side_order {

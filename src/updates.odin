@@ -8,7 +8,7 @@ package classeur
 
 import "core:fmt"
 import config "gt:config"
-import process "gt:process"
+import "core:strings"
 import "gt:platform"
 import setup "gt:setup"
 import update "gt:update"
@@ -22,7 +22,7 @@ updates_start :: proc(app: ^App) {
 	app.installed_copy = setup.facts(setup_config()).running_it
 	app.updater = update.updater_start({
 		product = classeur_update.PRODUCT, folder = UPDATE_FOLDER, current = APP_VERSION,
-		exe = process.executable_path(), user_agent = fmt.tprintf("classeur/%s", APP_VERSION),
+		exe = app.exe, user_agent = fmt.tprintf("classeur/%s", APP_VERSION),
 		// (the updater's thread: the loop wakes, and updates_follow reads the state)
 		news = proc(user: rawptr) { platform.wake((^App)(user).main.win) }, user = app,
 	})
@@ -58,6 +58,6 @@ updates_follow :: proc(app: ^App) {
 // The new program takes over: started once this one has ended (it holds the single instance until then).
 updates_restart :: proc(app: ^App) {
 	delete(app.launch_after)
-	app.launch_after = fmt.aprintf("%s", process.executable_path())
+	app.launch_after = strings.clone(app.exe)
 	platform.request_close(app.main.win)
 }

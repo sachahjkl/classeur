@@ -87,7 +87,7 @@ sys_icon :: proc(app: ^App, path: string, folder: bool, px: int) -> (ic: ^Sys_Ic
 	}
 	app.icons_cache[strings.clone(key)] = {state = .Asked, used = app.frame}
 	job := new(Icon_Job)
-	job^ = {app = app, key = strings.clone(key), path = strings.clone(path), folder = folder, px = px}
+	job^ = {app = app, key = strings.clone(key), path = strings.clone(path), folder = folder, px = made}
 	pool_submit(&app.thumb_pool, icon_run, job)
 	return icon_stand_in(app, key, made), false
 }

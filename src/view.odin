@@ -254,7 +254,7 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 			if !app.tab_drag.active { hover_tip(sig, home_path(app, t.path), t.locked ? "Locked: folders open in a new tab" : "") }
 			append(&app.tab_rects, Tab_Rect{index, i, tab.rect})
 			tab_drag_signal(app, index, i, sig)
-			if app.tab_drag.active && app.tab_drag.panel == index && app.tab_drag.index == i { tab_drag_mark(tab) }
+			if app.tab_drag.active && app.tab_drag.tab == t.id { tab_drag_mark(tab) }
 			if sig.middle_clicked { close = i }
 			if sig.right_clicked {
 				p.active, app.focus = i, index

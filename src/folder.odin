@@ -34,6 +34,8 @@ Folder :: struct {
 	dates_off:   Ranks,             // the date groups left out (the Modified column's filter: group_rank .Date)
 	sizes_off:   Ranks,             // the size groups left out (the Size column's filter: group_rank .Size)
 	filter_now:  i64,               // the date filter's "now" (ns), set with it
+	today_of:    i64,               // the "now" whose local day is `today` (one conversion per refilter, not per row)
+	today:       i64,
 	order:       [dynamic]u32,      // every entry, sorted
 	shown:       [dynamic]u32,      // the rows: `order` without what the filter and the hidden setting leave out
 	ids:         [dynamic]u64,      // a stable identity per row (the hash of its name): the virtual list's
@@ -204,6 +206,7 @@ folder_toggle_rank :: proc(f: ^Folder, by: Group_By, rank: int, now: i64, tz: ^d
 	}
 	f.filter_now, f.group_tz = now, tz
 	folder_refilter(f)
+	if f.cursor < 0 && len(f.shown) > 0 { f.cursor = 0 }
 }
 
 // Every date (or size) shown again.
@@ -464,7 +467,8 @@ group_rank :: proc(f: ^Folder, e: fs.Entry, by: Group_By, now: i64) -> (rank: in
 		return 5, "Huge (1 GB and more)"
 	case .Date:
 		day := day_number(e.mtime, f.group_tz)
-		today := day_number(now, f.group_tz)
+		if f.today_of != now || now == 0 { f.today_of, f.today = now, day_number(now, f.group_tz) }
+		today := f.today
 		switch {
 		case e.mtime == 0:         return 7, "No date"
 		case day >= today:         return 0, "Today"

@@ -151,6 +151,8 @@ Panel_Menus :: struct {
 	ranks_key:   ui.Key,     // a column's filter: its dates or its sizes (rank_menu_open)
 	ranks_tab:   u64,
 	ranks_by:    Group_By,
+	rank_counts: [8]int,              // the menu's counts, and what they were counted for
+	rank_counts_key: Rank_Counts_Key,
 }
 
 // The types' popup (the filter's funnel): files and folders, or one of them; each extension of the folder with its
@@ -170,6 +172,11 @@ types_menu_build :: proc(app: ^App, em: f32) {
 		t := find_tab(app, m.types_tab)
 		if t == nil { ui.ctx_menu_close(); return }
 		f := &t.folder
+		// (the columns' filters light this funnel too: they are cleared here as well)
+		if f.dates_off != {} || f.sizes_off != {} {
+			if ui.menu_item("Every date and size###kclear", keep_open = true).clicked { folder_all_ranks(f, .Date); folder_all_ranks(f, .Size) }
+			ui.menu_separator()
+		}
 		if ui.menu_item("Files and folders###k0", checked = f.kinds == .All, keep_open = true).clicked { folder_set_kinds(f, .All) }
 		if ui.menu_item("Files only###k1", checked = f.kinds == .Files, keep_open = true).clicked { folder_set_kinds(f, .Files) }
 		if ui.menu_item("Folders only###k2", checked = f.kinds == .Folders, keep_open = true).clicked { folder_set_kinds(f, .Folders) }
@@ -189,8 +196,12 @@ types_menu_build :: proc(app: ^App, em: f32) {
 
 // The Modified column's filter (its dates: today, this week... as the date groups) or the Size column's (folders, tiny,
 // small... as the size groups): each group with its count, ticked when shown. It stays open while groups are ticked.
+Rank_Counts_Key :: struct { tab: u64, by: Group_By, entries: rawptr, n: int, hidden: bool, now: i64 }
+
 rank_menu_open :: proc(app: ^App, t: ^Tab, by: Group_By, at: ui.Vec2) {
 	m := &app.panel_menus
+	// (its "now": the filter's day, the menu's counts and the rows agree; a new day when it opens again)
+	t.folder.filter_now, t.folder.group_tz = time.now()._nsec, app.tz
 	if m.ranks_key == 0 { m.ranks_key = ui.key_from_string(0, "classeur_ranks_menu") }
 	m.ranks_tab, m.ranks_by = t.id, by
 	ui.ctx_menu_open(m.ranks_key, at)
@@ -214,14 +225,21 @@ rank_menu_build :: proc(app: ^App, em: f32) {
 		f := &t.folder
 		by := m.ranks_by
 		off := by == .Date ? f.dates_off : f.sizes_off
-		now := time.now()._nsec
-		// (the count of each group among the rows the other filters keep: what a tick brings back)
-		counts: [8]int
-		for e in f.listing.entries {
-			if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { continue }
-			r, _ := group_rank(f, e, by, now)
-			counts[r] += 1
+		// (the filter's "now", so that the counts and the rows agree; set when the menu opened)
+		now := f.filter_now
+		// the count of each group among the entries shown (not hidden), counted once per listing and "now": not at
+		// each frame the menu is open (a folder of 100 000 entries)
+		key := Rank_Counts_Key{t.id, by, raw_data(f.listing.entries), len(f.listing.entries), f.show_hidden, now}
+		if m.rank_counts_key != key {
+			m.rank_counts_key = key
+			m.rank_counts = {}
+			for e in f.listing.entries {
+				if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { continue }
+				r, _ := group_rank(f, e, by, now)
+				m.rank_counts[r] += 1
+			}
 		}
+		counts := m.rank_counts
 		every := by == .Date ? "Every date###rall" : "Every size###rall"
 		if ui.menu_item(every, checked = off == {}, keep_open = true).clicked { folder_all_ranks(f, by) }
 		ui.menu_separator()

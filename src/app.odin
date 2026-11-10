@@ -17,6 +17,7 @@ import "gt:instance"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:render"
+import process "gt:process"
 import setup "gt:setup"
 import update "gt:update"
 import "gt:ui"
@@ -55,6 +56,7 @@ App :: struct {
 	side_drag:   Side_Section,          // the heading dragged ...
 	side_dragging: bool,                // ... while it is
 	side_held:     bool,                // ... and its button is still down (let go: it lands)
+	side_cancelled: bool,               // Escape cancelled it, its button still down
 	side_menu_key: ui.Key,              // a heading's menu: Move up, Move down...
 	side_menu_of:  Side_Section,
 	side_filter: ui.Text_Field,
@@ -125,6 +127,8 @@ App :: struct {
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
 	session_path: string,           // owned: the tests' session file ("": the person's, none when headless)
 	standalone:  bool,              // a window of a torn-off tab (tab_drag.odin): no session
+	exe:         string,            // owned: this program's file, read at the start (after an update puts a new one in
+	                                // its place, Linux reads the running one as "<path> (deleted)")
 	tab_out:     u64,               // a tab dragged out of the window: the drag of the system starts after this frame
 	tab_out_home: bool,             // that drag came back and was dropped in this window
 	tab_image:    platform.Drag_Image,   // owned: the dragged tab's picture, read back from the renderer (tab_drag_poll)
@@ -165,7 +169,7 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 	if outcome == .First { server = instance.serve_start(owner, app_message, app) }
 	platform.show_window(app.main.win)
 	setup_offer(app, setup_asked)
-	updates_start(app)
+	if !standalone { updates_start(app) }   // (one updater: the main window's; a torn-off one leaves the file alone)
 	for !platform.is_closed(app.main.win) {
 		host.hosts_wait({&app.main})
 		app_frame(app)
@@ -215,6 +219,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	app.headless = o.headless
 	app.session_path = strings.clone(o.session)
 	app.standalone = o.standalone
+	app.exe = strings.clone(process.executable_path())
 	app.home = o.home != "" ? fs.clean(o.home) : fs.home()
 	app.sidebar = true
 	app.sidebar_px = 210
@@ -303,6 +308,7 @@ app_free :: proc(app: ^App) {
 	keymap_free(&app.keymap)
 	setup.destroy(&app.setup)
 	delete(app.launch_after)
+	delete(app.exe)
 	tab_image_free(app)
 	delete(app.tab_rects)
 	delete(app.columns_order)

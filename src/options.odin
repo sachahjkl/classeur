@@ -17,6 +17,7 @@ Options :: struct {
 	open: bool,
 	page: prefs_page.Page,
 	size: ui.Vec2,   // as the person resized it (logical px; {}: preferred)
+	shown: bool,     // it was open at the last build (closed since: a slider's preview undone)
 }
 
 options_free :: proc(o: ^Options) {
@@ -40,7 +41,12 @@ OPTIONS_PAGES := [?]prefs_page.Page_Info{
 
 options_build :: proc(app: ^App) {
 	o := &app.options
-	if !o.open { return }
+	if !o.open {
+		// (closed while a slider was held: what it showed and did not write goes back to the preferences)
+		if o.shown { o.shown = false; settings_apply(app) }
+		return
+	}
+	o.shown = true
 	em := ui.font_size()
 	// (Escape closes it, unless a field of the page has the keyboard: that Escape is the field's)
 	if !prefs_page.editing(&o.page) && ui.key_press(.Escape) { o.open = false; return }

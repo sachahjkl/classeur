@@ -415,22 +415,14 @@ column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: 
 	if ui.row(.Center, {.Clickable, .Draw_Hot_Effects}, fmt.tprintf("###col_%s", title)) {
 		sig = ui.signal(ui.parent_box())
 		if key != .Name { vrule(em, 1.2) } else { ui.spacer(ui.px(em * 0.4)) }
+		// (a right-aligned title keeps its edge over its values: its funnel goes before it)
+		if align == .Right { column_funnel(app, t, key, title, em) }
 		if align == .Right { ui.spacer(ui.fill()) }
 		ui.next({width = ui.text_size(), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###t", title))
 		if align == .Left { ui.spacer(ui.fill()) }
 		if on { glyph(app, s.descending ? lucide.ARROW_DOWN : lucide.ARROW_UP, em * 1.4) } else { ui.spacer(ui.px(em * 0.4)) }
-		// the column's filter (File Pilot's and Explorer's): its funnel, over the column or lit while it filters
-		active := column_filtered(&t.folder, key)
-		if active || ui.hot_within(ui.parent_box().key) {
-			if !active { ui.push_tags("weak") }
-			if icon_action(app, fmt.tprintf("filter_%s", title), lucide.FILTER, fmt.tprintf("Filter by %s", title), em * 0.8, on = active) {
-				column_filter_open(app, t, key)
-			}
-			if !active { ui.pop_tags() }
-		} else {
-			ui.spacer(ui.px(em * 1.6))
-		}
+		if align != .Right { column_funnel(app, t, key, title, em) }
 	}
 	moved := false
 	if c, ok := column.?; ok { moved = column_drag_signal(app, c, sig) }
@@ -439,6 +431,21 @@ column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: 
 		app.default_sort = t.folder.sort
 	}
 	hover_tip(sig, on ? (s.descending ? "Sorted down: a click sorts up" : "Sorted up: a click sorts down") : fmt.tprintf("Sort by %s", title))
+}
+
+// The column's filter (File Pilot's and Explorer's): its funnel, over the column or lit while it filters.
+@(private = "file")
+column_funnel :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, em: f32) {
+	active := column_filtered(&t.folder, key)
+	if active || ui.hot_within(ui.parent_box().key) {
+		if !active { ui.push_tags("weak") }
+		if icon_action(app, fmt.tprintf("filter_%s", title), lucide.FILTER, fmt.tprintf("Filter by %s", title), em * 0.8, on = active) {
+			column_filter_open(app, t, key)
+		}
+		if !active { ui.pop_tags() }
+	} else {
+		ui.spacer(ui.px(em * 1.6))
+	}
 }
 
 // Whether the column's filter leaves rows out.
@@ -507,15 +514,18 @@ check_box :: proc(app: ^App, id: string, on, some: bool, width: f32) -> bool {
 }
 
 // A row's icon, which is its box too (File Pilot's): the pointer over it, or the row checked among others, shows the
-// box in its place; a click on it checks the row or not, the others kept. True: it was clicked.
+// box in its place. The row takes the presses (a drag from the icon drags the row, a double click opens it); a click on
+// the icon checks the row or not, the others kept (the caller reads it with the row's signal). True: the pointer is over it.
 @(private = "file")
-icon_check :: proc(app: ^App, t: ^Tab, e: fs.Entry, row: int, selected: bool, em: f32) -> bool {
+icon_check :: proc(app: ^App, t: ^Tab, e: fs.Entry, row: int, selected: bool, em: f32) -> (over: bool) {
 	width := em * ICON_CELL_EM
 	ui.next({width = ui.px(width), height = ui.pct(1)})
-	cell := ui.build_box({.Clickable}, fmt.tprintf("###check%d", row))
-	sig := ui.signal(cell)
+	cell := ui.build_box({}, fmt.tprintf("###check%d", row))
+	m := ui.mouse_pos()
+	r := cell.rect   // (the last layout's)
+	over = m.x >= r.min.x && m.x < r.max.x && m.y >= r.min.y && m.y < r.max.y
 	if ui.parent(cell) {
-		if sig.hovering || selected && t.folder.count > 1 {
+		if over || selected && t.folder.count > 1 {
 			d := ui.frame_new(Check_Draw)
 			d^ = {selected, false, ui.color("text"), ui.color("accent"), {1, 1, 1, 1}, corner_k()}
 			ui.next({width = ui.px(width), height = ui.pct(1)})
@@ -524,8 +534,7 @@ icon_check :: proc(app: ^App, t: ^Tab, e: fs.Entry, row: int, selected: bool, em
 			entry_glyph(app, t.path, e, width)
 		}
 	}
-	hover_tip(sig, selected ? "Uncheck it (the others stay)" : "Check it (the others stay)")
-	return sig.clicked
+	return
 }
 
 ////////////////////////////////
@@ -626,9 +635,13 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 		}
 		if row == t.vl.sel { t.cursor_rect = sig.box.rect }
 		if !app.drag_started && !app.band.active { entry_tip(app, t, e, sig) }
-		if check {
+		// (the icon is the row's box: a click on it checks the row, the others kept; a press there selects nothing yet)
+		if check && sig.clicked && !app.drag_started {
 			clicked = true
 			folder_pick(f, row, toggle = true)
+		} else if check && sig.pressed {
+			clicked = true
+			f.cursor = row
 		} else if app.settings.single_click && sig.clicked && sig.mods == {} {
 			folder_pick(f, row)
 			act_open(app)
@@ -641,7 +654,7 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 			clicked = true
 			folder_pick(f, row, extend = .Shift in sig.mods, toggle = .Ctrl in sig.mods)
 		}
-		if sig.clicked && selected && sig.mods == {} && f.count > 1 && !app.drag_started { folder_pick(f, row) }
+		if sig.clicked && !check && selected && sig.mods == {} && f.count > 1 && !app.drag_started { folder_pick(f, row) }
 		drag_maybe(app, t, sig)
 		if e.kind == .Directory {
 			dir := fs.join(t.path, e.name, context.temp_allocator)
@@ -657,7 +670,7 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 		if sig.middle_clicked && e.kind == .Directory {
 			tab_open(app, current_panel(app), fs.join(t.path, e.name, context.temp_allocator), current_panel(app).active + 1)
 		}
-		if sig.double_clicked && !check {
+		if sig.double_clicked {
 			folder_pick(f, row)
 			act_open(app)
 			return

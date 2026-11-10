@@ -148,6 +148,7 @@ tab_go :: proc(app: ^App, t: ^Tab, path: string, history := true) {
 	t.folder.kinds = .All
 	for k in t.folder.types_off { delete(k) }
 	clear(&t.folder.types_off)
+	t.folder.dates_off, t.folder.sizes_off = {}, {}   // (the columns' filters are the folder's too)
 	tab_load(app, t)
 }
 

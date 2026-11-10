@@ -1,11 +1,11 @@
 package classeur
 
-// The person's own keys (File Pilot's): any command bound to a key or to a sequence of two (Ctrl+K, then T), in place of
+// The person's own keys (File Pilot's): any command bound to a key or to a sequence of two (Ctrl+M, then T), in place of
 // its own keys; aliases, short names typed in the palette that find a command. Both are preferences (keys.custom,
 // keys.aliases), set from the palette: Ctrl+Enter (or a row's +) records the keys of the chosen command, Alt+Enter makes
 // the letters typed an alias of it.
 //
-//   keys.custom   "tab_new=Ctrl+K,T;terminal=F7"   a command's id, its chords (a comma between two of a sequence)
+//   keys.custom   "tab_new=Ctrl+M,T;terminal=F7"   a command's id, its chords (a comma between two of a sequence)
 //   keys.aliases  "nf=new_folder;go=goto_popup"
 
 import "core:fmt"
@@ -48,7 +48,7 @@ command_bindings :: proc(app: ^App, c: ^Command, allocator := context.temp_alloc
 	return out[:]
 }
 
-// "Ctrl+K, T".
+// "Ctrl+M, T".
 binding_text :: proc(b: Binding, allocator := context.temp_allocator) -> string {
 	if b.chords[1].key == .None { return shortcut_text(b.chords[0], allocator) }
 	return fmt.aprintf("%s, %s", shortcut_text(b.chords[0], context.temp_allocator), shortcut_text(b.chords[1], context.temp_allocator), allocator = allocator)
