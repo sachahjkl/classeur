@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-10
+
 ### Added
 - The inspector: its edge dragged (the toolkit's pane: folded to a strip, the arrows, kept between starts); a file's
   properties (where it is, its dates of creation and access, its permissions and owner on Linux, its attributes on
@@ -225,3 +227,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.12.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.12.0
 [0.13.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.13.0
 [0.13.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.13.1
+[0.14.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.0
