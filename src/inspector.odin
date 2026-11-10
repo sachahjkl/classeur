@@ -217,7 +217,8 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 	r := ui.pane_split("###insp_split", .X, &insp.pane, inspector_pane_options(app))
 	if r.size <= 0 { return }
 	ui.next({width = ui.px(r.size * ui.scale()), height = ui.fill(), axis = .Y})
-	box := ui.build_box({.Clip, .Draw_Side_Left}, "###inspector")
+	// (no line of its own: the edge that drags it is the line between it and the list)
+	box := ui.build_box({.Clip}, "###inspector")
 	if ui.parent(box) {
 		if e == nil { return }
 		// what it is: its icon, its name, its size and date
