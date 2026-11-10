@@ -1617,3 +1617,35 @@ test_side_order :: proc(t: ^testing.T) {
 	session.frames(s, 2)
 	testing.expect_value(t, app.side_order[len(Side_Section) - 1], Side_Section.Places)
 }
+
+// Ctrl+wheel through the zoom's steps: at every frame of the moves, every icon shown has its picture (a size not made yet
+// shows the nearest one made): no icon goes blank.
+@(test)
+test_zoom_icons_stay :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 700})
+	tab := current_tab(app)
+	wait_read(s)
+	session.wait_until(s, proc(s: ^session.Session) -> bool {
+		b := session.find(s, "icon")
+		return b != nil && b.custom != nil
+	}, "the first icons")
+	session.frames(s, 4)
+	blank := 0
+	list := session.get(s, "list")
+	at := session.center(list)
+	for _ in 0 ..< 4 {
+		session.wheel(s, at, {0, -1}, {.Ctrl})   // (up: larger)
+		for _ in 0 ..< 12 {
+			session.frames(s, 1)
+			for i in 0 ..< 200 {
+				b := session.find(s, "icon", i)
+				if b == nil { break }
+				if b.custom == nil { blank += 1 }
+			}
+		}
+	}
+	testing.expect(t, tab.zoom > 0, "zoomed")
+	testing.expect_value(t, blank, 0)
+}

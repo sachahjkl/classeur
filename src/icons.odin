@@ -66,18 +66,47 @@ icon_keys_free :: proc(app: ^App) {
 	clear(&app.icon_keys)
 }
 
-// The system's icon of `path` at `px` pixels, if it is made; else it is asked (once).
-sys_icon :: proc(app: ^App, path: string, folder: bool, px: int) -> (^Sys_Icon, bool) {
-	key := icon_key(app, path, folder, px)
-	if ic, ok := &app.icons_cache[key]; ok {
-		ic.used = app.frame
-		return ic, ic.state == .Ready
+// The sizes the pictures are made at: a size asked is the next one up, drawn smaller. A zoom that moves smoothly asks
+// every size on its way: made at these alone, a step reuses the pictures of the last and asks a few new ones.
+ICON_SIZES := [?]int{16, 20, 24, 32, 40, 48, 64, 96, 128, 192, 256}
+
+icon_size_for :: proc(px: int) -> int {
+	for s in ICON_SIZES { if s >= px { return s } }
+	return ICON_SIZES[len(ICON_SIZES) - 1]
+}
+
+// The system's icon of `path` at `px` pixels (made at icon_size_for(px)), if it is made; else it is asked (once), and
+// meanwhile the picture of another size made already stands in (`ready` false then): no box goes blank as the zoom moves.
+sys_icon :: proc(app: ^App, path: string, folder: bool, px: int) -> (ic: ^Sys_Icon, ready: bool) {
+	made := icon_size_for(px)
+	key := icon_key(app, path, folder, made)
+	if c, ok := &app.icons_cache[key]; ok {
+		c.used = app.frame
+		if c.state == .Ready { return c, true }
+		return icon_stand_in(app, key, made), false
 	}
 	app.icons_cache[strings.clone(key)] = {state = .Asked, used = app.frame}
 	job := new(Icon_Job)
 	job^ = {app = app, key = strings.clone(key), path = strings.clone(path), folder = folder, px = px}
 	pool_submit(&app.thumb_pool, icon_run, job)
-	return nil, false
+	return icon_stand_in(app, key, made), false
+}
+
+// The picture of the same icon at the nearest size made already (nil: none).
+@(private = "file")
+icon_stand_in :: proc(app: ^App, key: string, made: int) -> ^Sys_Icon {
+	at := strings.last_index_byte(key, '@')
+	if at < 0 { return nil }
+	best: ^Sys_Icon
+	best_gap := max(int)
+	for s in ICON_SIZES {
+		if s == made { continue }
+		c, ok := &app.icons_cache[fmt.tprintf("%s@%d", key[:at], s)]
+		if !ok || c.state != .Ready { continue }
+		if gap := abs(s - made); gap < best_gap { best, best_gap = c, gap }
+	}
+	if best != nil { best.used = app.frame }
+	return best
 }
 
 @(private = "file")
@@ -147,13 +176,14 @@ Icon_Draw :: struct {
 	px:   f32,
 }
 
-// The picture centred in its box, on whole pixels (a 22-pixel icon drawn 22 pixels: sharp).
+// The picture centred in its box, `px` pixels on its longer side, on whole pixels (made at that size: sharp).
 @(private = "file")
 icon_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Icon_Draw)(user)
 	r := b.rect
-	scale := min(d.px / max(d.size.x, d.size.y), 1)
-	sz := d.size * (scale >= 0.999 ? 1 : scale)
+	scale := d.px / max(d.size.x, d.size.y)
+	sz := d.size * (abs(scale - 1) < 0.001 ? 1 : scale)
+	sz = {math.round(sz.x), math.round(sz.y)}
 	at := (r.min + r.max - sz) * 0.5
 	at = {math.round(at.x), math.round(at.y)}
 	draw.image(dc, d.tex, {at, at + sz})
@@ -163,9 +193,11 @@ icon_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 path_icon :: proc(app: ^App, path: string, folder: bool, width: f32) {
 	px := max(16, int(math.round(width * 0.8)))
 	ui.next({width = ui.px(width), height = ui.pct(1)})
-	if ic, ready := sys_icon(app, path, folder, px); ready {
+	if ic, ready := sys_icon(app, path, folder, px); ic != nil {
+		// (made at its size: never larger than the theme drew it; a stand-in at another size: scaled to fit)
+		side := f32(max(ic.size.x, ic.size.y))
 		d := ui.frame_new(Icon_Draw)
-		d^ = {ic.tex, {f32(ic.size.x), f32(ic.size.y)}, f32(px)}
+		d^ = {ic.tex, {f32(ic.size.x), f32(ic.size.y)}, ready ? min(f32(px), side) : f32(px)}
 		ui.custom("###icon", icon_draw, d)
 	} else {
 		ui.build_box({}, "###icon")

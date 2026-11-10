@@ -19,6 +19,10 @@ and the versions follow [semantic versioning](https://semver.org/).
 - A row's icon is its box (File Pilot's): the pointer over it, or the row checked among others, shows it; the header's
   box is over the icons.
 
+### Fixed
+- Ctrl+wheel no longer blinks the icons: they are made at a few sizes (drawn smaller), and a size not made yet shows the
+  nearest one made.
+
 ### Removed
 - The Round corners switch: the rounding slider replaces it.
 
