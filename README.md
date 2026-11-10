@@ -10,6 +10,19 @@ you type, the path typed or clicked. It is one native program, written in [Odin]
 
 ![classeur's window](docs/screenshots/main.png)
 
+## Why, and where it comes from
+
+Plainly: classeur is a clean-room reimplementation, strongly inspired by [File Pilot](https://filepilot.tech). File Pilot is
+a closed-source file manager for Windows; we have no access to its code, and none of it is here. What classeur copies is
+what anyone can see: its layout, its keys, its behaviour, studied from its site, its release notes and its use.
+
+It exists because Linux has, to my mind, no good native and fast file manager: one that opens a folder of 100 000 files
+without a wait, does everything from the keyboard, and stays out of the way. classeur tries to fill that gap. It runs on
+Windows too, but Linux is the reason.
+
+classeur is not affiliated with File Pilot or its authors. If you are on Windows and want the original, use
+[File Pilot](https://filepilot.tech).
+
 Its site: [classeur.sacha.house](https://classeur.sacha.house/).
 
 ## Features

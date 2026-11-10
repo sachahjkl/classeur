@@ -193,3 +193,8 @@ html.lightbox-open { overflow: hidden; }
 .lightbox-count { margin-right: 6px; color: var(--faint); font-family: var(--mono); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .lightbox .btn { font-family: inherit; font-size: 0.9rem; cursor: pointer; }
 .lightbox .btn:hover { text-decoration: none; }
+
+/* why it exists: a plain text block, a line on its left */
+.why { max-width: 760px; margin: 0 auto 48px; padding: 4px 0 4px 20px; border-left: 2px solid var(--accent); }
+.why h2 { margin: 0 0 10px; font: 700 1.15rem var(--mono); }
+.why p { margin: 0 0 12px; color: var(--weak); }
