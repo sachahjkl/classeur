@@ -450,14 +450,42 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 	for row in rows.first ..< rows.last {
 		e := &f.listing.entries[f.shown[row]]
 		selected := f.selected[f.shown[row]]
+		// a group's first row: its title above it (File Pilot's Group By)
+		title := ""
+		if f.group != .None && f.filter == "" {
+			_, key := group_of(f, e^)
+			prev := ""
+			if row > 0 { _, prev = group_of(f, f.listing.entries[f.shown[row - 1]]) }
+			if row == 0 || key != prev { title = key }
+		}
+		head := title != "" ? ui.dense(em * GROUP_HEAD_EM) : 0
 		// (the list's own fill of the cursor's row is clear: the row draws its pill itself)
-		ui.next({height = ui.px(ui.dense(em * ROW_EM)), radius = 0, bg = ui.Color{}})
+		ui.next({height = ui.px(ui.dense(em * ROW_EM) + head), radius = 0, bg = ui.Color{}})
 		if selected && focused { ui.push_tags("selected") }
 		sig := ui.list_row(&t.vl, row, e.name)
 		if selected && focused { ui.pop_tags() }
-		row_paint(sig.box, look, selected, row == f.cursor && (!selected || f.count > 1), row & 1 == 1)
+		row_paint(sig.box, look, selected, row == f.cursor && (!selected || f.count > 1), row & 1 == 1, head)
 		check := false
-		if ui.parent(sig.box) { check = entry_row(app, t, e, row, selected, wide, names_only, em) }
+		if ui.parent(sig.box) {
+			if title != "" {
+				// (the title, then the row's cells under it)
+				ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
+				if ui.column(.Start, {}, "###grouped") {
+					ui.next({width = ui.fill(), height = ui.px(head)})
+					if ui.row(.End, {.Draw_Side_Bottom}, "###group") {
+						ui.spacer(ui.px(em * (ROW_INSET_EM + 0.4)))
+						ui.next({width = ui.fill(), height = ui.px(head * 0.8), font_size = em * 0.9})
+						ui.push_tags("weak")
+						ui.label(fmt.tprintf("%s###g", title))
+						ui.pop_tags()
+					}
+					ui.next({width = ui.fill(), height = ui.fill()})
+					if ui.row(.Center, {}, "###cells") { check = entry_row(app, t, e, row, selected, wide, names_only, em) }
+				}
+			} else {
+				check = entry_row(app, t, e, row, selected, wide, names_only, em)
+			}
+		}
 		if row == t.vl.sel { t.cursor_rect = sig.box.rect }
 		if !app.drag_started && !app.band.active { entry_tip(app, t, e, sig) }
 		if check {
@@ -525,7 +553,11 @@ Row_Paint :: struct {
 	selected: bool,
 	cursor:   bool,
 	odd:      bool,
+	top:      f32,   // a group's title above the row: its pill starts below it
 }
+
+// The height of a group's title above its first row, in ems.
+GROUP_HEAD_EM :: 2.2
 
 row_look :: proc(app: ^App, focused: bool, em: f32) -> ^Row_Look {
 	look := ui.frame_new(Row_Look)
@@ -544,9 +576,9 @@ row_look :: proc(app: ^App, focused: bool, em: f32) -> ^Row_Look {
 }
 
 // The box `b` (a row, a card) draws its pill and its ring under what it holds.
-row_paint :: proc(b: ^ui.Box, look: ^Row_Look, selected, cursor: bool, odd := false) {
+row_paint :: proc(b: ^ui.Box, look: ^Row_Look, selected, cursor: bool, odd := false, top: f32 = 0) {
 	d := ui.frame_new(Row_Paint)
-	d^ = {look, selected, cursor && look.focused, odd}
+	d^ = {look, selected, cursor && look.focused, odd, top}
 	b.custom, b.custom_user = row_draw, d
 }
 
@@ -555,6 +587,7 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Row_Paint)(user)
 	l := d.look
 	r := b.rect
+	r.min.y += d.top   // (a group's title above the row: not part of its pill)
 	inner := ui.Rect{{r.min.x + l.inset, r.min.y + 1}, {r.max.x - l.inset, r.max.y - 1}}
 	if l.stripes && d.odd { draw.rect(dc, inner, l.stripe, radius = l.radius) }
 	draw.rect(dc, {{inner.min.x, r.max.y - 1}, {inner.max.x, r.max.y}}, l.line)

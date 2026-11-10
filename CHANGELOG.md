@@ -5,6 +5,13 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Keys of one's own from the palette: Ctrl+Enter (or a row's +) records the keys of the chosen command, one key or a
+  sequence of two (Ctrl+K, then T); Backspace gives it its own keys again. Aliases: the letters typed, Alt+Enter on a
+  command, then those letters find it first.
+- The tree view (Ctrl+Shift+E): folders opened in place with a chevron, Right and Left.
+- Group by date, type or size (Ctrl+Alt+5, 6, 7, or the menus' Group by): a title above each group.
+
 ## [0.4.0] - 2026-11-10
 
 ### Added

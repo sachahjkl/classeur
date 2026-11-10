@@ -10,6 +10,9 @@ package classeur
 import "core:hash"
 import "core:slice"
 import "core:strings"
+import "core:time/timezone"
+import "core:time/datetime"
+import "core:time"
 import "core:unicode/utf8"
 import "gt:ui"
 import "fs"
@@ -19,6 +22,9 @@ Folder :: struct {
 	loaded:      bool,              // a listing came (it may be an error)
 	flat:        bool,              // the listing is a flat read: its names are paths from the folder
 	tree:        bool,              // the tree view: its names are paths too, the rows in the tree's order
+	group:       Group_By,          // the rows grouped (by date, type or size), the sort's order in each group
+	group_now:   i64,               // the date groups' "now" (ns), set when grouped by date
+	group_tz:    ^datetime.TZ_Region,
 	sort:        fs.Sort,
 	show_hidden: bool,
 	filter:      string,            // owned; lower case; "" shows every row
@@ -220,6 +226,17 @@ folder_refilter :: proc(f: ^Folder) {
 		append(&f.shown, i)
 		append(&f.ids, hash.fnv64a(transmute([]u8)e.name))
 	}
+	if f.group != .None && f.filter == "" {
+		// (grouped: by the group's rank, stable: the sort's order in each group)
+		Grouped :: struct { i: u32, rank: int, key: string }
+		g := make([]Grouped, len(f.shown), context.temp_allocator)
+		for i, k in f.shown { rank, key := group_of(f, entries[i]); g[k] = {i, rank, key} }
+		slice.stable_sort_by(g, proc(a, b: Grouped) -> bool { return a.rank != b.rank ? a.rank < b.rank : a.key < b.key })
+		for x, k in g {
+			f.shown[k] = x.i
+			f.ids[k] = hash.fnv64a(transmute([]u8)entries[x.i].name)
+		}
+	}
 	if f.filter != "" {
 		Ranked :: struct { i: u32, score: int }
 		ranked := make([]Ranked, len(f.shown), context.temp_allocator)
@@ -378,4 +395,58 @@ tree_depth :: proc(name: string) -> int {
 	n := 0
 	for i in 0 ..< len(name) { if fs.is_separator(name[i]) { n += 1 } }
 	return n
+}
+
+// How the rows are grouped (File Pilot's Group By).
+Group_By :: enum u8 { None, Date, Type, Size }
+
+folder_set_group :: proc(f: ^Folder, g: Group_By, now: i64, tz: ^datetime.TZ_Region) {
+	f.group, f.group_now, f.group_tz = g, now, tz
+	name := ""
+	if e := folder_cursor_entry(f); e != nil { name = strings.clone(e.name, context.temp_allocator) }
+	folder_refilter(f)
+	if name != "" { folder_cursor_to_name(f, name) }
+}
+
+// The group of an entry: its rank (the groups' order) and its key (its title, the order of equal ranks).
+group_of :: proc(f: ^Folder, e: fs.Entry) -> (rank: int, key: string) {
+	switch f.group {
+	case .None:
+	case .Type:
+		if e.kind == .Directory { return 0, "Folders" }
+		ext := strings.to_upper(fs.extension(fs.base(e.name)), context.temp_allocator)
+		return 1, ext == "" ? "No extension" : ext
+	case .Size:
+		if e.kind == .Directory { return 0, "Folders" }
+		switch {
+		case e.size < 16 * 1024:           return 1, "Tiny (under 16 KB)"
+		case e.size < 1024 * 1024:         return 2, "Small (under 1 MB)"
+		case e.size < 128 * 1024 * 1024:   return 3, "Medium (under 128 MB)"
+		case e.size < 1024 * 1024 * 1024:  return 4, "Large (under 1 GB)"
+		}
+		return 5, "Huge (1 GB and more)"
+	case .Date:
+		day := day_number(e.mtime, f.group_tz)
+		today := day_number(f.group_now, f.group_tz)
+		switch {
+		case e.mtime == 0:         return 7, "No date"
+		case day >= today:         return 0, "Today"
+		case day == today - 1:     return 1, "Yesterday"
+		case day > today - 7:      return 2, "This week"
+		case day > today - 31:     return 3, "This month"
+		case day > today - 365:    return 4, "This year"
+		}
+		return 5, "Older"
+	}
+	return 0, ""
+}
+
+// The local day of a time (days since 1970), for the date groups.
+@(private = "file")
+day_number :: proc(ns: i64, tz: ^datetime.TZ_Region) -> i64 {
+	dt, ok := time.time_to_datetime(time.Time{_nsec = ns})
+	if !ok { return 0 }
+	if tz != nil { if local, lok := timezone.datetime_to_tz(dt, tz); lok { dt = local } }
+	ord, _ := datetime.date_to_ordinal(dt.date)
+	return i64(ord)
 }

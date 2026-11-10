@@ -270,6 +270,12 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 			ui.menu_separator()
 			menu_command(app, "folders_mixed", checked = !s.mixed)
 		}
+		if ui.menu_submenu("Group by") {
+			g := t.group
+			menu_command(app, "group_date", checked = g == .Date)
+			menu_command(app, "group_type", checked = g == .Type)
+			menu_command(app, "group_size", checked = g == .Size)
+		}
 		menu_command(app, "hidden", checked = app.show_hidden)
 		ui.menu_separator()
 		menu_command(app, "panel_split")

@@ -1205,3 +1205,23 @@ test_tree :: proc(t: ^testing.T) {
 	wait_read(s)
 	testing.expect(t, !slice.contains(shown_names(tab), letter), "closed")
 }
+
+// Group by type: the folders, then each extension (the sort's order in each), a title above each group's first row.
+@(test)
+test_group :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 700})
+	tab := current_tab(app)
+	session.key(s, .N6, {.Ctrl, .Alt})
+	session.frames(s, 3)
+	testing.expect_value(t, tab.group, Group_By.Type)
+	testing.expect_value(t, fmt.tprint(shown_names(tab)), fmt.tprint([]string{"Documents", "Photos", "Projects", "report 2.pdf", "report 10.pdf", "notes.txt", "archive.zip"}))
+	testing.expect(t, session.find_text(s, "PDF") != nil && session.find_text(s, "Folders") != nil, "the groups' titles")
+	when SHOTS { session.save_png(s, "group.png") }
+	// the same key again: no groups
+	session.key(s, .N6, {.Ctrl, .Alt})
+	session.frames(s, 2)
+	testing.expect_value(t, tab.group, Group_By.None)
+	testing.expect_value(t, shown_names(tab)[3], "archive.zip")
+}

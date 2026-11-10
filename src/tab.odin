@@ -32,6 +32,7 @@ Tab :: struct {
 	locked:       bool,
 	flat:         bool,              // the search of File Pilot: every entry under the folder, flattened
 	tree:         bool,              // the tree view: folders opened in place (tree_open), their entries under them
+	group:        Group_By,          // the rows grouped (the tab's; the folder follows it at each read)
 	tree_open:    [dynamic]string,   // owned: the folders opened in the tree, by their path from the tab's folder
 	walk:         ^Load_Job,         // the flat read the tab waits for (its progress), nil: none
 	zoom:         int,               // an index of ZOOMS: the view and the size of its items
@@ -276,6 +277,7 @@ load_done :: proc(data: rawptr, word: u64) {
 		t.folder.cursor = -1
 		if job.listing.error == .None && !job.flat { recent_add(job.app, job.listing.path) }
 	}
+	if t.folder.group != t.group { t.folder.group, t.folder.group_now, t.folder.group_tz = t.group, time.now()._nsec, job.app.tz }
 	folder_set_listing(&t.folder, &job.listing)
 	// the row asked for (made, renamed, the folder we came up from) has the cursor and the selection
 	revealed := t.reveal_name != "" && folder_cursor_to_name(&t.folder, t.reveal_name)
@@ -432,3 +434,15 @@ tab_tree_is_open :: proc(t: ^Tab, rel: string) -> bool {
 	for p in t.tree_open { if p == rel { return true } }
 	return false
 }
+
+// The rows grouped by `g` (again: no groups).
+tab_group :: proc(app: ^App, g: Group_By) {
+	t := current_tab(app)
+	if t == nil { return }
+	t.group = t.group == g ? .None : g
+	folder_set_group(&t.folder, t.group, time.now()._nsec, app.tz)
+}
+
+act_group_date :: proc(app: ^App) { tab_group(app, .Date) }
+act_group_type :: proc(app: ^App) { tab_group(app, .Type) }
+act_group_size :: proc(app: ^App) { tab_group(app, .Size) }

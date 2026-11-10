@@ -78,11 +78,8 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 
 ## Next
 
-1. **Layouts** saved by name (the panels, their tabs, the types shown); **keys of one's own** from the palette, key
-   sequences and aliases (File Pilot's).
-2. **The panels split below** as well as beside; the columns of the details reordered, added and removed.
-3. **Views**: the tree (folders opened in place), groups by date, type or size.
-4. **A popover of the jobs**: every job, its errors, a retry. Undo of the Recycle Bin on Windows (`IFileOperation`).
+1. Groups folded (a click on a group's title), the tree in the grid's views.
+2. **A popover of the jobs**: every job, its errors, a retry. Undo of the Recycle Bin on Windows (`IFileOperation`).
 5. **The inspector, more**: its width dragged, a text highlighted by its language, PDF and videos, the permissions.
 6. **Sort by the measures** and a bar in the size column; the thumbnails' cache on the disk, more formats.
 7. **A progressive search**: the results shown as the walk reads them, on several threads.
