@@ -888,3 +888,39 @@ test_types :: proc(t: ^testing.T) {
 	_ = s
 	_ = app
 }
+
+@(test)
+test_tab_drag :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1200, 700})
+	context.allocator = runtime.heap_allocator()
+	p := app.panels[0]
+	tab_open(app, p, fs.join(dir, "Documents", context.temp_allocator), 1)
+	tab_open(app, p, fs.join(dir, "Photos", context.temp_allocator), 2)
+	wait_read(s)
+	session.frames(s, 2)
+	// the first tab dragged past the third: it goes last
+	first, last: ui.Rect
+	for tr in app.tab_rects_last { if tr.index == 0 { first = tr.rect }; if tr.index == 2 { last = tr.rect } }
+	from := (first.min + first.max) * 0.5
+	to := [2]f32{last.max.x - 4, from.y}
+	session.press(s, from)
+	session.move(s, from + {20, 0})
+	session.move(s, to)
+	session.release(s, to)
+	session.frames(s, 2)
+	testing.expect_value(t, fs.base(p.tabs[2].path), fs.base(dir))
+	// the tab dragged to the right quarter of the panel: a new panel with it
+	pr := app.panel_rects[0]
+	from = (app.tab_rects_last[0].rect.min + app.tab_rects_last[0].rect.max) * 0.5
+	to = {pr.max.x - 20, (pr.min.y + pr.max.y) * 0.5}
+	session.press(s, from)
+	session.move(s, from + {20, 0})
+	session.move(s, to)
+	session.release(s, to)
+	session.frames(s, 2)
+	testing.expect_value(t, len(app.panels), 2)
+	testing.expect_value(t, len(app.panels[0].tabs), 2)
+	testing.expect_value(t, len(app.panels[1].tabs), 1)
+}

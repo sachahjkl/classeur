@@ -69,6 +69,9 @@ App :: struct {
 	goto:        Goto,              // GoTo (goto.odin)
 	batch:       Batch,             // batch rename (batch.odin)
 	band:        Band,              // the rectangle selection (band.odin)
+	tab_drag:    Tab_Drag,          // a tab dragged (tab_drag.odin)
+	tab_rects:   [dynamic]Tab_Rect, // the tabs' boxes of this frame
+	tab_rects_last: [dynamic]Tab_Rect,   // and of the last one (what a released tab is tested against)
 	rename:      Rename,            // the rename in place (actions.odin)
 	status:      string,            // a message for the status bar (owned), until status_until (ui clock, ms)
 	status_until: f64,
@@ -248,6 +251,8 @@ app_free :: proc(app: ^App) {
 	goto_free(&app.goto)
 	batch_free(&app.batch)
 	band_free(&app.band)
+	delete(app.tab_rects)
+	delete(app.tab_rects_last)
 	rename_free(&app.rename)
 	confirm_free(&app.confirm)
 	options_free(&app.options)

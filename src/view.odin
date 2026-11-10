@@ -30,6 +30,9 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app.room = size.x / max(ui.scale(), 0.01)
 	app.frame += 1
 	dnd_frame(app)
+	app.tab_rects, app.tab_rects_last = app.tab_rects_last, app.tab_rects
+	clear(&app.tab_rects)
+	tab_drag_apply(app)
 	// a text field had the keyboard at the end of the last build: only the commands that work while typing run
 	clear(&app.text_keys_before)
 	append(&app.text_keys_before, ..app.text_keys[:])
@@ -205,6 +208,9 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 				}
 			}
 			if sig.pressed { p.active = i; app.focus = index }
+			append(&app.tab_rects, Tab_Rect{index, i, tab.rect})
+			tab_drag_signal(app, index, i, sig)
+			if app.tab_drag.active && app.tab_drag.panel == index && app.tab_drag.index == i { tab_drag_mark(tab) }
 			if sig.middle_clicked { close = i }
 			if sig.right_clicked {
 				p.active, app.focus = i, index
@@ -230,7 +236,7 @@ build_body :: proc(app: ^App, em: f32) {
 		app.sidebar_px = clamp(app.sidebar_px, SIDEBAR_MIN_PX, max(min(SIDEBAR_MAX_PX, app.room - PANELS_MIN_PX), SIDEBAR_MIN_PX))
 		ui.next({width = ui.px(app.sidebar_px * scale), height = ui.fill()})
 		sidebar_build(app, em)
-		ui.splitter("###side_split", .X, &app.sidebar_px, SIDEBAR_MIN_PX, SIDEBAR_MAX_PX, {default_size = 240, total = app.room, min_other = PANELS_MIN_PX, thickness = 3, fill = draw.hex(surfaces(app).side), line_at = .End})
+		ui.splitter("###side_split", .X, &app.sidebar_px, SIDEBAR_MIN_PX, SIDEBAR_MAX_PX, {default_size = 240, total = app.room, min_other = PANELS_MIN_PX, flush = true})
 	}
 	resize(&app.panel_rects, len(app.panels))
 	for p, i in app.panels {
