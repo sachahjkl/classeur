@@ -11,6 +11,9 @@ and the versions follow [semantic versioning](https://semver.org/).
   programs alone and their signed manifests.
 - Settings: the rounding of the whole interface (a slider; the tabs' corners and classeur's own drawings too), the density, the animations,
   smooth scrolling, scroll bars that hide.
+- Tabs dragged say where they go: the tab follows the pointer, a line between the tabs of a row, the half of the panel a
+  new panel takes, the panel that takes it; at the window's edge the drag of the system starts (the pointer still in the
+  window), with the tab's picture. A tab's menu sends it to a window of its own (Ctrl+Shift+Alt+N).
 - The sidebar's sections in the person's order: a heading dragged (a line says where it lands), or its menu's Move up,
   Move down, Move to the top, Move to the bottom; kept between starts.
 - The columns' filters: a funnel on each column's title (over it, or lit while it filters): the dates of Modified and the
@@ -19,7 +22,12 @@ and the versions follow [semantic versioning](https://semver.org/).
 - A row's icon is its box (File Pilot's): the pointer over it, or the row checked among others, shows it; the header's
   box is over the icons.
 
+### Changed
+- The settings' sliders show their value while they are held (the rounding, the text size), written when let go.
+- The alternating rows are on by default.
+
 ### Fixed
+- A tab dragged back into its own window moves that tab, not another one showing the same folder.
 - Ctrl+wheel no longer blinks the icons: they are made at a few sizes (drawn smaller), and a size not made yet shows the
   nearest one made.
 

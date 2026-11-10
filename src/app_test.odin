@@ -1140,7 +1140,7 @@ test_tab_out :: proc(t: ^testing.T) {
 	// a tab of another window dropped on this one's tab row: opened here
 	photos := fs.join(dir, "Photos", context.temp_allocator)
 	data: platform.Drag_Data
-	append(&data.custom, platform.Drag_Entry{TAB_MIME, photos})
+	append(&data.custom, platform.Drag_Entry{TAB_MIME, tab_mime_data(1, 7, photos)})   // (another process's tab)
 	defer delete(data.custom)
 	at := (app.tab_rects_last[0].rect.min + app.tab_rects_last[0].rect.max) * 0.5
 	platform.drop_inject(app.main.win, .Drop_Enter, at, &data, {.Move})
@@ -1152,7 +1152,7 @@ test_tab_out :: proc(t: ^testing.T) {
 	delete(documents)
 }
 
-// A key of one's own from the palette: a sequence (Ctrl+K, then T) bound to "New tab", which then opens one; an alias.
+// A key of one's own from the palette: a sequence (Ctrl+M, then T) bound to "New tab", which then opens one; an alias.
 @(test)
 test_own_keys :: proc(t: ^testing.T) {
 	files := FIXTURE
@@ -1165,12 +1165,12 @@ test_own_keys :: proc(t: ^testing.T) {
 	session.key(s, .Return, {.Ctrl})
 	session.frames(s, 1)
 	testing.expect(t, app.palette.recording >= 0, "recording")
-	session.key(s, .K, {.Ctrl})
+	session.key(s, .M, {.Ctrl})
 	session.key(s, .T)
 	session.key(s, .Return)
 	session.frames(s, 1)
 	testing.expect_value(t, app.palette.recording, -1)
-	testing.expect_value(t, binding_text(app.keymap.custom["tab_new"]), "Ctrl+K, T")
+	testing.expect_value(t, binding_text(app.keymap.custom["tab_new"]), "Ctrl+M, T")
 	testing.expect_value(t, ui.field_string(&app.palette.field), "new tab")
 	// an alias: "nt" for it
 	ui.field_set(&app.palette.field, "nt")
@@ -1180,7 +1180,7 @@ test_own_keys :: proc(t: ^testing.T) {
 	testing.expect(t, alias_command(app, "nt") != nil && alias_command(app, "nt").id == "tab_new")
 	// the sequence opens a tab; Ctrl+T alone no longer does (its own keys gave way)
 	before := len(current_panel(app).tabs)
-	session.key(s, .K, {.Ctrl})
+	session.key(s, .M, {.Ctrl})
 	session.key(s, .T)
 	session.frames(s, 1)
 	testing.expect_value(t, len(current_panel(app).tabs), before + 1)
@@ -1188,8 +1188,8 @@ test_own_keys :: proc(t: ^testing.T) {
 	session.frames(s, 1)
 	testing.expect_value(t, len(current_panel(app).tabs), before + 1)
 	// the preference holds them, read again as they were
-	testing.expect_value(t, config.string_of(&app.prefs, "keys.custom"), "tab_new=Ctrl+K, T")
-	b, ok := binding_parse("Ctrl+K, T")
+	testing.expect_value(t, config.string_of(&app.prefs, "keys.custom"), "tab_new=Ctrl+M, T")
+	b, ok := binding_parse("Ctrl+M, T")
 	testing.expect(t, ok && b == app.keymap.custom["tab_new"])
 }
 
@@ -1520,6 +1520,17 @@ test_settings_look :: proc(t: ^testing.T) {
 	session.key(s, .Comma, {.Ctrl})
 	session.frames(s, 3)
 	when SHOTS { session.save_png(s, "settings_round.png") }
+	// the rounding's slider held at its start: square at once, before it is let go
+	sl := session.get(s, "sl")
+	from := session.center(sl)
+	to := [2]f32{sl.rect.min.x + 1, from.y}
+	session.press(s, from)
+	session.move(s, to)
+	session.frames(s, 2)
+	testing.expectf(t, ui.rounding(&app.main.state) < 0.2, "shown while held: %v", ui.rounding(&app.main.state))
+	session.release(s, to)
+	session.frames(s, 2)
+	testing.expect(t, config.float_of(&app.prefs, "look.rounding") < 0.2, "written at the release")
 	session.type_text(s, "update")
 	session.frames(s, 3)
 	testing.expect(t, session.find_text(s, "Update") != nil, "the update line")
@@ -1648,4 +1659,43 @@ test_zoom_icons_stay :: proc(t: ^testing.T) {
 	}
 	testing.expect(t, tab.zoom > 0, "zoomed")
 	testing.expect_value(t, blank, 0)
+}
+
+// A tab dragged shows where it goes: its ghost under the pointer, the line between the tabs of a row, the half of the
+// panel a new panel takes; let go there, the new panel is made. Its menu's line sends it to a window of its own.
+@(test)
+test_tab_drag_feedback :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1200, 700})
+	context.allocator = runtime.heap_allocator()
+	session.key(s, .T, {.Ctrl})
+	wait_read(s)
+	session.frames(s, 2)
+	p := current_panel(app)
+	testing.expect_value(t, len(p.tabs), 2)
+	first := app.tab_rects_last[0].rect
+	from := (first.min + first.max) * 0.5
+	session.press(s, from)
+	session.move(s, from + {12, 0})
+	session.move(s, from + {first.max.x - first.min.x, 0})
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "tab_ghost") != nil, "the ghost")
+	testing.expect(t, session.find(s, "tab_drop_line") != nil, "the line in the row")
+	// the right quarter of the panel: a new panel at the right
+	pr := app.panel_rects[0]
+	right := [2]f32{pr.max.x - (pr.max.x - pr.min.x) * 0.1, (pr.min.y + pr.max.y) * 0.5}
+	session.move(s, right)
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "tab_drop_split") != nil && session.find_text(s, "A new panel at the right") != nil, "the half it takes")
+	when SHOTS { session.save_png(s, "tab_split.png") }
+	session.release(s, right)
+	session.frames(s, 3)
+	testing.expect_value(t, len(app.panels), 2)
+	testing.expect(t, session.find(s, "tab_ghost") == nil, "the ghost gone")
+	// the menu's line: the shown tab to a window of its own (headless: noted)
+	act_tab_window(app)
+	session.frames(s, 2)
+	testing.expect(t, len(app.opened) > 0 && strings.has_prefix(app.opened[len(app.opened) - 1], "window:"), "a window of its own")
+	testing.expect_value(t, len(app.panels), 1)
 }

@@ -38,6 +38,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app.column_rects, app.column_rects_now = app.column_rects_now, app.column_rects
 	clear(&app.column_rects_now)
 	tab_drag_apply(app)
+	tab_drag_poll(app)
 	// (a band whose tab went, or whose press ended out of its list: over)
 	if app.band.active && (find_tab(app, app.band.tab) == nil || ui.active_key() == 0) { app.band.active = false }
 	// a text field had the keyboard at the end of the last build: only the commands that work while typing run
@@ -57,6 +58,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.row() { build_body(app, em) }
 	}
+	tab_drag_overlay(app, em)
 	entry_menu_build(app, em)
 	side_menu_build(app, em)
 	panel_menus_build(app, em)

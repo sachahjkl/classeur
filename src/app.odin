@@ -127,6 +127,7 @@ App :: struct {
 	standalone:  bool,              // a window of a torn-off tab (tab_drag.odin): no session
 	tab_out:     u64,               // a tab dragged out of the window: the drag of the system starts after this frame
 	tab_out_home: bool,             // that drag came back and was dropped in this window
+	tab_image:    platform.Drag_Image,   // owned: the dragged tab's picture, read back from the renderer (tab_drag_poll)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
 }
 
@@ -302,6 +303,7 @@ app_free :: proc(app: ^App) {
 	keymap_free(&app.keymap)
 	setup.destroy(&app.setup)
 	delete(app.launch_after)
+	tab_image_free(app)
 	delete(app.tab_rects)
 	delete(app.columns_order)
 	delete(app.column_rects)

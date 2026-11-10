@@ -251,6 +251,7 @@ tab_menu_build :: proc(app: ^App, em: f32) {
 		if t == nil { ui.ctx_menu_close(); return }
 		menu_command(app, "tab_new")
 		menu_command(app, "tab_duplicate")
+		menu_command(app, "tab_window", enabled = !(len(app.panels) == 1 && len(app.panels[0].tabs) == 1))
 		menu_command(app, "lock", checked = t.locked)
 		menu_command(app, "bookmark")
 		ui.menu_separator()

@@ -16,7 +16,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "look.autohide_scrollbars", description = "The scroll bars show only while the pointer is over what they scroll.", kind = .Bool, default = {b = false}},
 	{name = "look.follow_system", description = "Follows the system's light or dark scheme as it changes; off, classeur stays dark.", kind = .Bool, default = {b = false}},
 	{name = "look.theme", description = "The colours of every part of the window.", kind = .String, default = {s = "Graphite"}},
-	{name = "look.alternating_rows", description = "Paints every other row a shade lighter, to tell the rows apart.", kind = .Bool, default = {b = false}},
+	{name = "look.alternating_rows", description = "Paints every other row a shade lighter, to tell the rows apart.", kind = .Bool, default = {b = true}},
 	{name = "look.inactive_opacity", description = "Dims the contents of the panels that do not have the keyboard, so that the one that has it stands out.", kind = .Float, default = {f = 0.8}, min = 0.3, max = 1, bounded = true},
 	{name = "look.font_size", description = "The size of the text, in logical pixels.", kind = .Float, default = {f = 13.5}, min = 10, max = 22, bounded = true},
 	{name = "files.show_extensions", description = "Shows the extensions of the files' names.", kind = .Bool, default = {b = true}},

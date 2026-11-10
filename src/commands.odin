@@ -72,6 +72,7 @@ COMMANDS := [?]Command{
 	{id = "new_file", title = "New file", icon = lucide.FILE_PLUS, keys = {{.N, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_new_file},
 	{id = "terminal", title = "Open a terminal here", icon = lucide.SQUARE_TERMINAL, keys = {{.F4, {}}, {}}, in_text = true, run = act_terminal},
 	{id = "terminal_in", title = "Open a terminal in the folder", icon = lucide.SQUARE_TERMINAL, keys = {{.F4, {.Shift}}, {}}, run = act_terminal_in},
+	{id = "tab_window", title = "Move the tab to a window of its own", icon = lucide.APP_WINDOW, keys = {{.N, {.Ctrl, .Shift, .Alt}}, {}}, in_text = true, run = act_tab_window},
 	{id = "tab_close_others", title = "Close the other tabs", icon = lucide.X, keys = {{.W, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_tab_close_others},
 	{id = "tab_close_left", title = "Close the tabs to the left", icon = lucide.X, keys = {{.Page_Up, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_tab_close_left},
 	{id = "tab_close_right", title = "Close the tabs to the right", icon = lucide.X, keys = {{.Page_Down, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_tab_close_right},
