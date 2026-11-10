@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-11-10
+
 ### Fixed
 - Where the system has no picture for an icon (no icon theme, a type it does not know), Lucide's folder or file stands
   in: no empty icon. (The 0.13.0 release stopped on this: the CI's machines have no icon theme.)
@@ -196,3 +198,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.11.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.11.0
 [0.12.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.12.0
 [0.13.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.13.0
+[0.13.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.13.1
