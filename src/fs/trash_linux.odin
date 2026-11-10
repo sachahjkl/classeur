@@ -13,7 +13,7 @@ import "core:time"
 import "core:time/timezone"
 
 // Moves `path` to the trash; `in_trash` is its path in the trash (files/<name>: what untrash puts back).
-trash :: proc(path: string, allocator := context.allocator) -> (in_trash: string, e: Error) {
+trash_native :: proc(path: string, allocator := context.allocator) -> (in_trash: string, e: Error) {
 	dev, ok := device_of(path)
 	if !ok { return "", .Not_Found }
 	dir := home_trash(context.temp_allocator)

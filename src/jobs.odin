@@ -417,7 +417,7 @@ move_one :: proc(job: ^Job, from, target: string) -> (at: string, ok: bool) {
 			if !fsx.remove_tree(from) { job_error(job, from, .Denied); return }
 			return copied, true
 		}
-	case .Not_Found, .Denied, .Not_A_Folder, .Exists, .No_Space, .Cancelled, .Other:
+	case .Not_Found, .Denied, .Not_A_Folder, .Exists, .No_Space, .Cancelled, .Read_Only, .Other:
 		job_error(job, from, e)
 	}
 	return

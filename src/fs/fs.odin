@@ -39,6 +39,7 @@ Error :: enum u8 {
 	Cross_Volume,   // a rename to another volume: copy, then delete
 	No_Space,
 	Cancelled,
+	Read_Only,      // in an archive: what is in it is read, never written
 	Other,
 }
 
@@ -52,6 +53,7 @@ ERROR_TEXT := [Error]string {
 	.Cross_Volume = "This is on another volume.",
 	.No_Space     = "The volume is full.",
 	.Cancelled    = "Cancelled.",
+	.Read_Only    = "An archive is read only: copy what is in it out of it.",
 	.Other        = "This folder cannot be read.",
 }
 
@@ -65,6 +67,7 @@ ERROR_REASON := [Error]string {
 	.Cross_Volume = "it is on another volume",
 	.No_Space     = "the volume is full",
 	.Cancelled    = "cancelled",
+	.Read_Only    = "an archive is read only",
 	.Other        = "the system refused",
 }
 
@@ -85,6 +88,8 @@ Listing :: struct {
 
 // Reads the folder at `path` into `l` (made empty first). The entries come in the system's order.
 list :: proc(l: ^Listing, path: string) -> Error {
+	// (an archive, or a folder of one: listed from its index)
+	if file, inner, ok := archive_split(path); ok { return archive_list(l, path, file, inner) }
 	listing_reset(l)
 	l.path = strings.clone(path, virtual.arena_allocator(&l.arena))
 	l.error = list_native(l, path)

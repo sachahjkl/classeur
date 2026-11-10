@@ -84,7 +84,7 @@ stat_entry :: proc(dfd: linux.Fd, name: cstring, e: ^Entry) -> bool {
 	return true
 }
 
-stat :: proc(path: string) -> (info: Info, ok: bool) {
+stat_native :: proc(path: string) -> (info: Info, ok: bool) {
 	e := Entry{size = -1}
 	if !stat_entry(linux.AT_FDCWD, strings.clone_to_cstring(path, context.temp_allocator), &e) { return }
 	return Info{kind = e.kind, size = e.size, mtime = e.mtime, flags = e.flags}, true

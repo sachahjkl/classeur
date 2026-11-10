@@ -6,6 +6,10 @@ and the versions follow [semantic versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Archives as folders (File Pilot's): a zip, a tar or a gzipped tar is entered as a folder (Enter; "Open with the
+  system's application" still gives it to its program); what is in it is listed, sorted, searched, copied out of it (taken
+  out), opened (taken out to a temporary folder first); a write in it is refused (read only). The toolkit's archive
+  package reads them.
 - The search shows its results as it walks (every 200 ms), the folders read by four threads.
 - Sorted by size, the folders go by what they hold as it is measured; a folder measured empty says 0 B. The Size column
   has a bar of each row's share of the largest (File Pilot's).

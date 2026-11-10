@@ -80,7 +80,7 @@ list_native :: proc(l: ^Listing, path: string) -> Error {
 	return .None
 }
 
-stat :: proc(path: string) -> (info: Info, ok: bool) {
+stat_native :: proc(path: string) -> (info: Info, ok: bool) {
 	data: win.WIN32_FILE_ATTRIBUTE_DATA
 	if !win.GetFileAttributesExW(win.utf8_to_wstring(path, context.temp_allocator), win.GetFileExInfoStandard, &data) { return }
 	e := Entry{size = -1}

@@ -29,7 +29,7 @@ op_error :: proc(e: linux.Errno) -> Error {
 @(private = "file")
 cpath :: proc(path: string) -> cstring { return strings.clone_to_cstring(path, context.temp_allocator) }
 
-copy_file :: proc(from, to: string, p: ^Progress = nil) -> Error {
+copy_file_native :: proc(from, to: string, p: ^Progress = nil) -> Error {
 	src, oerr := linux.open(cpath(from), {.CLOEXEC})
 	if oerr != .NONE { return op_error(oerr) }
 	defer linux.close(src)
@@ -87,12 +87,12 @@ copy_link :: proc(from, to: string) -> Error {
 	return op_error(linux.symlink(cpath(string(buf[:n])), cpath(to)))
 }
 
-make_folder :: proc(path: string) -> Error {
+make_folder_native :: proc(path: string) -> Error {
 	return op_error(linux.mkdir(cpath(path), {.IRUSR, .IWUSR, .IXUSR, .IRGRP, .IWGRP, .IXGRP, .IROTH, .IWOTH, .IXOTH}))
 }
 
 // An empty file at `path`, never over something (.Exists when the name is taken).
-make_file :: proc(path: string) -> Error {
+make_file_native :: proc(path: string) -> Error {
 	fd, err := linux.open(cpath(path), {.WRONLY, .CREAT, .EXCL, .CLOEXEC}, {.IRUSR, .IWUSR, .IRGRP, .IROTH})
 	if err != .NONE { return op_error(err) }
 	linux.close(fd)
@@ -101,19 +101,19 @@ make_file :: proc(path: string) -> Error {
 
 // Renames `from` to `to`, never over something: .Exists when the name is taken, .Cross_Volume when it is on another
 // volume.
-rename :: proc(from, to: string) -> Error {
+rename_native :: proc(from, to: string) -> Error {
 	return op_error(linux.renameat2(linux.AT_FDCWD, cpath(from), linux.AT_FDCWD, cpath(to), {.NOREPLACE}))
 }
 
 // A file, a link or an empty folder.
-remove :: proc(path: string) -> Error {
+remove_native :: proc(path: string) -> Error {
 	e := linux.unlink(cpath(path))
 	if e == .EISDIR { e = linux.rmdir(cpath(path)) }
 	return op_error(e)
 }
 
 // Whether something is at `path` (a broken link counts).
-exists :: proc(path: string) -> bool {
+exists_native :: proc(path: string) -> bool {
 	sx: linux.Statx
 	return linux.statx(linux.AT_FDCWD, cpath(path), {.SYMLINK_NOFOLLOW}, {.TYPE}, &sx) == .NONE
 }

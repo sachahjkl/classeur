@@ -19,11 +19,13 @@ act_open :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
 	targets := folder_targets(&t.folder)
+	// (an archive opens as a folder, File Pilot's: "Open with the system's application" gives it to its program)
+	as_folder :: proc(e: ^fs.Entry) -> bool { return e.kind == .Directory || e.kind == .File && fs.is_archive_name(e.name) }
 	folders := 0
-	for e in targets { if e.kind == .Directory { folders += 1 } }
+	for e in targets { if as_folder(e) { folders += 1 } }
 	for e in targets {
 		path := fs.join(t.path, e.name, context.temp_allocator)
-		if e.kind == .Directory {
+		if as_folder(e) {
 			if folders == 1 && !t.locked {
 				tab_go(app, t, path)
 				return
@@ -71,6 +73,23 @@ act_open_system :: proc(app: ^App) {
 
 // The system's application for the file. Headless (the tests), nothing starts: the path is noted in `app.opened`.
 open_system :: proc(app: ^App, path: string) {
+	// (a file of an archive: taken out to a temporary folder on a worker, then opened from there)
+	if fs.archive_holds(path) {
+		Take_Out :: struct { app: ^App, path: string, out: string }
+		job := new(Take_Out)
+		job^ = {app = app, path = strings.clone(path)}
+		pool_submit(&app.pool, proc(data: rawptr) {
+			job := (^Take_Out)(data)
+			job.out = strings.clone(fs.archive_take_out(job.path))
+			if !ui.post(&job.app.main.state, proc(data: rawptr, word: u64) {
+				job := (^Take_Out)(data)
+				defer { delete(job.path); delete(job.out); free(job) }
+				if job.out == "" { say(job.app, "%s cannot be taken out of its archive.", fs.base(job.path)); return }
+				open_system(job.app, job.out)
+			}, job) { delete(job.path); delete(job.out); free(job) }
+		}, job)
+		return
+	}
 	if app.headless {
 		append(&app.opened, strings.clone(path))
 		return

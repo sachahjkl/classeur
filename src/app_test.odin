@@ -1791,3 +1791,68 @@ test_sort_by_measures :: proc(t: ^testing.T) {
 	testing.expect_value(t, first.kind, fs.Kind.Directory)   // (Documents' 61 bytes: more than any file)
 	when SHOTS { session.save_png(s, "size_sort.png") }
 }
+
+// A zip of stored files, as a zip writer makes one (local headers, the central directory, its end).
+@(private = "file")
+stored_zip :: proc(files: [][2]string) -> []u8 {
+	le16 :: proc(b: ^[dynamic]u8, v: int) { append(b, u8(v), u8(v >> 8)) }
+	le32 :: proc(b: ^[dynamic]u8, v: int) { le16(b, v); le16(b, v >> 16) }
+	b := make([dynamic]u8, context.temp_allocator)
+	central := make([dynamic]u8, context.temp_allocator)
+	for f in files {
+		at := len(b)
+		le32(&b, 0x04034b50); le16(&b, 20); le16(&b, 0); le16(&b, 0); le16(&b, 0); le16(&b, 0x5a21)
+		le32(&b, 0); le32(&b, len(f[1])); le32(&b, len(f[1])); le16(&b, len(f[0])); le16(&b, 0)
+		append(&b, ..transmute([]u8)f[0]); append(&b, ..transmute([]u8)f[1])
+		le32(&central, 0x02014b50); le16(&central, 20); le16(&central, 20); le16(&central, 0); le16(&central, 0)
+		le16(&central, 0); le16(&central, 0x5a21); le32(&central, 0); le32(&central, len(f[1])); le32(&central, len(f[1]))
+		le16(&central, len(f[0])); le16(&central, 0); le16(&central, 0); le16(&central, 0); le16(&central, 0); le32(&central, 0); le32(&central, at)
+		append(&central, ..transmute([]u8)f[0])
+	}
+	cd := len(b)
+	append(&b, ..central[:])
+	le32(&b, 0x06054b50); le16(&b, 0); le16(&b, 0); le16(&b, len(files)); le16(&b, len(files)); le32(&b, len(central)); le32(&b, cd); le16(&b, 0)
+	return b[:]
+}
+
+// An archive is a folder (File Pilot's): Enter goes into it, its folders named only by their files are folders, a file
+// copied out of it is taken out, a write in it is refused, a file of it opened is taken out first.
+@(test)
+test_archive_folders :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	zip := fs.join(dir, "real.zip", context.temp_allocator)
+	testing.expect(t, os.write_entire_file(zip, stored_zip({{"inner/hello.txt", "hello"}, {"top.txt", "top!"}})) == nil)
+	s, app := start(t, {dir}, size = {1100, 700})
+	context.allocator = runtime.heap_allocator()
+	tab := current_tab(app)
+	wait_read(s)
+	point_at(t, tab, "real.zip")
+	session.key(s, .Return)
+	wait_read(s)
+	testing.expect_value(t, tab.path, zip)
+	testing.expect(t, slice.contains(shown_names(tab), "inner") && slice.contains(shown_names(tab), "top.txt"), "its top")
+	point_at(t, tab, "inner")
+	session.key(s, .Return)
+	wait_read(s)
+	testing.expect(t, slice.contains(shown_names(tab), "hello.txt"), "a folder named only by its file")
+	when SHOTS { session.save_png(s, "archive.png") }
+	// copied out: taken out
+	hello := fs.join(tab.path, "hello.txt", context.temp_allocator)
+	job_add(app, .Copy, {hello}, dir)
+	wait_jobs(s)
+	got, _ := os.read_entire_file(fs.join(dir, "hello.txt", context.temp_allocator), context.temp_allocator)
+	testing.expect_value(t, string(got), "hello")
+	// a write in it: refused
+	testing.expect_value(t, fs.make_folder(fs.join(tab.path, "new", context.temp_allocator)), fs.Error.Read_Only)
+	testing.expect_value(t, fs.remove(hello), fs.Error.Read_Only)
+	// opened: taken out first, then given to the system (headless: noted)
+	before := len(app.opened)
+	open_system(app, hello)
+	session.wait_until(s, proc(s: ^session.Session) -> bool { return len((^App)(s.user).opened) > 0 && strings.has_suffix((^App)(s.user).opened[len((^App)(s.user).opened) - 1], "hello.txt") }, "taken out and opened")
+	testing.expect(t, len(app.opened) > before, "opened")
+	out := app.opened[len(app.opened) - 1]
+	testing.expect(t, !strings.has_prefix(out, zip), "from outside of the archive")
+	taken, _ := os.read_entire_file(out, context.temp_allocator)
+	testing.expect_value(t, string(taken), "hello")
+}

@@ -127,7 +127,7 @@ run_check :: proc(args: []string) -> int {
 	// (the file system's code of the other system is checked too: the program is written for both; the whole program
 	// cannot be, the renderer of the other system needs its libraries)
 	other := ODIN_OS == .Windows ? "-target:linux_amd64" : "-target:windows_amd64"
-	if !toolbox.run({"odin", "check", "src/fs", "-vet", "-no-entry-point", other}, {echo = true}) { return 1 }
+	if !toolbox.run({"odin", "check", "src/fs", collection(), "-vet", "-no-entry-point", other}, {echo = true}) { return 1 }
 	if !toolbox.run({"odin", "check", "tools/classeurtool", collection(), "-vet"}, {echo = true}) { return 1 }
 	if run_test(nil) != 0 { return 1 }
 	if run_build({"release"}) != 0 { return 1 }

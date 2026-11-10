@@ -79,7 +79,7 @@ copy_progress :: proc "system" (total, transferred, stream_size, stream_transfer
 	return PROGRESS_CONTINUE
 }
 
-copy_file :: proc(from, to: string, p: ^Progress = nil) -> Error {
+copy_file_native :: proc(from, to: string, p: ^Progress = nil) -> Error {
 	if p == nil {
 		if !CopyFileExW(wide(from), wide(to), nil, nil, nil, COPY_FILE_FAIL_IF_EXISTS) { return op_error(win.GetLastError()) }
 		return .None
@@ -113,13 +113,13 @@ link_target :: proc(path: string) -> (string, bool) {
 	return strings.trim_prefix(s, "\\\\?\\"), true
 }
 
-make_folder :: proc(path: string) -> Error {
+make_folder_native :: proc(path: string) -> Error {
 	if !win.CreateDirectoryW(wide(path), nil) { return op_error(win.GetLastError()) }
 	return .None
 }
 
 // An empty file at `path`, never over something (.Exists when the name is taken).
-make_file :: proc(path: string) -> Error {
+make_file_native :: proc(path: string) -> Error {
 	h := win.CreateFileW(wide(path), win.GENERIC_WRITE, 0, nil, win.CREATE_NEW, win.FILE_ATTRIBUTE_NORMAL, nil)
 	if h == win.INVALID_HANDLE_VALUE { return op_error(win.GetLastError()) }
 	win.CloseHandle(h)
@@ -129,7 +129,7 @@ make_file :: proc(path: string) -> Error {
 // Renames `from` to `to`, never over something: .Exists when the name is taken, .Cross_Volume when it is on another
 // volume.
 // (a file the shell or an antivirus reads for a moment refuses to move: tried again a few times, as Explorer does)
-rename :: proc(from, to: string) -> Error {
+rename_native :: proc(from, to: string) -> Error {
 	for attempt in 0 ..< 10 {
 		if win.MoveFileExW(wide(from), wide(to), 0) { return .None }
 		e := win.GetLastError()
@@ -140,7 +140,7 @@ rename :: proc(from, to: string) -> Error {
 }
 
 // A file, a link or an empty folder.
-remove :: proc(path: string) -> Error {
+remove_native :: proc(path: string) -> Error {
 	info, ok := stat(path)
 	if !ok { return .Not_Found }
 	if info.kind == .Directory {
@@ -151,7 +151,7 @@ remove :: proc(path: string) -> Error {
 	return .None
 }
 
-exists :: proc(path: string) -> bool {
+exists_native :: proc(path: string) -> bool {
 	return win.GetFileAttributesW(wide(path)) != win.INVALID_FILE_ATTRIBUTES
 }
 
@@ -185,7 +185,7 @@ FOF_NOERRORUI :: 0x400
 
 // To the Recycle Bin. `in_trash` is "": the Recycle Bin gives no path back (untrash cannot put it back; Explorer's
 // Recycle Bin can).
-trash :: proc(path: string, allocator := context.allocator) -> (in_trash: string, e: Error) {
+trash_native :: proc(path: string, allocator := context.allocator) -> (in_trash: string, e: Error) {
 	if !exists(path) { return "", .Not_Found }
 	// (a list of paths, each ended by a zero, the list by another)
 	w := win.utf8_to_utf16(path, context.temp_allocator)
