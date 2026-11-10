@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-10
+
 ### Added
 - Keys of one's own from the palette: Ctrl+Enter (or a row's +) records the keys of the chosen command, one key or a
   sequence of two (Ctrl+K, then T); Backspace gives it its own keys again. Aliases: the letters typed, Alt+Enter on a
@@ -79,3 +81,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.2.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.2.0
 [0.3.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.3.0
 [0.4.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.4.0
+[0.5.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.5.0
