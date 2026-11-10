@@ -6,6 +6,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- The alternating rows a faint shade (a few levels off the list, mixed in sRGB): the tint of the text, blended in linear
+  light, made a band that stood out on a dark list.
 - The themes are the toolkit's, as in its other programs (inspecteur's Graphite): classeur's own Graphite is gone; the
   surfaces, the selection, the cursor and the volumes' bars take the theme's colours.
 

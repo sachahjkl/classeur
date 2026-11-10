@@ -29,6 +29,19 @@ COL_MODIFIED_EM :: 9.5
 COL_TYPE_EM     :: 8.5
 COL_COUNT_EM    :: 5.6
 COL_SIZE_EM     :: 6.5
+// How far the alternating rows go from the list's colour toward the headers' (sRGB).
+STRIPE_SHARE :: 0.35
+
+// `a` toward `b` by `k`, channel by channel in sRGB (0xRRGGBBAA); a's alpha.
+srgb_mix :: proc(a, b: u32, k: f32) -> u32 {
+	out := a & 0xff
+	for shift in ([]u32{24, 16, 8}) {
+		x, y := f32((a >> shift) & 0xff), f32((b >> shift) & 0xff)
+		out |= u32(clamp(x + (y - x) * k + 0.5, 0, 255)) << shift
+	}
+	return out
+}
+
 // How far the rows' pills and lines stand from the panel's sides, in ems.
 ROW_INSET_EM :: 0.5
 // The name's least width, and what a row holds besides its columns (insets, box, icon), in ems.
@@ -731,7 +744,8 @@ row_look :: proc(app: ^App, focused: bool, em: f32) -> ^Row_Look {
 		ring = ui.color("accent"),
 		focused = focused,
 		stripes = app.settings.alternating_rows,
-		stripe = ui.color("text") * {1, 1, 1, 0.035},
+		// (opaque, mixed in sRGB: a few levels off the list; a tint of the text, blended in linear light, stood out)
+		stripe = draw.hex(srgb_mix(surfaces(app).list, surfaces(app).head, STRIPE_SHARE)),
 	}
 	return look
 }

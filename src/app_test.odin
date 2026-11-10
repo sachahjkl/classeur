@@ -1947,3 +1947,19 @@ test_folder_add_entries :: proc(t: ^testing.T) {
 	e := folder_cursor_entry(&f)
 	testing.expect(t, e != nil && e.name == "d.txt", "the cursor on its entry")
 }
+
+// The alternating rows: a faint shade (a picture to look at).
+@(test)
+test_stripes :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 500})
+	context.allocator = runtime.heap_allocator()
+	_ = config.set_from_string(&app.prefs, "look.alternating_rows", "true", .User)
+	settings_apply(app)
+	current_tab(app).zoom = 0
+	wait_read(s)
+	session.frames(s, 3)
+	testing.expect(t, app.settings.alternating_rows)
+	when SHOTS { session.save_png(s, "stripes.png") }
+}
