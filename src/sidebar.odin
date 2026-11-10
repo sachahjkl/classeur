@@ -21,8 +21,6 @@ SECTION_ICONS := [Side_Section]string{.Recents = lucide.HISTORY, .Bookmarks = lu
 
 
 // How full a volume is: its bar under its name.
-VOLUME_BAR      :: 0x2f7fd0ff
-VOLUME_BAR_FULL :: 0xe9605fff
 VOLUME_FULL_AT  :: 0.9
 
 sidebar_build :: proc(app: ^App, em: f32) {
@@ -315,7 +313,7 @@ side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, e
 			if sp.total > 0 {
 				used := 1 - f32(f64(sp.free) / f64(sp.total))
 				d := ui.frame_new(Bar_Draw)
-				d^ = {used, draw.hex(used > VOLUME_FULL_AT ? VOLUME_BAR_FULL : VOLUME_BAR), ui.color("border")}
+				d^ = {used, used > VOLUME_FULL_AT ? ui.color("bad text") : ui.color("accent"), ui.color("border")}
 				ui.next({width = ui.fill(), height = ui.px(max(3, em * 0.25))})
 				ui.custom("###bar", bar_draw, d)
 			}

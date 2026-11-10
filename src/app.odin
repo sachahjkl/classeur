@@ -10,7 +10,6 @@ import "core:time/datetime"
 import "core:time/timezone"
 import config "gt:config"
 import "gt:devtools"
-import "gt:draw"
 import "gt:font"
 import "gt:host"
 import "gt:instance"
@@ -397,15 +396,6 @@ say :: proc(app: ^App, format: string, args: ..any) {
 
 STATUS_SHOWN_MS :: 4000
 
-// classeur's own theme, first of the list, File Pilot's colours: a near-black grey for every surface, the bars a step
-// darker, thin lines, a strong blue for the selection; a light version of the same steps.
-THEME_CLASSEUR :: ui.Theme_Def{"Graphite",
-	{{0x141517ff, 0x1e1f22ff, 0x18191cff, 0x232427ff, 0x2a2b2fff, 0x34363bff}, {0x5b5e63ff, 0x8d9096ff, 0xd8dadeff, 0xffffffff},
-		{0x0a7cadff, 0x4f9de8ff, 0xa78bfaff, 0x5dc48aff, 0xe8b84eff, 0xe9605fff, 0x1aa3d9ff, 0xe476a8ff}},
-	{{0xffffffff, 0xfafbfcff, 0xf3f4f6ff, 0xf3f4f6ff, 0xe9ebeeff, 0xd8dbe0ff}, {0xa3a7adff, 0x676c73ff, 0x1b1d20ff, 0x000000ff},
-		{0x0a7cadff, 0x2563ebff, 0x7c3aedff, 0x2f8f46ff, 0xb7820cff, 0xd23c3cff, 0x0e7490ff, 0xc2477aff}},
-	.Both, nil, false, 0xffffffff}
-
 // How square the corners are (1: the toolkit's) and how dense the rows (1: the toolkit's).
 ROUNDING :: 0.25
 
@@ -415,30 +405,11 @@ corner_k :: proc() -> f32 { return ui.rounding(ui.current_state()) / ROUNDING }
 DENSITY  :: 1.0
 DENSITY_COMPACT :: 0.82
 
-// The selection's fill, solid as File Pilot's (the theme's own is a tint).
-SELECTION_DARK  :: 0x0a78a8ff
-SELECTION_LIGHT :: 0x9fd3ecff
+// The selection's fill: the theme's (its accent, a tint), as in the toolkit's lists.
+selection_color :: proc(app: ^App) -> ui.Color { return ui.color("selection") }
 
-selection_color :: proc(app: ^App) -> ui.Color {
-	return draw.hex(app.theme_shown.light ? SELECTION_LIGHT : SELECTION_DARK)
-}
-
-// The themes the window can show: classeur's, then the toolkit's (gui_toolkit docs/themes.md).
-themes :: proc() -> []ui.Theme_Def {
-	@(static) list: [len(ui.THEMES) + 1]ui.Theme_Def
-	@(static) n: int
-	if n == 0 {
-		// (the toolkit's own Graphite gives way to classeur's: one name, one theme)
-		list[0] = THEME_CLASSEUR
-		n = 1
-		for t in ui.THEMES {
-			if t.name == THEME_CLASSEUR.name { continue }
-			list[n] = t
-			n += 1
-		}
-	}
-	return list[:n]
-}
+// The themes the window can show: the toolkit's (gui_toolkit docs/themes.md), the same as its other programs'.
+themes :: proc() -> []ui.Theme_Def { return ui.THEMES[:] }
 
 // Text to show as it is: a "##" in it would end the shown part of a box's id string (ui's key rules), so a zero-width
 // space goes between the two signs.

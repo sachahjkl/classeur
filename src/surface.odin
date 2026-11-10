@@ -7,13 +7,15 @@ package classeur
 import "gt:draw"
 import "gt:ui"
 
-// The surfaces' colours (sRGB), dark and light: the window's top, the sidebar and the footers, the lists, the headers,
-// the cards and the boxes.
+// The surfaces' colours (sRGB) of the theme shown, by its steps as the toolkit lays them out (theme_palette): the window's
+// top (its darkest, the well), the lists (its page), the sidebar and the footers (its bars), the headers, the cards and
+// the boxes, the lines. Every program of the toolkit shows the same colours for a theme.
 Surfaces :: struct { top, side, list, head, raised, edge: u32 }
-SURFACES_DARK  :: Surfaces{top = 0x141517ff, side = 0x18191cff, list = 0x1e1f22ff, head = 0x232427ff, raised = 0x2a2b2fff, edge = 0x34363bff}
-SURFACES_LIGHT :: Surfaces{top = 0xe4e6e9ff, side = 0xeef0f2ff, list = 0xfbfbfcff, head = 0xf1f2f4ff, raised = 0xffffffff, edge = 0xd2d5daff}
 
-surfaces :: proc(app: ^App) -> Surfaces { return app.theme_shown.light ? SURFACES_LIGHT : SURFACES_DARK }
+surfaces :: proc(app: ^App) -> Surfaces {
+	c, _ := ui.theme_version(app.theme_shown.def, app.theme_shown.light)
+	return Surfaces{top = c.steps[0], list = c.steps[1], side = c.steps[2], head = c.steps[3], raised = c.steps[4], edge = c.steps[5]}
+}
 
 Raised :: struct {
 	base:   ui.Color,

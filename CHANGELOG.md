@@ -5,6 +5,10 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The themes are the toolkit's, as in its other programs (inspecteur's Graphite): classeur's own Graphite is gone; the
+  surfaces, the selection, the cursor and the volumes' bars take the theme's colours.
+
 ## [0.14.0] - 2026-11-10
 
 ### Added

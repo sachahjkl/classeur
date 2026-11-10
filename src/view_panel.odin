@@ -31,12 +31,6 @@ COL_COUNT_EM    :: 5.6
 COL_SIZE_EM     :: 6.5
 // How far the rows' pills and lines stand from the panel's sides, in ems.
 ROW_INSET_EM :: 0.5
-// The selection's border (sRGB): a brighter step of its fill.
-SELECTION_EDGE_DARK  :: 0x35b6e9ff
-SELECTION_EDGE_LIGHT :: 0x0a7cadff
-// The ring of the cursor (sRGB).
-CURSOR_DARK  :: 0x1aa3d9ff
-CURSOR_LIGHT :: 0x0a7cadff
 // The name's least width, and what a row holds besides its columns (insets, box, icon), in ems.
 NAME_MIN_EM   :: 14
 ROW_FIXED_EM  :: 7
@@ -733,8 +727,8 @@ row_look :: proc(app: ^App, focused: bool, em: f32) -> ^Row_Look {
 		inset = em * ROW_INSET_EM, radius = max(1, ui.scale()) * 2 * corner_k(),
 		line = ui.color("border") * {1, 1, 1, 0.7},
 		fill = focused ? sel : sel * {1, 1, 1, 0.35},
-		edge = focused ? draw.hex(app.theme_shown.light ? SELECTION_EDGE_LIGHT : SELECTION_EDGE_DARK) : draw.hex(app.theme_shown.light ? SELECTION_EDGE_LIGHT : SELECTION_EDGE_DARK) * {1, 1, 1, 0.45},
-		ring = draw.hex(app.theme_shown.light ? CURSOR_LIGHT : CURSOR_DARK),
+		edge = focused ? ui.color("accent") : ui.color("accent") * {1, 1, 1, 0.45},
+		ring = ui.color("accent"),
 		focused = focused,
 		stripes = app.settings.alternating_rows,
 		stripe = ui.color("text") * {1, 1, 1, 0.035},
@@ -874,7 +868,7 @@ entry_name :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, em: f32) {
 // `text` (a part of what `ranges` were found in, from `offset`) in pieces: the matched ones in the accent's colour.
 @(private = "file")
 match_text :: proc(text: string, ranges: []ui.Fuzzy_Range, offset: int, selected: bool) {
-	accent := selected ? draw.hex(0xffffffff) : draw.hex(CURSOR_DARK)
+	accent := selected ? ui.color("text") : ui.color("accent")
 	at := 0
 	piece :: proc(s: string, lit: bool, accent: ui.Color, n: int) {
 		if s == "" { return }
