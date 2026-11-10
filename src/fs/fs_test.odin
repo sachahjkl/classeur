@@ -212,7 +212,8 @@ test_recycle_bin :: proc(t: ^testing.T) {
 	testing.expect(t, !exists(file), "gone")
 	from, uerr := untrash(in_trash, context.temp_allocator)
 	testing.expect_value(t, uerr, Error.None)
-	testing.expect(t, strings.equal_fold(from, file), "where it was")
+	// (its long form: TEMP may be written in 8.3 parts, RUNNER~1, the record never is)
+	testing.expect(t, strings.equal_fold(base(from), base(file)) && exists(file), "where it was")
 	data, _ := os.read_entire_file(file, context.temp_allocator)
 	testing.expect_value(t, string(data), "back")
 }
