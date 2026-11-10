@@ -161,6 +161,11 @@ act_panel_split :: proc(app: ^App) {
 	panel_open(app, t != nil ? t.path : app.home)
 }
 
+act_panel_split_below :: proc(app: ^App) {
+	t := current_tab(app)
+	panel_open(app, t != nil ? t.path : app.home, below = true)
+}
+
 act_panel_close :: proc(app: ^App) {
 	if len(app.panels) < 2 { return }
 	panel_close(app, current_panel(app))

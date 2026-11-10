@@ -147,12 +147,17 @@ build_top :: proc(app: ^App, em: f32) {
 			if icon_action(app, "sidebar", app.sidebar ? lucide.PANEL_LEFT : lucide.PANEL_RIGHT, command_tip("sidebar"), em) { act_toggle_sidebar(app) }
 			ui.spacer(ui.px(em * 0.3))
 		}
+		// (a column's top panel has its tabs here; a panel below another has them at its own top: panel_build)
+		prev := -1
 		for p, i in app.panels {
-			last := i == len(app.panels) - 1
+			if p.below { continue }
+			last := true
+			for q in app.panels[i + 1:] { if !q.below { last = false; break } }
 			w: ui.Size = ui.fill()
 			if have && !last { w = ui.px(app.panel_rects[i].max.x - app.panel_rects[i].min.x + line) }
-			if have && i > 0 { ui.spacer(ui.px(app.panel_rects[i].min.x - app.panel_rects[i - 1].max.x - line)) }
+			if have && prev >= 0 { ui.spacer(ui.px(app.panel_rects[i].min.x - app.panel_rects[prev].max.x - line)) }
 			tab_region(app, p, i, w, have ? app.panel_rects[i].max.x - app.panel_rects[i].min.x : 0, em)
+			prev = i
 		}
 		ui.window_buttons()
 	}
@@ -180,7 +185,6 @@ tab_paint :: proc(b: ^ui.Box, base, edge: ui.Color) {
 
 // A panel's tabs, at the top of the window over it: as wide as TAB_EM, narrower when they do not fit; the shown one
 // in the list's colour, with a line of the accent along its top when its panel has the keyboard.
-@(private = "file")
 tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, em: f32) {
 	focused := index == app.focus
 	ui.next({width = width, height = ui.pct(1)})
@@ -257,14 +261,28 @@ build_body :: proc(app: ^App, em: f32) {
 		sidebar_build(app, em)
 		ui.splitter("###side_split", .X, &app.sidebar_px, SIDEBAR_MIN_PX, SIDEBAR_MAX_PX, {default_size = 240, total = app.room, min_other = PANELS_MIN_PX, flush = true})
 	}
+	// the panels in columns: a column a panel and the ones below it; a line between two columns, and between two panels
+	// of a column
 	resize(&app.panel_rects, len(app.panels))
-	for p, i in app.panels {
+	for i := 0; i < len(app.panels); {
+		end := i + 1
+		for end < len(app.panels) && app.panels[end].below { end += 1 }
 		if i > 0 {
 			ui.next({width = ui.px(max(1, scale)), height = ui.fill(), bg = ui.color("border")})
 			ui.build_box({.Draw_Background}, fmt.tprintf("###panel_sep%d", i))
 		}
 		ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
-		app.panel_rects[i] = panel_build(app, p, i, em)
+		if ui.column(.Start, {}, fmt.tprintf("###panel_col%d", i)) {
+			for k in i ..< end {
+				if k > i {
+					ui.next({width = ui.fill(), height = ui.px(max(1, scale)), bg = ui.color("border")})
+					ui.build_box({.Draw_Background}, fmt.tprintf("###panel_hsep%d", k))
+				}
+				ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
+				app.panel_rects[k] = panel_build(app, app.panels[k], k, em)
+			}
+		}
+		i = end
 	}
 }
 

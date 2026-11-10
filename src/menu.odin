@@ -273,6 +273,7 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 		menu_command(app, "hidden", checked = app.show_hidden)
 		ui.menu_separator()
 		menu_command(app, "panel_split")
+		menu_command(app, "panel_split_below")
 		menu_command(app, "panel_close", enabled = len(app.panels) > 1)
 	}
 }

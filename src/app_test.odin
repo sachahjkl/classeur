@@ -1016,3 +1016,37 @@ test_zoom_slider :: proc(t: ^testing.T) {
 	session.frames(s, 2)
 	testing.expect_value(t, tab.zoom, len(ZOOMS) - 1)
 }
+
+// A panel below another: its own column, its tabs at its top; the session keeps it; a tab dragged to a panel's bottom
+// quarter makes one.
+@(test)
+test_split_below :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1200, 800})
+	session.key(s, .J, {.Ctrl, .Shift})
+	wait_read(s)
+	session.frames(s, 2)
+	testing.expect_value(t, len(app.panels), 2)
+	testing.expect(t, app.panels[1].below)
+	top, bottom := app.panel_rects[0], app.panel_rects[1]
+	testing.expect(t, bottom.min.y >= top.max.y, "under it")
+	testing.expect_value(t, bottom.min.x, top.min.x)
+	testing.expect(t, session.find(s, "below_tabs") != nil, "its tabs at its top")
+	when SHOTS { session.save_png(s, "split.png") }
+	// a column at the right of both: Ctrl+Shift+D from the top panel goes after the column
+	app.focus = 0
+	session.key(s, .D, {.Ctrl, .Shift})
+	wait_read(s)
+	session.frames(s, 2)
+	testing.expect_value(t, len(app.panels), 3)
+	testing.expect(t, app.panels[1].below && !app.panels[2].below, "the one below stays in its column")
+	// the session's lines keep it
+	context.allocator = runtime.heap_allocator()
+	b := strings.builder_make(context.temp_allocator)
+	panels_text(app, &b)
+	testing.expect(t, strings.contains(strings.to_string(b), " below\n"))
+	// the top panel closed: the one below is the top of its column
+	panel_close(app, app.panels[0])
+	testing.expect(t, !app.panels[0].below)
+}

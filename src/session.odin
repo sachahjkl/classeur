@@ -60,7 +60,7 @@ session_save :: proc(app: ^App, later := false) {
 panels_text :: proc(app: ^App, b: ^strings.Builder) {
 	fmt.sbprintf(b, "focus %d\n", app.focus)
 	for p in app.panels {
-		fmt.sbprintf(b, "panel %d\n", p.active)
+		fmt.sbprintf(b, "panel %d%s\n", p.active, p.below ? " below" : "")
 		for t in p.tabs { fmt.sbprintf(b, "tab %d %d %s\n", t.zoom, t.locked ? 1 : 0, t.path) }
 	}
 }
@@ -80,7 +80,9 @@ panels_open :: proc(app: ^App, text: string) -> bool {
 		case "panel":
 			panel = new(Panel)
 			append(&app.panels, panel)
-			panel.active, _ = strconv.parse_int(rest)
+			active_text, _, flags := strings.partition(rest, " ")
+			panel.active, _ = strconv.parse_int(active_text)
+			panel.below = flags == "below" && len(app.panels) > first + 1
 		case "tab":
 			if panel == nil { continue }
 			zoom_text, _, rest2 := strings.partition(rest, " ")

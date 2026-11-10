@@ -70,6 +70,7 @@ Focus_Due :: enum u8 { None, List, Filter, Address }
 Panel :: struct {
 	tabs:   [dynamic]^Tab,
 	active: int,
+	below:  bool,   // under the panel before it, in its column (File Pilot's split below); else a column of its own
 }
 
 tab_new :: proc(app: ^App, path: string) -> ^Tab {
@@ -317,16 +318,28 @@ tab_close :: proc(app: ^App, p: ^Panel, i: int) {
 	}
 }
 
-panel_open :: proc(app: ^App, path: string) {
+// A new panel after the focused one: beside it (a column of its own), or `below` it in its column.
+panel_open :: proc(app: ^App, path: string, below := false) {
 	p := new(Panel)
+	p.below = below
 	tab_open(app, p, path)
-	inject_at(&app.panels, app.focus + 1, p)
-	app.focus += 1
+	at := below ? app.focus + 1 : column_end(app, app.focus)
+	inject_at(&app.panels, at, p)
+	app.focus = at
+}
+
+// The index after the last panel of the column of panel `i` (a new column goes there: the panels below `i` stay its).
+column_end :: proc(app: ^App, i: int) -> int {
+	end := clamp(i, 0, len(app.panels) - 1) + 1
+	for end < len(app.panels) && app.panels[end].below { end += 1 }
+	return end
 }
 
 panel_close :: proc(app: ^App, p: ^Panel) {
 	for q, i in app.panels {
 		if q != p { continue }
+		// (the panel under it, the top of its column now)
+		if !p.below && i + 1 < len(app.panels) && app.panels[i + 1].below { app.panels[i + 1].below = false }
 		ordered_remove(&app.panels, i)
 		panel_destroy(p)
 		if app.focus >= len(app.panels) { app.focus = len(app.panels) - 1 }

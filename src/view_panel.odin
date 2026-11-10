@@ -72,6 +72,11 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 		}
 		drop_zone(app, box.rect, t.path)
 		room := box.rect.max.x - box.rect.min.x
+		// (a panel below another: its tabs at its own top, on the window's top surface)
+		if p.below {
+			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOP_EM)), bg = draw.hex(surfaces(app).top)})
+			if ui.row(.Start, {.Draw_Background}, "###below_tabs") { tab_region(app, p, index, ui.fill(), room, em) }
+		}
 		if app.inspector.open && focused { room -= app.inspector.width_px * ui.scale() }
 		wide := details_columns(room, em)
 		toolbar(app, p, t, index, em)

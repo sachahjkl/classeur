@@ -48,6 +48,7 @@ COMMANDS := [?]Command{
 	{id = "tab_previous", title = "Previous tab", icon = lucide.CHEVRON_LEFT, keys = {{.Tab, {.Ctrl, .Shift}}, {.Page_Up, {.Ctrl}}}, in_text = true, run = act_tab_previous},
 	{id = "tab_duplicate", title = "Duplicate the tab", icon = lucide.COPY, keys = {{.K, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_tab_duplicate},
 	{id = "panel_split", title = "Split: a new panel at the right", icon = lucide.COLUMNS_2, keys = {{.D, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_panel_split},
+	{id = "panel_split_below", title = "Split: a new panel below", icon = lucide.ROWS_2, keys = {{.J, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_panel_split_below},
 	{id = "panel_close", title = "Close the panel", icon = lucide.X, keys = {{.W, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_panel_close},
 	{id = "panel_next", title = "Go to the next panel", icon = lucide.COLUMNS_2, keys = {{.F6, {}}, {}}, in_text = true, run = act_panel_next},
 

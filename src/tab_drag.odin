@@ -1,7 +1,7 @@
 package classeur
 
 // Tabs dragged (File Pilot's): along their row to another place, onto another panel's row to move there, onto the right
-// quarter of a panel to open a new panel beside it with the tab. The tabs' boxes of the last frame (`tab_rects_last`)
+// quarter of a panel to open a new panel beside it with the tab, onto its bottom quarter for a new panel below it. The tabs' boxes of the last frame (`tab_rects_last`)
 // and the panels' say where the pointer is; the move is made before the build that follows the release.
 
 import "gt:draw"
@@ -19,8 +19,11 @@ Tab_Drag :: struct {
 	tab:          u64,              // the tab's id (the tabs may shift while it is dragged: it is found again)
 	pending:      bool,             // released: the move is made before the next build (the panels are built now)
 	to, at:       int,
-	split:        bool,
+	split:        Split,
 }
+
+// Where a tab let go makes a new panel: none, a column at the right, a panel below.
+Split :: enum u8 { None, Right, Below }
 
 // Before a build: the move of a tab released in the last one.
 tab_drag_apply :: proc(app: ^App) {
@@ -36,7 +39,7 @@ tab_drag_apply :: proc(app: ^App) {
 
 // Where a tab let go at `pos` goes: a panel and the place in its row, or a new panel after `panel` (`split`).
 @(private = "file")
-tab_drop_place :: proc(app: ^App, pos: [2]f32) -> (panel, at: int, split, ok: bool) {
+tab_drop_place :: proc(app: ^App, pos: [2]f32) -> (panel, at: int, split: Split, ok: bool) {
 	// a row of tabs: before the tab whose middle is right of the pointer
 	for tr in app.tab_rects_last {
 		r := tr.rect
@@ -48,13 +51,14 @@ tab_drop_place :: proc(app: ^App, pos: [2]f32) -> (panel, at: int, split, ok: bo
 		for o in app.tab_rects_last {
 			if o.panel == tr.panel && pos.x > (o.rect.min.x + o.rect.max.x) * 0.5 { at = o.index + 1 }
 		}
-		return tr.panel, at, false, true
+		return tr.panel, at, .None, true
 	}
 	for pr, i in app.panel_rects {
 		if i >= len(app.panels) { break }
 		if pos.x < pr.min.x || pos.x >= pr.max.x || pos.y < pr.min.y || pos.y >= pr.max.y { continue }
-		if pos.x > pr.max.x - (pr.max.x - pr.min.x) * 0.25 { return i, 0, true, true }
-		return i, len(app.panels[i].tabs), false, true
+		if pos.x > pr.max.x - (pr.max.x - pr.min.x) * 0.25 { return i, 0, .Right, true }
+		if pos.y > pr.max.y - (pr.max.y - pr.min.y) * 0.25 { return i, 0, .Below, true }
+		return i, len(app.panels[i].tabs), .None, true
 	}
 	return
 }
@@ -74,13 +78,13 @@ tab_drag_signal :: proc(app: ^App, panel, index: int, sig: ui.Signal) {
 	}
 }
 
-// Moves the tab `index` of panel `from` to panel `to` at `at`, or into a new panel after `to` (`split`).
-tab_move :: proc(app: ^App, from, index, to, at: int, split: bool) {
+// Moves the tab `index` of panel `from` to panel `to` at `at`, or into a new panel beside `to`'s column or below `to`.
+tab_move :: proc(app: ^App, from, index, to, at: int, split: Split) {
 	if from < 0 || from >= len(app.panels) || to < 0 || to >= len(app.panels) { return }
 	src := app.panels[from]
 	if index < 0 || index >= len(src.tabs) { return }
 	t := src.tabs[index]
-	if !split && from == to {
+	if split == .None && from == to {
 		dest := at > index ? at - 1 : at
 		ordered_remove(&src.tabs, index)
 		dest = clamp(dest, 0, len(src.tabs))
@@ -89,16 +93,17 @@ tab_move :: proc(app: ^App, from, index, to, at: int, split: bool) {
 		app.focus = from
 		return
 	}
-	if split && len(src.tabs) == 1 && from == to { return }   // (the panel's one tab beside itself: nothing)
+	if split != .None && len(src.tabs) == 1 && from == to { return }   // (the panel's one tab beside itself: nothing)
 	ordered_remove(&src.tabs, index)
 	target: ^Panel
-	if split {
+	if split != .None {
 		target = new(Panel)
-		inject_at(&app.panels, to + 1, target)
+		target.below = split == .Below
+		inject_at(&app.panels, split == .Below ? to + 1 : column_end(app, to), target)
 	} else {
 		target = app.panels[to]
 	}
-	dest := split ? 0 : clamp(at, 0, len(target.tabs))
+	dest := split != .None ? 0 : clamp(at, 0, len(target.tabs))
 	inject_at(&target.tabs, dest, t)
 	target.active = dest
 	// (the tab shown stays shown: one left of it went)
@@ -108,6 +113,8 @@ tab_move :: proc(app: ^App, from, index, to, at: int, split: bool) {
 	if len(src.tabs) == 0 {
 		for q, i in app.panels {
 			if q == src {
+				// (the panel under it, the top of its column now)
+				if !src.below && i + 1 < len(app.panels) && app.panels[i + 1].below { app.panels[i + 1].below = false }
 				ordered_remove(&app.panels, i)
 				free_panel_shell(src)
 				break
