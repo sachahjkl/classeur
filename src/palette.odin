@@ -12,14 +12,19 @@ import "gt:draw"
 import lucide "gt:lucide"
 import "gt:ui"
 
-PALETTE_ROWS :: 12
 PALETTE_RECENT :: 6
+// Its size when first opened, and the least it can be made (em); its top held at this fraction of the window.
+PALETTE_PREFERRED_EM :: [2]f32{46, 31}
+PALETTE_MIN_EM :: [2]f32{28, 14}
+PALETTE_TOP :: 0.1
 
 Palette :: struct {
 	open:      bool,
 	field:     ui.Text_Field,
 	sel:       int,
-	scroll:    int,
+	reveal:    bool,        // the selected row is brought into view at the next build
+	view_h:    f32,         // the list's height at the last build (a page for Page Up, Page Down)
+	size:      ui.Vec2,     // as the person resized it by its edges and corner (logical px; {}: preferred)
 	focus_due: bool,
 	mouse:     [2]f32,
 	recording: int,         // the command whose keys are recorded (-1: none; keymap.odin)
@@ -36,8 +41,9 @@ palette_open :: proc(app: ^App) {
 	p := &app.palette
 	p.open = true
 	ui.field_clear(&p.field)
-	p.sel, p.scroll = 0, 0
+	p.sel, p.reveal = 0, true
 	p.focus_due = true
+	p.size = {f32(config.int_of(&app.prefs, "palette.width")), f32(config.int_of(&app.prefs, "palette.height"))}
 	p.recording = -1
 }
 
@@ -86,7 +92,6 @@ palette_build :: proc(app: ^App) {
 	p := &app.palette
 	if !p.open { return }
 	em := ui.font_size()
-	pw := min(em * 44, app.room * ui.scale() * 0.92)
 
 	rows := make([dynamic]Palette_Row, context.temp_allocator)
 	needle := strings.clone(ui.field_string(&p.field), context.temp_allocator)
@@ -131,144 +136,146 @@ palette_build :: proc(app: ^App) {
 	} else if n > 0 {
 		if ui.key_press(.Down) { p.sel = (p.sel + 1) % n }
 		if ui.key_press(.Up) { p.sel = (p.sel + n - 1) % n }
-		if ui.key_press(.Page_Down) { p.sel = min(p.sel + PALETTE_ROWS, n - 1) }
-		if ui.key_press(.Page_Up) { p.sel = max(p.sel - PALETTE_ROWS, 0) }
+		// (a page: the rows the list showed at the last build, as large as the person made the palette)
+		page := max(int(p.view_h / ui.dense(em * 2.3)), 1)
+		if ui.key_press(.Page_Down) { p.sel = min(p.sel + page, n - 1) }
+		if ui.key_press(.Page_Up) { p.sel = max(p.sel - page, 0) }
+		if ui.key_press(.Down) || ui.key_press(.Up) || ui.key_press(.Page_Down) || ui.key_press(.Page_Up) { p.reveal = true }
 		p.sel = clamp(p.sel, 0, n - 1)
-		if p.sel < p.scroll { p.scroll = p.sel }
-		if p.sel >= p.scroll + PALETTE_ROWS { p.scroll = p.sel - PALETTE_ROWS + 1 }
-		p.scroll = clamp(p.scroll, 0, max(n - PALETTE_ROWS, 0))
 	}
 	mouse := ui.mouse_pos()
 	moved := abs(mouse.x - p.mouse.x) + abs(mouse.y - p.mouse.y) > 0.5
 	p.mouse = mouse
 	run := -1
 
-	if ui.modal("palette", pw, &p.open, 0.12) {
-		if ui.style({width = ui.px(pw)}) {
-			ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 3.2))})
-			if ui.row(.Center, id = "###pal_head") {
-				ui.spacer(ui.px(em * 0.8))
-				input_key := ui.key_from_string(ui.parent_box().key, "###pal_input")
-				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.3))})
-				res := ui.line_edit("###pal_input", &p.field, "Type a command")
-				if res.changed && p.recording >= 0 {
-					ui.field_set(&p.field, needle)   // (the keys recorded are not letters of the search)
-				} else if res.changed {
-					p.sel, p.scroll = 0, 0
-				}
-				if res.cancelled { p.open = false }
-				if res.committed && n > 0 && p.recording < 0 { run = rows[p.sel].command }
-				// Ctrl+Enter: record the chosen command's keys; Alt+Enter: the letters typed, its alias
-				if p.recording < 0 && n > 0 && ui.key_press(.Return, {.Ctrl}) { p.recording, p.count = rows[p.sel].command, 0 }
-				if p.recording < 0 && n > 0 && ui.key_press(.Return, {.Alt}) && strings.trim_space(needle) != "" {
-					keymap_alias(app, needle, COMMANDS[rows[p.sel].command].id)
-					say(app, "%s: an alias of %s.", needle, COMMANDS[rows[p.sel].command].title)
-				}
-				if p.focus_due { ui.set_focus(input_key); p.focus_due = false }
-				ui.spacer(ui.px(em * 0.8))
+	row_h := ui.dense(em * 2.3)
+	head_h := ui.dense(em * 1.7)
+	// (resizable by its edges and corner, its size kept; its top held where a palette is)
+	if ui.modal_sized("palette", PALETTE_PREFERRED_EM * em, &p.size, &p.open, PALETTE_MIN_EM * em, top = PALETTE_TOP) {
+		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 3.2))})
+		if ui.row(.Center, id = "###pal_head") {
+			ui.spacer(ui.px(em * 0.8))
+			input_key := ui.key_from_string(ui.parent_box().key, "###pal_input")
+			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.3))})
+			res := ui.line_edit("###pal_input", &p.field, "Type a command")
+			if res.changed && p.recording >= 0 {
+				ui.field_set(&p.field, needle)   // (the keys recorded are not letters of the search)
+			} else if res.changed {
+				p.sel, p.reveal = 0, true
 			}
-			ui.hline(ui.px(pw))
-			ui.spacer(ui.px(em * 0.3))
-			ui.next({width = ui.px(pw), height = ui.children_sum()})
-			if ui.row(.Start, id = "###pal_body") {
-			// (the bar is as tall as the rows were last frame: a percent of a parent sized by its children is not known)
-			rows_box := ui.box_from_key(ui.key_from_string(ui.parent_box().key, "###pal_rows"))
-			rows_h := rows_box != nil ? rows_box.size.y : em * 2.3 * PALETTE_ROWS
-			ui.next({width = ui.px(pw - em * 0.8), height = ui.children_sum()})
-			if ui.column(.Center, {.Scroll_Self}, "###pal_rows") {
-				// (the wheel scrolls the rows)
-				if d := ui.signal(ui.parent_box()).scrolled.y; d != 0 {
-					p.scroll = clamp(p.scroll + (d > 0 ? 3 : -3), 0, max(n - PALETTE_ROWS, 0))
-				}
-				for vi in 0 ..< min(n, PALETTE_ROWS) {
-					at := p.scroll + vi
-					r := rows[at]
-					c := COMMANDS[r.command]
-					selected := at == p.sel
-					if r.header != "" {
-						ui.next({width = ui.px(pw - em * 1.6), height = ui.px(ui.dense(em * 1.7))})
-						if ui.row(.End, {}, fmt.tprintf("###pal_head_%d", at)) {
-							ui.spacer(ui.px(em * 0.5))
-							ui.push_tags("weak")
-							ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 0.85)})
-							ui.label(fmt.tprintf("%s###h", r.header))
-							ui.pop_tags()
-						}
-					}
-					if selected { ui.push_tags("selected") }
-					ui.next({width = ui.px(pw - em * 1.0), height = ui.px(ui.dense(em * 2.3)), radius = em * 0.45, border = selected ? nil : draw.Color{}})
-					flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Draw_Border}
-					if selected { flags += {.Draw_Background} }
-					sig: ui.Signal
-					if ui.row(.Center, flags, fmt.tprintf("###pal_row_%s", c.id)) {
-						sig = ui.signal(ui.parent_box())
-						ui.spacer(ui.px(em * 0.4))
-						if ui.tags("weak") { glyph(app, c.icon, em * 1.8) }
-						ui.next({width = ui.fill(), height = ui.pct(1)})
-						ui.label_fuzzy(c.title, r.ranges)
-						// its aliases, and its group while searching
-						ui.push_tags("weak")
-						for alias, id in app.keymap.aliases {
-							if id != c.id { continue }
-							ui.next({width = ui.text_size(em * 0.4), height = ui.pct(1), font_size = math.round(em * 0.85)})
-							ui.label(fmt.tprintf("%s###alias_%s", alias, alias))
-						}
-						if needle != "" {
-							ui.next({width = ui.text_size(em * 0.6), height = ui.pct(1), font_size = math.round(em * 0.85)})
-							ui.label(fmt.tprintf("%s###grp", COMMAND_GROUPS[command_group(c.id)]))
-						}
-						ui.pop_tags()
-						if p.recording == r.command {
-							ui.push_tags("selected")
-							ui.kbd(p.count == 0 ? "Press the keys…" : binding_text(Binding{p.chords}))
-							ui.pop_tags()
-						} else {
-							for b, bi in command_bindings(app, &COMMANDS[r.command]) {
-								if bi > 0 { ui.spacer(ui.px(em * 0.3)) }
-								ui.kbd(binding_text(b))
-							}
-						}
-						// File Pilot's +: a key of one's own for it
-						if selected || sig.hovering {
-							ui.spacer(ui.px(em * 0.3))
-							if icon_action(app, fmt.tprintf("bind_%s", c.id), lucide.PLUS, "A key of your own (Ctrl+Enter)", em) { p.recording, p.count = r.command, 0 }
-						}
-						ui.spacer(ui.px(em * 0.5))
-					}
-					if selected { ui.pop_tags() }
-					if sig.clicked { run = r.command }
-					if sig.hovering && moved { p.sel = at }
-				}
+			if res.cancelled { p.open = false }
+			if res.committed && n > 0 && p.recording < 0 { run = rows[p.sel].command }
+			// Ctrl+Enter: record the chosen command's keys; Alt+Enter: the letters typed, its alias
+			if p.recording < 0 && n > 0 && ui.key_press(.Return, {.Ctrl}) { p.recording, p.count = rows[p.sel].command, 0 }
+			if p.recording < 0 && n > 0 && ui.key_press(.Return, {.Alt}) && strings.trim_space(needle) != "" {
+				keymap_alias(app, needle, COMMANDS[rows[p.sel].command].id)
+				say(app, "%s: an alias of %s.", needle, COMMANDS[rows[p.sel].command].title)
 			}
-			// the scroll bar: where the rows shown are among all
-			if n > PALETTE_ROWS {
-				d := ui.frame_new(Scroll_Draw)
-				d^ = {f32(p.scroll) / f32(n), f32(min(n, p.scroll + PALETTE_ROWS)) / f32(n), ui.color("border"), ui.color("weak text")}
-				ui.next({width = ui.px(em * 0.5), height = ui.px(rows_h)})
-				ui.custom("###pal_bar", scroll_draw, d)
-			}
-			}
+			if p.focus_due { ui.set_focus(input_key); p.focus_due = false }
+			ui.spacer(ui.px(em * 0.8))
+		}
+		ui.hline(ui.fill())
+		// the rows: the toolkit's scrolled list (the wheel, its bar, smooth), the chosen one kept in view
+		ui.next({width = ui.fill(), height = ui.fill()})
+		if ui.scroll_y("###pal_list") {
+			lb := ui.parent_box()
+			view_h := lb.rect.max.y - lb.rect.min.y
+			if view_h < row_h { view_h = 12 * row_h }
+			p.view_h = view_h
 			if n == 0 {
 				if ui.tags("weak") {
-					ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 3.5)), text_align = .Center})
+					ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 3.5)), text_align = .Center})
 					ui.label("No command has these letters.###pal_none")
 				}
 			}
-			ui.spacer(ui.px(em * 0.3))
-			ui.hline(ui.px(pw))
-			ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 2.1))})
-			if ui.row(.Center, id = "###pal_foot") {
-				ui.spacer(ui.px(em * 0.9))
-				if ui.tags("weak") {
-					ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 0.85)})
-					help := p.recording >= 0 ? "Press the keys (two for a sequence)   Enter: keep   Backspace: its own keys   Esc: cancel" : "Up, Down: choose   Enter: run   Ctrl+Enter: a key of your own   Alt+Enter: an alias"
-					// (nothing typed: every command, the recent ones counted once)
-					count := needle == "" ? fmt.tprintf("%d commands", len(COMMANDS)) : fmt.tprintf("%d of %d commands", n, len(COMMANDS))
-					ui.label(fmt.tprintf("%s   %s###pal_count", count, help))
+			y: f32 = 0   // (the top of each row in the list: a group's title above it pushes it down)
+			for r, at in rows {
+				c := COMMANDS[r.command]
+				selected := at == p.sel
+				if r.header != "" {
+					y += head_h
+					ui.next({width = ui.fill(), height = ui.px(head_h)})
+					if ui.row(.End, {}, fmt.tprintf("###pal_head_%d", at)) {
+						ui.spacer(ui.px(em * 0.9))
+						ui.push_tags("weak")
+						ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 0.85)})
+						ui.label(fmt.tprintf("%s###h", r.header))
+						ui.pop_tags()
+					}
+				}
+				if selected && p.reveal {
+					// (its group's title too, when it is the first of its group)
+					top := r.header != "" ? y - head_h : y
+					lb.view_target.y = ui.view_reveal_offset(lb.view_target.y, top, y + row_h, view_h)
+					p.reveal = false
+				}
+				y += row_h
+				ui.next({width = ui.fill(), height = ui.px(row_h)})
+				if ui.row(.Center, {}, fmt.tprintf("###pal_slot_%s", c.id)) {
+				ui.spacer(ui.px(em * 0.4))
+				if selected { ui.push_tags("selected") }
+				ui.next({width = ui.fill(), height = ui.pct(1), radius = em * 0.45, border = selected ? nil : draw.Color{}})
+				flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Draw_Border}
+				if selected { flags += {.Draw_Background} }
+				sig: ui.Signal
+				if ui.row(.Center, flags, fmt.tprintf("###pal_row_%s", c.id)) {
+					sig = ui.signal(ui.parent_box())
+					ui.spacer(ui.px(em * 0.4))
+					if ui.tags("weak") { glyph(app, c.icon, em * 1.8) }
+					ui.next({width = ui.fill(), height = ui.pct(1)})
+					ui.label_fuzzy(c.title, r.ranges)
+					// its aliases, and its group while searching
+					ui.push_tags("weak")
+					for alias, id in app.keymap.aliases {
+						if id != c.id { continue }
+						ui.next({width = ui.text_size(em * 0.4), height = ui.pct(1), font_size = math.round(em * 0.85)})
+						ui.label(fmt.tprintf("%s###alias_%s", alias, alias))
+					}
+					if needle != "" {
+						ui.next({width = ui.text_size(em * 0.6), height = ui.pct(1), font_size = math.round(em * 0.85)})
+						ui.label(fmt.tprintf("%s###grp", COMMAND_GROUPS[command_group(c.id)]))
+					}
+					ui.pop_tags()
+					if p.recording == r.command {
+						ui.push_tags("selected")
+						ui.kbd(p.count == 0 ? "Press the keys…" : binding_text(Binding{p.chords}))
+						ui.pop_tags()
+					} else {
+						for b, bi in command_bindings(app, &COMMANDS[r.command]) {
+							if bi > 0 { ui.spacer(ui.px(em * 0.3)) }
+							ui.kbd(binding_text(b))
+						}
+					}
+					// File Pilot's +: a key of one's own for it
+					if selected || sig.hovering {
+						ui.spacer(ui.px(em * 0.3))
+						if icon_action(app, fmt.tprintf("bind_%s", c.id), lucide.PLUS, "A key of your own (Ctrl+Enter)", em) { p.recording, p.count = r.command, 0 }
+					}
+					ui.spacer(ui.px(em * 0.5))
+				}
+				if selected { ui.pop_tags() }
+				ui.spacer(ui.px(em * 0.4))
+				if sig.clicked { run = r.command }
+				if sig.hovering && moved { p.sel = at }
 				}
 			}
 		}
+		ui.hline(ui.fill())
+		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.1))})
+		if ui.row(.Center, id = "###pal_foot") {
+			ui.spacer(ui.px(em * 0.9))
+			if ui.tags("weak") {
+				ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 0.85)})
+				help := p.recording >= 0 ? "Press the keys (two for a sequence)   Enter: keep   Backspace: its own keys   Esc: cancel" : "Up, Down: choose   Enter: run   Ctrl+Enter: a key of your own   Alt+Enter: an alias"
+				// (nothing typed: every command, the recent ones counted once)
+				count := needle == "" ? fmt.tprintf("%d commands", len(COMMANDS)) : fmt.tprintf("%d of %d commands", n, len(COMMANDS))
+				ui.label(fmt.tprintf("%s   %s###pal_count", count, help))
+			}
+			ui.spacer(ui.px(em * 1.4))   // (the corner's resize grip)
+		}
 	}
+	// closed (Escape, a click outside, a command run): the size the person gave it is kept for the next time
+	if !p.open || run >= 0 { palette_keep_size(app) }
 	if run >= 0 {
 		p.open = false
 		palette_note_run(app, COMMANDS[run].id)
@@ -313,14 +320,11 @@ palette_first :: proc(app: ^App) -> int {
 }
 
 @(private = "file")
-Scroll_Draw :: struct { from, to: f32, track, thumb: ui.Color }
-
-@(private = "file")
-scroll_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	d := (^Scroll_Draw)(user)
-	r := b.rect
-	x0, x1 := r.min.x + (r.max.x - r.min.x) * 0.3, r.max.x - (r.max.x - r.min.x) * 0.3
-	h := r.max.y - r.min.y
-	draw.rect(dc, {{x0, r.min.y}, {x1, r.max.y}}, d.track)
-	draw.rect(dc, {{x0, r.min.y + h * d.from}, {x1, r.min.y + h * d.to}}, d.thumb)
+palette_keep_size :: proc(app: ^App) {
+	p := &app.palette
+	w, h := i64(p.size.x), i64(p.size.y)
+	if w == config.int_of(&app.prefs, "palette.width") && h == config.int_of(&app.prefs, "palette.height") { return }
+	config.set_int(&app.prefs, config.ref_of(&app.prefs, "palette.width"), w)
+	config.set_int(&app.prefs, config.ref_of(&app.prefs, "palette.height"), h)
+	prefs_save(app)
 }

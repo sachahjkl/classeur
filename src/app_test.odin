@@ -1380,8 +1380,8 @@ test_address_suggest :: proc(t: ^testing.T) {
 	session.key(s, .A, {.Ctrl})
 	session.type_text(s, fmt.tprintf("%s%s", dir, fs.SEPARATOR_STRING))
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return len((^App)(s.user).goto.names) > 0 }, "the folder read")
-	session.frames(s, 2)
-	testing.expect(t, session.find(s, "sugg0") != nil, "the suggestions shown")
+	// (the folder is listed on a worker: the suggestions follow when it is read)
+	session.wait_box(s, "sugg0")
 	when SHOTS { session.save_png(s, "address.png") }
 	// Down twice: Photos (Documents, Photos, Projects)
 	session.key(s, .Down)
@@ -1395,7 +1395,7 @@ test_address_suggest :: proc(t: ^testing.T) {
 	session.key(s, .A, {.Ctrl})
 	session.type_text(s, fmt.tprintf("%s%sPro", dir, fs.SEPARATOR_STRING))
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return strings.has_suffix((^App)(s.user).goto.dir, fs.base((^App)(s.user).home)) || len((^App)(s.user).goto.names) > 0 }, "read")
-	session.frames(s, 3)
+	session.wait_box(s, "sugg0")
 	session.click(s, "sugg0")
 	wait_read(s)
 	testing.expect_value(t, tab.path, fs.join(dir, "Projects", context.temp_allocator))
@@ -1406,7 +1406,7 @@ test_address_suggest :: proc(t: ^testing.T) {
 test_palette_groups :: proc(t: ^testing.T) {
 	files := FIXTURE
 	dir := make_fixture(t, files[:])
-	s, app := start(t, {dir}, size = {1200, 800})
+	s, _ := start(t, {dir}, size = {1200, 800})
 	session.key(s, .P, {.Ctrl, .Shift})
 	session.type_text(s, "hidden files")
 	session.key(s, .Return)
@@ -1416,9 +1416,10 @@ test_palette_groups :: proc(t: ^testing.T) {
 	testing.expect(t, session.find_text(s, "Recent") != nil && session.find_text(s, "Go") != nil, "the groups' titles")
 	testing.expect(t, session.find(s, "pal_row_hidden") != nil, "the command run last, shown first")
 	when SHOTS { session.save_png(s, "palette_groups.png") }
-	rows := session.get(s, "pal_rows")
+	rows := session.get(s, "pal_list")
 	session.wheel(s, (rows.rect.min + rows.rect.max) * 0.5, {0, 3})
 	session.frames(s, 2)
-	testing.expect(t, app.palette.scroll > 0, "scrolled")
+	session.frames(s, 20)
+	testing.expect(t, session.get(s, "pal_list").view_off.y > 0, "scrolled")
 	session.key(s, .Escape)
 }
