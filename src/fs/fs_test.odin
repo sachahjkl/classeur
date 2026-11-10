@@ -1,8 +1,10 @@
 package fs
 
+import "base:runtime"
 import "core:fmt"
 import "core:os"
 import "core:testing"
+import "core:time"
 
 @(test)
 test_name_compare :: proc(t: ^testing.T) {
@@ -160,4 +162,35 @@ test_operations :: proc(t: ^testing.T) {
 	testing.expect_value(t, numbered_name("Projects", 3, context.temp_allocator), "Projects 3")
 	testing.expect_value(t, free_name(dir, "b.txt", context.temp_allocator), "b 2.txt")
 	testing.expect_value(t, free_name(dir, "new.txt", context.temp_allocator), "new.txt")
+}
+
+// A walk read by several threads hands its entries out as it goes: batches before the end, never more than the final
+// listing, and that one whole.
+@(test)
+test_walk_progress :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()   // (the walk's threads allocate: the test's tracking allocator is one thread's)
+	root := join(os.get_env("TMPDIR", context.temp_allocator) != "" ? os.get_env("TMPDIR", context.temp_allocator) : "/tmp", fmt.tprintf("classeur_walk_%d", os.get_pid()), context.temp_allocator)
+	when ODIN_OS == .Windows { root = join(os.get_env("TEMP", context.temp_allocator), fmt.tprintf("classeur_walk_%d", os.get_pid()), context.temp_allocator) }
+	defer os.remove_all(root)
+	FOLDERS :: 300
+	for i in 0 ..< FOLDERS {
+		dir := join(root, fmt.tprintf("d%d", i), context.temp_allocator)
+		testing.expect(t, os.make_directory_all(dir) == nil)
+		for k in 0 ..< 2 { testing.expect(t, os.write_entire_file(join(dir, fmt.tprintf("f%d.txt", k), context.temp_allocator), "x") == nil) }
+	}
+	Seen :: struct { batches, entries: int }
+	seen: Seen
+	l: Listing
+	defer listing_destroy(&l)
+	// (each folder a little slow: the walk lasts past a batch's period)
+	err := walk(&l, root, nil, proc(user: rawptr) -> bool { time.sleep(2 * time.Millisecond); return false }, &seen, proc(user: rawptr, batch: ^Listing) {
+		s := (^Seen)(user)
+		s.batches += 1
+		s.entries += len(batch.entries)
+		listing_destroy(batch)
+	})
+	testing.expect_value(t, err, Error.None)
+	testing.expect_value(t, len(l.entries), FOLDERS * 3)
+	testing.expect(t, seen.batches > 0, "batches before the end")
+	testing.expect(t, seen.entries <= len(l.entries), "never more than the listing")
 }

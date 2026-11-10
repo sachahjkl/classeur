@@ -12,6 +12,7 @@ import "fs"
 
 Tab :: struct {
 	resort_due:  bool,              // folders measured since its sort by size: sorted again before the next build
+	walk_shown:  u64,               // the serial of the walk whose batches it shows (the first one replaced its rows)
 	id:          u64,
 	path:        string,             // owned, clean (fs.clean)
 	folder:      Folder,
@@ -217,7 +218,8 @@ load_run :: proc(data: rawptr) {
 	job := (^Load_Job)(data)
 	start := time.tick_now()
 	if job.flat {
-		fs.walk(&job.listing, job.path, &job.count, proc(user: rawptr) -> bool { return sync.atomic_load(&(^Load_Job)(user).cancel) }, job)
+		// (what it found so far goes to the tab as it reads: a search shows its results while it walks)
+		fs.walk(&job.listing, job.path, &job.count, proc(user: rawptr) -> bool { return sync.atomic_load(&(^Load_Job)(user).cancel) }, job, load_progress)
 	} else {
 		fs.list(&job.listing, job.path)
 		// the tree's open folders: their entries after the folder's own, named by their path from it
@@ -236,6 +238,46 @@ load_run :: proc(data: rawptr) {
 	job.ms = time.duration_milliseconds(time.tick_since(start))
 	job.space, job.has_space = fs.space(job.path)
 	if !ui.post(&job.app.main.state, load_done, job) { load_free(job) }
+}
+
+// A batch of a walk, on its way to the interface's thread.
+@(private = "file")
+Walk_Batch :: struct {
+	app:     ^App,
+	tab:     u64,
+	serial:  u64,
+	listing: fs.Listing,
+}
+
+// On the walk's thread: the entries found since the last batch, posted to the tab.
+@(private = "file")
+load_progress :: proc(user: rawptr, batch: ^fs.Listing) {
+	job := (^Load_Job)(user)
+	b := new(Walk_Batch)
+	b^ = {app = job.app, tab = job.tab, serial = job.serial, listing = batch^}
+	batch^ = {}
+	if !ui.post(&job.app.main.state, load_batch, b) { fs.listing_destroy(&b.listing); free(b) }
+}
+
+// On the interface's thread: a walk's batch shown in its tab, when the tab still waits for that walk. The first one
+// takes the place of what the tab showed; the next ones are added (the full listing still comes at the end: load_done).
+@(private = "file")
+load_batch :: proc(data: rawptr, word: u64) {
+	b := (^Walk_Batch)(data)
+	defer { fs.listing_destroy(&b.listing); free(b) }
+	t := find_tab(b.app, b.tab)
+	if t == nil || t.serial != b.serial || t.walk == nil { return }
+	f := &t.folder
+	if t.walk_shown != b.serial {
+		t.walk_shown = b.serial
+		f.flat, f.tree = true, false
+		folder_set_listing(f, &b.listing)
+		f.cursor = len(f.shown) > 0 ? 0 : -1
+		f.anchor = f.cursor
+	} else {
+		folder_add_entries(f, &b.listing)
+	}
+	app_frames(b.app)
 }
 
 @(private = "file")

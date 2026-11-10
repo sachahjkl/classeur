@@ -106,6 +106,21 @@ folder_set_sort :: proc(f: ^Folder, s: fs.Sort) {
 	if name != "" { folder_cursor_to_name(f, name) }
 }
 
+// Entries added (a walk's batch): their names kept in the listing, sorted with the others; the cursor and the selection
+// stay on their entries.
+folder_add_entries :: proc(f: ^Folder, batch: ^fs.Listing) {
+	n := len(f.listing.entries)
+	for e in batch.entries {
+		x := e
+		x.name = fs.keep_name(&f.listing, e.name)
+		append(&f.listing.entries, x)
+		append(&f.order, u32(len(f.listing.entries) - 1))
+		append(&f.selected, false)
+	}
+	if len(f.listing.entries) == n { return }
+	folder_resort(f)
+}
+
 // The order again, the same sort (folders' sizes measured since): the cursor stays on its entry.
 folder_resort :: proc(f: ^Folder) {
 	name := ""
