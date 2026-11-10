@@ -1,0 +1,39 @@
+name: CI
+
+# Every push to master and every pull request: classeurtool check (odin check -vet of the program for Linux and Windows,
+# the tests of the whole program with no window of the system, a release build).
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux x64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-odin-linux
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ext/gui_toolkit/build/text
+            ~/.cargo/registry
+          key: text-linux-${{ hashFiles('ext/gui_toolkit/native/text/**') }}
+      - name: Mesa's software Vulkan (the tests render headless)
+        run: sudo apt-get install -y -qq mesa-vulkan-drivers libvulkan1 libxkbcommon0 librsvg2-2
+      - name: classeurtool check
+        run: |
+          odin build tools/classeurtool -collection:gt=ext/gui_toolkit/src -out:build/classeurtool -vet
+          build/classeurtool check

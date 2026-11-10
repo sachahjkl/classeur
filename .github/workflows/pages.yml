@@ -1,0 +1,43 @@
+# Publishes site/ to GitHub Pages with the pages classeurtool makes of it and of CHANGELOG.md (classeurtool site build).
+# Pages use the "GitHub Actions" source (set once: gh api -X POST repos/sachahjkl/classeur/pages -f build_type=workflow).
+name: Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "site/**"
+      - "CHANGELOG.md"
+      - "tools/classeurtool/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/configure-pages@v5
+      - uses: ./.github/actions/setup-odin-linux
+      - run: |
+          odin build tools/classeurtool -collection:gt=ext/gui_toolkit/src -out:build/classeurtool
+          build/classeurtool site build site _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

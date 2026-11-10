@@ -61,54 +61,34 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 - Folder measures (`src/measure.odin`): the folders shown are measured all the way down on a pool of their own (2
   threads): their folders, files and bytes, kept by path and date; a navigation drops the measures not started.
 
+### Layers 3 to 6: done so far
+
+- Undo and redo (`src/undo.odin`): a stack of steps, each a list of (before, after) paths; the jobs record what they did
+  (`Job.done`), renames go through free names in two steps, all or nothing; what an undo removes goes to the trash.
+- GoTo (`src/goto.odin`): the folder a path names read on a worker, its folders found by the letters after the last
+  separator; the recents, the bookmarks, the places by their path.
+- Batch rename (`src/batch.odin`): a pattern with fields, find and replace, the case, names from the clipboard; the
+  problems from the names read at the opening, never from the disk while typing.
+- Drag and drop (`src/dnd.odin`): the system's (`platform.drag_start`, `drop_sync_set` for a drag of our own); the places
+  that take a drop are noted each frame. Tabs dragged (`src/tab_drag.odin`); the rectangle selection (`src/band.odin`).
+- The session (`src/session.odin`), one window per person (`gt:instance` `serve_start`), the types' popup, menus
+  searched by typing (gui_toolkit's `ctx_menu_open(search)`), Open with, a terminal here (gui_toolkit's
+  `desktop.open_terminal`), the system's icons (gui_toolkit's `desktop.file_icon`).
+- The site (`site/`, `classeurtool site`, published by `.github/workflows/pages.yml` at classeur.sacha.house).
+
 ## Next
 
-### Layer 2: what is left
-
-1. **Undo** (Ctrl+Z) of the last rename, move, new folder and trash: a stack of what was done, each with its inverse.
-2. **A popover of the jobs** (a click on the status bar): every job, its errors, a retry.
-
-### Layer 3: see inside
-
-1. **The inspector, more**: its width dragged, a text highlighted by its language, PDF and videos, the permissions.
-2. **Sort by the measures** (Size, Folders, Files on folders) and a bar in the size column (TreeSize's view) as an option.
-3. **The thumbnails' cache on the disk** (`$XDG_CACHE_HOME/classeur`), more formats (WebP, GIF, AVIF, videos' frames),
-   the cards' size with Ctrl+wheel (File Pilot's zoom).
-
-### File Pilot's details still missing
-
-- The search's type filter: a popup of the types found, with their counts and boxes to tick (its button in the
-  filter's box).
-- A progressive search: the results shown as the walk reads them; the walk on several threads.
-
-- The context menu's search field at its top ("Select a system command...") and its icons; several keys per item.
-- The tabs dragged to reorder them and to another panel; the panels split below as well as beside.
-- Bookmarks and recents saved (layer 5).
-
-### Layer 4: find
-
-1. **GoTo** (Ctrl+G, and a click on the empty part of the crumbs): a field with completion from the folders of the path
-   typed, the recent folders, the places; fuzzy.
-2. **The flat search** (Ctrl+Shift+F): every file under the folder (a whole volume), read on the workers in parallel,
-   shown as it comes in the same list with a path column, fuzzy, filtered by extension.
-3. **Recent folders** and **bookmarks** (Ctrl+D) in the sidebar, saved.
-
-### Layer 5: keep it the person's
-
-1. **Preferences** with gui_toolkit's `config` and `prefs_page` (Ctrl+,): theme, mode, density, font size, folders first,
-   hidden files, date format, single click to open, what Space does.
-2. **The session**: the tabs and panels again at the next start; **layouts** saved by name.
-3. **Keys of one's own**: in the palette, a key for any command (saved in the preferences).
-4. **One window per process** (`gt:instance`): a second `classeur <folder>` opens a tab in the running one.
-
-### Layer 6: more
-
-- Drag and drop: rows to a folder, to another panel, to a tab, to the sidebar; to and from other programs
-  (`platform.drag_start`, `drop_target_enable`).
-- Batch rename (File Pilot's): a text with the names, one per line, edited; numbers and dates as fields.
-- "Open with" (`gt:desktop`'s handlers), open a terminal here, the properties of a file.
-- Archives as folders (zip, tar), read only.
-- The site (gui_toolkit's `site`), the release (`classeurtool ship`, as papier's), the package for Windows (`gt:setup`).
+1. **Layouts** saved by name (the panels, their tabs, the types shown); **keys of one's own** from the palette, key
+   sequences and aliases (File Pilot's).
+2. **The panels split below** as well as beside; the columns of the details reordered, added and removed.
+3. **Views**: the tree (folders opened in place), groups by date, type or size.
+4. **A popover of the jobs**: every job, its errors, a retry. Undo of the Recycle Bin on Windows (`IFileOperation`).
+5. **The inspector, more**: its width dragged, a text highlighted by its language, PDF and videos, the permissions.
+6. **Sort by the measures** and a bar in the size column; the thumbnails' cache on the disk, more formats.
+7. **A progressive search**: the results shown as the walk reads them, on several threads.
+8. **The release**: `classeurtool ship` and archives for Linux and Windows (as papier's); the window raised by a second
+   start on Wayland (an xdg-activation token).
+9. Archives as folders (zip, tar), read only; the properties of a file.
 
 ## Debts
 

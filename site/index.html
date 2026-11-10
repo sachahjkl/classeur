@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>classeur: a fast file manager for Linux and Windows</title>
+<meta name="description" content="classeur is a file manager for Linux and Windows modelled on File Pilot: tabs in panels, a command palette, GoTo, a flat search of every folder below, batch rename, undo, drag and drop. One small native program; a folder of 100 000 files lists without a wait.">
+<link rel="icon" href="img/logo.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="#"><img src="img/logo.png" alt="" width="28" height="28"><span>classeur</span></a>
+  <button class="burger" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav"><span></span></button>
+  <nav id="nav">
+    <a href="#features">Features</a>
+    <a href="#get">Get it</a>
+    <a href="changelog.html">Changelog</a>
+    <a href="https://github.com/sachahjkl/classeur">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <img class="mark" src="img/logo.png" alt="classeur's logo" width="112" height="112">
+    <h1>classeur</h1>
+    <p class="lead">A file manager for Linux and Windows, keyboard first. Tabs in panels, a command palette, GoTo, a search of
+      every folder below, batch rename, undo, drag and drop. One small native program: a folder of a hundred thousand files
+      lists and scrolls without a wait.</p>
+    <div class="actions">
+      <a class="btn accent get" href="#get"><span class="get-text"><span class="get-main">Get classeur</span> <span class="get-sub">v{{version}} · Linux · Nix or from source</span></span></a>
+      <a class="btn" href="https://github.com/sachahjkl/classeur">Source on GitHub</a>
+    </div>
+    <p class="small">With Nix: <code>nix run github:sachahjkl/classeur</code> &nbsp;·&nbsp; MIT</p>
+  </section>
+
+  <figure class="shot wide">
+    <a class="frame" href="img/panels.png"><img src="img/panels.png" alt="classeur with two panels: pictures in a grid on the left, the details of a home folder on the right" loading="lazy"></a>
+    <figcaption>Two panels: the pictures as cards, the home folder in details, three folders selected.</figcaption>
+  </figure>
+
+  <section id="features" class="grid">
+    <article class="card">
+      <h3>Tabs in panels</h3>
+      <p>Each panel its tabs; Ctrl+Shift+D splits, F6 goes to the next. Drag a tab along its row, to another panel, or to
+        a panel's right edge for a new one. The session comes back at the next start.</p>
+    </article>
+    <article class="card">
+      <h3>Fast</h3>
+      <p>Folders are read on worker threads and only the rows in view are built. Every folder shown is measured all the way
+        down, and watched: a change made by any program shows at once.</p>
+    </article>
+    <article class="card">
+      <h3>Find it</h3>
+      <p>Ctrl+F filters the folder by a few letters, in order. Ctrl+Shift+F searches every folder below. The types' popup
+        keeps files or folders alone, or some extensions.</p>
+    </article>
+    <article class="card">
+      <h3>GoTo</h3>
+      <p>Ctrl+G: a path with its folders completed as you type (Tab completes), or a few letters of a recent folder, a
+        bookmark or a place.</p>
+    </article>
+    <article class="card">
+      <h3>The command palette</h3>
+      <p>Ctrl+Shift+P: every action of the program, found by a few letters, with its keys. The menus are searched by typing
+        too.</p>
+    </article>
+    <article class="card">
+      <h3>Batch rename</h3>
+      <p>F2 on several items: a pattern with numbers, dates and ids, a find and replace, the case, or the names from the
+        clipboard, each new name shown before anything moves.</p>
+    </article>
+    <article class="card">
+      <h3>Undo</h3>
+      <p>Ctrl+Z puts back a rename, a new folder or file, a copy, a move, the trash; Ctrl+Y does it again. What an undo
+        removes goes to the trash, never away for good.</p>
+    </article>
+    <article class="card">
+      <h3>Drag and drop</h3>
+      <p>Rows out to any program as files; files from anywhere onto a folder, a list, a tab or the sidebar. A move on one
+        volume, a copy across volumes; Ctrl copies, Shift moves.</p>
+    </article>
+    <article class="card">
+      <h3>Your system's look</h3>
+      <p>The icons are your desktop's icon theme (the shell's on Windows). The inspector (Space) shows a picture, a text or
+        a folder beside the list.</p>
+    </article>
+  </section>
+
+  <!-- whats-new -->
+
+  <section class="gallery">
+    <figure class="shot"><a class="frame" href="img/goto.png"><img src="img/goto.png" alt="GoTo with a path being typed" loading="lazy"></a><figcaption>GoTo</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/batch.png"><img src="img/batch.png" alt="Batch rename of three items" loading="lazy"></a><figcaption>Batch rename</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/search.png"><img src="img/search.png" alt="The search of every folder below" loading="lazy"></a><figcaption>Every folder below</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/palette.png"><img src="img/palette.png" alt="The command palette" loading="lazy"></a><figcaption>The command palette</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/inspector.png"><img src="img/inspector.png" alt="The inspector on a picture" loading="lazy"></a><figcaption>The inspector</figcaption></figure>
+    <figure class="shot"><a class="frame" href="img/options.png"><img src="img/options.png" alt="The options" loading="lazy"></a><figcaption>The options</figcaption></figure>
+  </section>
+
+  <section id="get" class="download">
+    <h2>Get it</h2>
+    <div class="cols">
+      <div class="well">
+        <h3>Nix</h3>
+        <p>The flake builds classeur from source with everything it needs (Vulkan, fontconfig, librsvg for the SVG icons).</p>
+        <code>nix run github:sachahjkl/classeur</code>
+      </div>
+      <div class="well">
+        <h3>From source</h3>
+        <p>With Odin (the version in <code>odin.version</code>), git and cargo: clone with its submodule, then build.</p>
+        <code>git clone --recursive https://github.com/sachahjkl/classeur && cd classeur && ./build.sh</code>
+      </div>
+      <div class="well">
+        <h3>Windows</h3>
+        <p>The code builds for Windows (<code>build.bat</code>) and uses the shell's icons, the Recycle Bin and the clipboard's
+          files there; it has not been tried on Windows yet.</p>
+        <code>build.bat release</code>
+      </div>
+    </div>
+    <p class="small">Every key is in the command palette (Ctrl+Shift+P). The <a href="https://github.com/sachahjkl/classeur#readme">README</a> says the rest.</p>
+  </section>
+</main>
+
+<footer>
+  <p>Built in <a href="https://odin-lang.org">Odin</a> on <a href="https://gt.sacha.house/">gui_toolkit</a>.
+    MIT licence. Its model: <a href="https://filepilot.tech">File Pilot</a>. Icons: your system's, and <a href="https://lucide.dev">Lucide</a> (ISC).<br><a href="classic/">Classic version</a></p>
+</footer>
+<script>
+  // the bar's menu on narrow screens: the button opens it, a link or a click elsewhere closes it
+  const bar = document.querySelector('.bar'), burger = bar.querySelector('.burger');
+  const shut = () => { bar.classList.remove('open'); burger.setAttribute('aria-expanded', 'false'); };
+  burger.addEventListener('click', e => { e.stopPropagation(); burger.setAttribute('aria-expanded', String(bar.classList.toggle('open'))); });
+  bar.querySelectorAll('nav a').forEach(a => a.addEventListener('click', shut));
+  document.addEventListener('click', e => { if (!bar.contains(e.target)) shut(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') shut(); });
+</script>
+<script src="gallery.js" defer></script>
+</body>
+</html>
