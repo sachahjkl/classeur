@@ -20,12 +20,14 @@ act_open :: proc(app: ^App) {
 	if t == nil { return }
 	targets := folder_targets(&t.folder)
 	// (an archive opens as a folder, File Pilot's: "Open with the system's application" gives it to its program)
-	as_folder :: proc(e: ^fs.Entry) -> bool { return e.kind == .Directory || e.kind == .File && fs.is_archive_name(e.name) }
+	// (an archive in an archive is taken out and opened: it is not entered)
+	in_archive := fs.archive_holds(fs.join(t.path, "x", context.temp_allocator))
+	as_folder :: proc(e: ^fs.Entry, in_archive: bool) -> bool { return e.kind == .Directory || !in_archive && e.kind == .File && fs.is_archive_name(e.name) }
 	folders := 0
-	for e in targets { if as_folder(e) { folders += 1 } }
+	for e in targets { if as_folder(e, in_archive) { folders += 1 } }
 	for e in targets {
 		path := fs.join(t.path, e.name, context.temp_allocator)
-		if as_folder(e) {
+		if as_folder(e, in_archive) {
 			if folders == 1 && !t.locked {
 				tab_go(app, t, path)
 				return
@@ -223,6 +225,7 @@ rename_free :: proc(r: ^Rename) {
 act_rename :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
+	if read_only_here(app, t) { return }
 	// (the search of every folder below: its names are paths, renamed from their own folders only)
 	if t.folder.flat {
 		say(app, "Rename from the item's own folder: the search lists items of several folders.")
@@ -293,6 +296,7 @@ rename_commit :: proc(app: ^App) {
 act_new_folder :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
+	if read_only_here(app, t) { return }
 	name := "New folder"
 	for n := 2; ; n += 1 {
 		if _, exists := fs.stat(fs.join(t.path, name, context.temp_allocator)); !exists { break }
@@ -313,6 +317,7 @@ act_new_folder :: proc(app: ^App) {
 act_new_file :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
+	if read_only_here(app, t) { return }
 	name := "New file.txt"
 	for n := 2; ; n += 1 {
 		if !fs.exists(fs.join(t.path, name, context.temp_allocator)) { break }
@@ -416,6 +421,7 @@ act_cut :: proc(app: ^App) { clipboard_put(app, true) }
 act_paste :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
+	if read_only_here(app, t) { return }
 	paths, ok := platform.clipboard_get_files(app.main.win, context.temp_allocator)
 	if !ok || len(paths) == 0 {
 		say(app, "The clipboard holds no files.")
@@ -442,6 +448,7 @@ act_move_to_other :: proc(app: ^App) { to_other_panel(app, .Move) }
 act_trash :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
+	if read_only_here(app, t) { return }
 	paths := target_paths(t)
 	if len(paths) == 0 { return }
 	job_add(app, .Trash, paths)
@@ -451,6 +458,7 @@ act_trash :: proc(app: ^App) {
 act_delete :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
+	if read_only_here(app, t) { return }
 	paths := target_paths(t)
 	if len(paths) == 0 { return }
 	confirm_delete(app, paths)
@@ -542,4 +550,11 @@ tab_pick :: proc(app: ^App, i: int) {
 	if p == nil || len(p.tabs) == 0 { return }
 	at := i < 0 ? len(p.tabs) - 1 : i
 	if at < len(p.tabs) { p.active = at }
+}
+
+// In an archive (a folder of one, or its top): what writes is refused at once, said (no stat of its entries on this thread).
+read_only_here :: proc(app: ^App, t: ^Tab) -> bool {
+	if !fs.archive_holds(fs.join(t.path, "x", context.temp_allocator)) { return false }
+	say(app, "%s", fs.ERROR_TEXT[.Read_Only])
+	return true
 }

@@ -32,6 +32,8 @@ Inspector :: struct {
 	ready:    bool,
 	kind:     Inspect_Kind,
 	text:     string,          // owned
+	spans:    [dynamic]syntax.Span,   // its colours (worked out with it, on the worker: not each frame)
+	language: bool,            // the text is a source file's: shown in its colours
 	tex:      render.Texture,
 	has_tex:  bool,
 	size:     [2]int,
@@ -47,6 +49,8 @@ Inspect_Job :: struct {
 	path:    string,           // owned
 	kind:    Inspect_Kind,
 	text:    string,           // owned until taken
+	spans:   [dynamic]syntax.Span,   // owned until taken
+	language: bool,
 	rgba:    []u8,
 	size:    [2]int,
 	listing: fs.Listing,
@@ -66,6 +70,8 @@ inspector_clear :: proc(app: ^App) {
 	insp := &app.inspector
 	delete(insp.text)
 	insp.text = ""
+	delete(insp.spans)
+	insp.spans, insp.language = nil, false
 	if insp.has_tex { render.destroy_texture(&app.shared.r, insp.tex) }
 	insp.has_tex = false
 	fs.listing_destroy(&insp.listing)
@@ -164,6 +170,11 @@ inspect_run :: proc(data: rawptr) {
 		for len(text) > 0 && !utf8.valid_string(text) { text = text[:len(text) - 1] }   // (cut inside a character)
 		if strings.index_byte(text, 0) >= 0 || (n > 0 && len(text) == 0) { job.kind = .Other; return }
 		job.text = strings.clone(text)
+		if l, ok := syntax.language_of_file(job.path); ok {
+			job.spans = make([dynamic]syntax.Span)
+			syntax.spans(job.text, l, &job.spans)
+			job.language = true
+		}
 	case .Other, .None:
 	}
 }
@@ -172,6 +183,7 @@ inspect_run :: proc(data: rawptr) {
 inspect_free :: proc(job: ^Inspect_Job) {
 	delete(job.path)
 	delete(job.text)
+	delete(job.spans)
 	delete(job.rgba)
 	props_free(&job.props)
 	fs.listing_destroy(&job.listing)
@@ -195,6 +207,8 @@ inspect_done :: proc(data: rawptr, word: u64) {
 		insp.has_tex, insp.size = true, job.size
 	case .Text:
 		insp.text, job.text = job.text, ""
+		insp.spans, job.spans = job.spans, nil
+		insp.language = job.language
 	case .Folder:
 		insp.listing, job.listing = job.listing, {}
 		order := make([]u32, len(insp.listing.entries), context.temp_allocator)
@@ -272,8 +286,8 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 					ui.next({width = ui.fill()})
 					if ui.style({font = app.mono, font_size = em * 0.92}) {
 						// (a source file in its language's colours: the toolkit's syntax lexer; plain text as it is)
-						if l, ok := syntax.language_of_file(insp.path); ok {
-							ui.rich_paragraph("###insp_body", code_runs(insp.text, l))
+						if insp.language {
+							ui.rich_paragraph("###insp_body", code_runs(insp.text, insp.spans[:]))
 						} else {
 							ui.paragraph(fmt.tprintf("%s###insp_body", shown_text(insp.text)))
 						}
@@ -368,9 +382,7 @@ inspector_props :: proc(app: ^App, t: ^Tab, e: fs.Entry, em: f32) {
 // The runs of a source text in its language's colours (the theme's: keywords in the accent, strings good, comments weak,
 // types and numbers warm, calls the text's).
 @(private = "file")
-code_runs :: proc(text: string, l: syntax.Language) -> []ui.Rich_Run {
-	spans := make([dynamic]syntax.Span, context.temp_allocator)
-	syntax.spans(text, l, &spans)
+code_runs :: proc(text: string, spans: []syntax.Span) -> []ui.Rich_Run {
 	colors := [syntax.Class]ui.Color{
 		.Plain = {}, .Keyword = ui.color("accent"), .Str = ui.color("good text"), .Comment = ui.color("weak text"),
 		.Func = {}, .Type = ui.color("warn text"),

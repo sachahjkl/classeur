@@ -59,6 +59,7 @@ App :: struct {
 	side_cancelled: bool,               // Escape cancelled it, its button still down
 	side_menu_key: ui.Key,              // a heading's menu: Move up, Move down...
 	side_menu_of:  Side_Section,
+	side_touched:  bool,                // a heading was clicked or dragged: the section the commands move is known
 	side_filter: ui.Text_Field,
 	volume_space: [dynamic]fs.Space,   // of each volume, read with the places
 	panel_rects: [dynamic]ui.Rect,  // each panel's box as last laid out (the tabs above are as wide)
@@ -122,6 +123,7 @@ App :: struct {
 	logo_made:   bool,
 	launch_after: string,           // owned: the installed copy, started once this one has ended ("": none)
 	updater:        ^update.Updater,   // checks, downloads and puts in place a new classeur (updates.odin; nil headless)
+	measures_sorted_at: f64,           // when measures_resort last sorted (ui.now_ms)
 	update_serial:  int,               // the updater's state last said
 	installed_copy: bool,              // this copy is the installed one: it updates itself by itself
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
@@ -180,6 +182,7 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 	launch := strings.clone(app.launch_after, context.temp_allocator)
 	setup.finish(&app.setup, setup_config())
 	app_close(app)
+	if !standalone { fs.archive_take_out_clear() }   // (what was opened out of archives: the main window's to remove)
 	// (the Setup installed a copy and asked to open it: it starts once this one let go of the instance)
 	if launch != "" { _ = setup.launch(launch) }
 	return 0

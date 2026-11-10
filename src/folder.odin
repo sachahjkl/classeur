@@ -39,6 +39,8 @@ Folder :: struct {
 	order:       [dynamic]u32,      // every entry, sorted
 	shown:       [dynamic]u32,      // the rows: `order` without what the filter and the hidden setting leave out
 	size_max:    i64,               // the largest size among the rows (the Size column's bars are its share)
+	name_index:  map[string]int,    // each entry's index by its name (folder_find_name), its keys the listing's
+	name_index_n: int,              // the entries it was made for (another count, or -1: made again)
 	ids:         [dynamic]u64,      // a stable identity per row (the hash of its name): the virtual list's
 	lowered:     [dynamic]string,   // each entry's name in lower case (made at the first filter), in `lowered_arena`
 	selected:    [dynamic]bool,     // per entry
@@ -50,6 +52,7 @@ Folder :: struct {
 folder_destroy :: proc(f: ^Folder) {
 	fs.listing_destroy(&f.listing)
 	delete(f.filter)
+	delete(f.name_index)
 	for k in f.types_off { delete(k) }
 	delete(f.types_off)
 	for k in f.folded { delete(k) }
@@ -74,6 +77,7 @@ folder_set_listing :: proc(f: ^Folder, l: ^fs.Listing) {
 	fs.listing_destroy(&f.listing)
 	f.listing = l^
 	l^ = {}
+	f.name_index_n = -1
 	f.loaded = true
 	for s in f.lowered { delete(s) }
 	clear(&f.lowered)
@@ -110,15 +114,50 @@ folder_set_sort :: proc(f: ^Folder, s: fs.Sort) {
 // stay on their entries.
 folder_add_entries :: proc(f: ^Folder, batch: ^fs.Listing) {
 	n := len(f.listing.entries)
+	lowered := len(f.lowered) == n   // (the filter's lower-case names: extended, not made again)
 	for e in batch.entries {
 		x := e
 		x.name = fs.keep_name(&f.listing, e.name)
 		append(&f.listing.entries, x)
-		append(&f.order, u32(len(f.listing.entries) - 1))
 		append(&f.selected, false)
+		if lowered { append(&f.lowered, strings.to_lower(x.name)) }
 	}
 	if len(f.listing.entries) == n { return }
-	folder_resort(f)
+	name := ""
+	if e := folder_cursor_entry(f); e != nil { name = strings.clone(e.name, context.temp_allocator) }
+	if f.tree {
+		for i in n ..< len(f.listing.entries) { append(&f.order, u32(i)) }
+		fs.sort_order(f.listing.entries[:], f.order[:], f.sort)
+		tree_order(f)
+	} else {
+		// the new ones sorted alone, then merged with the order (the order of all is not sorted again)
+		added := make([]u32, len(f.listing.entries) - n, context.temp_allocator)
+		for &a, k in added { a = u32(n + k) }
+		fs.sort_order(f.listing.entries[:], added, f.sort)
+		old := slice.clone(f.order[:], context.temp_allocator)
+		clear(&f.order)
+		i, j := 0, 0
+		for i < len(old) || j < len(added) {
+			if j >= len(added) || i < len(old) && !fs.entry_less(f.listing.entries[added[j]], f.listing.entries[old[i]], f.sort) {
+				append(&f.order, old[i]); i += 1
+			} else {
+				append(&f.order, added[j]); j += 1
+			}
+		}
+	}
+	f.name_index_n = -1   // (the names' index is made again when asked)
+	folder_refilter(f)
+	if name != "" { folder_cursor_to_name(f, name) }
+}
+
+// The entry of a name in the listing (-1: none), by an index of the names made at the first ask after the listing changed.
+folder_find_name :: proc(f: ^Folder, name: string) -> int {
+	if f.name_index_n != len(f.listing.entries) {
+		clear(&f.name_index)
+		for e, i in f.listing.entries { f.name_index[e.name] = i }
+		f.name_index_n = len(f.listing.entries)
+	}
+	return f.name_index[name] or_else -1
 }
 
 // The order again, the same sort (folders' sizes measured since): the cursor stays on its entry.
@@ -407,7 +446,7 @@ folder_selection_size :: proc(f: ^Folder) -> (bytes: i64, files: int) {
 	for i in f.shown {
 		if !f.selected[i] { continue }
 		e := f.listing.entries[i]
-		if e.size > 0 { bytes += e.size }
+		if e.size > 0 && e.kind != .Directory { bytes += e.size }   // (a folder's measured size in its entry: not a file's)
 		files += 1
 	}
 	return

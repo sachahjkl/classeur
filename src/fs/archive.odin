@@ -5,6 +5,8 @@ package fs
 // package takes it out); every write is refused (Read_Only). The indexes read are kept (ARCHIVES_KEPT), each until its
 // file changes: entering a folder of a large archive does not read it again. The workers call these at once: a lock.
 
+import "core:fmt"
+import "core:hash"
 import "core:os"
 import "core:strings"
 import "core:sync"
@@ -30,8 +32,18 @@ archives: struct {
 
 // Whether the name is an archive's that classeur enters (.zip, .tar, .tar.gz, .tgz).
 is_archive_name :: proc(name: string) -> bool {
-	_, ok := archive.kind_of(name)
-	return ok
+	// (in place, any case: asked at each separator of every path the program reads)
+	ends :: proc(s, suffix: string) -> bool {
+		if len(s) < len(suffix) { return false }
+		tail := s[len(s) - len(suffix):]
+		for i in 0 ..< len(suffix) {
+			c := tail[i]
+			if c >= 'A' && c <= 'Z' { c += 'a' - 'A' }
+			if c != suffix[i] { return false }
+		}
+		return true
+	}
+	return ends(name, ".zip") || ends(name, ".tar") || ends(name, ".tar.gz") || ends(name, ".tgz")
 }
 
 // The archive a path is in, and the path inside it ("" its top). ok = false: not in an archive. Only the parts of the
@@ -116,6 +128,7 @@ archive_list :: proc(l: ^Listing, path, file, inner: string) -> Error {
 		for x in list {
 			name := x.name
 			if slash := strings.last_index_byte(name, '/'); slash >= 0 { name = name[slash + 1:] }
+			if name == "" || name == "." || name == ".." || strings.index_byte(name, '\\') >= 0 { continue }   // (no way out of its folder)
 			append(&a.l.entries, Entry{name = keep_name(a.l, name), kind = x.dir ? .Directory : .File, size = x.dir ? -1 : x.size, mtime = x.mtime})
 		}
 		return .None
@@ -161,16 +174,40 @@ archive_copy :: proc(file, inner, to: string) -> Error {
 	}, &ask)
 }
 
-// A file of an archive taken out to a folder of the system's temporary place (to be opened by another program); its path
-// there (temp memory), "" when it cannot be.
+// Where the files opened out of archives go: a folder of the person's alone (Linux: XDG_RUNTIME_DIR, else a folder made
+// for them only in the temporary place; Windows: the person's TEMP). The tests set it to a folder of theirs.
+take_out_root: string
+
+@(private = "file")
+take_out_folder :: proc() -> string {
+	if take_out_root != "" { return take_out_root }
+	when ODIN_OS == .Windows {
+		return join(os.get_env("TEMP", context.temp_allocator), "classeur-archives", context.temp_allocator)
+	} else {
+		if run := os.get_env("XDG_RUNTIME_DIR", context.temp_allocator); run != "" { return join(run, "classeur-archives", context.temp_allocator) }
+		tmp := os.get_env("TMPDIR", context.temp_allocator)
+		if tmp == "" { tmp = "/tmp" }
+		return join(tmp, strings.concatenate({"classeur-archives-", os.get_env("USER", context.temp_allocator)}, context.temp_allocator), context.temp_allocator)
+	}
+}
+
+// A file of an archive taken out (to be opened by another program): in a folder of its own, named after the archive's
+// path and the file's (two archives of one name, two files of one name do not meet), its name kept. Its path there
+// (temp memory), "" when it cannot be.
 archive_take_out :: proc(path: string) -> string {
 	file, inner, ok := archive_split(path)
 	if !ok || inner == "" { return "" }
-	tmp := os.get_env("TMPDIR", context.temp_allocator)
-	when ODIN_OS == .Windows { tmp = os.get_env("TEMP", context.temp_allocator) }
-	if tmp == "" { tmp = "/tmp" }
-	dir := join(join(tmp, "classeur-archives", context.temp_allocator), name_key(base(file), context.temp_allocator), context.temp_allocator)
-	out := join(dir, base(inner), context.temp_allocator)
+	root := take_out_folder()
+	// (the person's alone: made readable by them only, and a folder of another's at that name is not used)
+	_ = os.make_directory_all(root, {.Read_User, .Write_User, .Execute_User})
+	if info, err := os.stat(root, context.temp_allocator); err != nil || info.type != .Directory { return "" }
+	key := fmt.tprintf("%016x", hash.fnv64a(transmute([]u8)strings.concatenate({file, "\x00", inner}, context.temp_allocator)))
+	out := join(join(root, key, context.temp_allocator), base(inner), context.temp_allocator)
 	if archive_copy(file, inner, out) != .None { return "" }
 	return out
+}
+
+// At the end of the program: what was taken out of archives goes.
+archive_take_out_clear :: proc() {
+	_ = os.remove_all(take_out_folder())
 }

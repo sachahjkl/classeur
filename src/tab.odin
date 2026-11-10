@@ -274,6 +274,9 @@ load_batch :: proc(data: rawptr, word: u64) {
 		folder_set_listing(f, &b.listing)
 		f.cursor = len(f.shown) > 0 ? 0 : -1
 		f.anchor = f.cursor
+		// (a new search: at its top, its first row chosen; load_done sees the same place and keeps it)
+		ui.vlist_scroll_to(&t.vl, 0)
+		ui.list_select(&t.vl, f.cursor)
 	} else {
 		folder_add_entries(f, &b.listing)
 	}

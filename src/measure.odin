@@ -123,15 +123,19 @@ measure_done :: proc(data: rawptr, word: u64) {
 		m^ = job.m
 		app_frames(app)
 		// the folder's size in its entry, in the tabs that show it: sorted by size, folders go among the sizes
+		// (the listing shown, not the one a tab waits for; the entry found by its name, at the date it was measured at)
 		parent, name := fs.parent(job.path), fs.base(job.path)
 		for p in app.panels {
 			for t in p.tabs {
-				if t.path != parent { continue }
-				for &e in t.folder.listing.entries {
-					if e.kind != .Directory || e.name != name { continue }
-					e.size = job.m.bytes
-					if t.folder.sort.key == .Size { t.resort_due = true }
-				}
+				f := &t.folder
+				if f.listing.path != parent { continue }
+				at := folder_find_name(f, name)
+				if at < 0 { continue }
+				e := &f.listing.entries[at]
+				if e.kind != .Directory || e.mtime != job.mtime { continue }
+				e.size = job.m.bytes
+				f.size_max = max(f.size_max, e.size)
+				if f.sort.key == .Size { t.resort_due = true }
 			}
 		}
 	}
@@ -146,12 +150,21 @@ measures_apply :: proc(app: ^App, l: ^fs.Listing) {
 	}
 }
 
+MEASURES_RESORT_MS :: 250
+
 // Before a build: the tabs sorted by size whose folders were measured since, sorted again (once a frame, whatever
 // the number of measures come).
 measures_resort :: proc(app: ^App) {
+	// (at most every MEASURES_RESORT_MS: measures come by hundreds, a sort of a large folder is not each frame's)
+	now := ui.now_ms()
+	if now - app.measures_sorted_at < MEASURES_RESORT_MS {
+		for p in app.panels { for t in p.tabs { if t.resort_due { ui.wake_within(&app.main.state, int(MEASURES_RESORT_MS - (now - app.measures_sorted_at)) + 1); return } } }
+		return
+	}
 	for p in app.panels {
 		for t in p.tabs {
 			if !t.resort_due { continue }
+			app.measures_sorted_at = now
 			t.resort_due = false
 			folder_resort(&t.folder)
 		}

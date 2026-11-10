@@ -84,30 +84,34 @@ sys_icon :: proc(app: ^App, path: string, folder: bool, px: int) -> (ic: ^Sys_Ic
 	if c, ok := &app.icons_cache[key]; ok {
 		c.used = app.frame
 		if c.state == .Ready { return c, true, false }
-		return icon_stand_in(app, key, made), false, c.state == .Failed
+		stand, other_failed := icon_stand_in(app, key, made)
+		return stand, false, c.state == .Failed || other_failed
 	}
 	app.icons_cache[strings.clone(key)] = {state = .Asked, used = app.frame}
 	job := new(Icon_Job)
 	job^ = {app = app, key = strings.clone(key), path = strings.clone(path), folder = folder, px = made}
 	pool_submit(&app.thumb_pool, icon_run, job)
-	return icon_stand_in(app, key, made), false, false
+	stand, other_failed := icon_stand_in(app, key, made)
+	return stand, false, other_failed
 }
 
 // The picture of the same icon at the nearest size made already (nil: none).
 @(private = "file")
-icon_stand_in :: proc(app: ^App, key: string, made: int) -> ^Sys_Icon {
+icon_stand_in :: proc(app: ^App, key: string, made: int) -> (best: ^Sys_Icon, failed: bool) {
 	at := strings.last_index_byte(key, '@')
-	if at < 0 { return nil }
-	best: ^Sys_Icon
+	if at < 0 { return }
 	best_gap := max(int)
 	for s in ICON_SIZES {
 		if s == made { continue }
 		c, ok := &app.icons_cache[fmt.tprintf("%s@%d", key[:at], s)]
-		if !ok || c.state != .Ready { continue }
+		if !ok { continue }
+		// (a size that failed: this one will too, the system has no picture for it)
+		if c.state == .Failed { failed = true }
+		if c.state != .Ready { continue }
 		if gap := abs(s - made); gap < best_gap { best, best_gap = c, gap }
 	}
 	if best != nil { best.used = app.frame }
-	return best
+	return
 }
 
 @(private = "file")

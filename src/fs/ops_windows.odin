@@ -189,13 +189,14 @@ FOF_NOERRORUI :: 0x400
 trash_native :: proc(path: string, allocator := context.allocator) -> (in_trash: string, e: Error) {
 	if !exists(path) { return "", .Not_Found }
 	since := time.time_to_unix_nano(time.now()) - 2_000_000_000   // (its record is dated from now: two seconds of slack)
+	long := long_path(path)   // (while it is there: the record says its long form)
 	// (a list of paths, each ended by a zero, the list by another)
 	w := win.utf8_to_utf16(path, context.temp_allocator)
 	from := make([]u16, len(w) + 2, context.temp_allocator)
 	copy(from, w)
 	op := SHFILEOPSTRUCTW{wFunc = FO_DELETE, pFrom = raw_data(from), fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI}
 	if sh_file_operation(&op) != 0 || op.fAnyOperationsAborted { return "", .Other }
-	return recycle_find(path, since, allocator), .None
+	return recycle_find(long, since, allocator), .None
 }
 
 // Puts back an item of the Recycle Bin (its $R path, as trash gave it): renamed to where its $I record says it was, the
@@ -210,6 +211,17 @@ untrash :: proc(in_trash: string, allocator := context.allocator) -> (original: 
 	if err := rename_native(in_trash, from); err != .None { return "", err }
 	_ = remove_native(record)
 	return strings.clone(from, allocator), .None
+}
+
+// The full form of a path (its 8.3 parts made long: C:\Users\RUNNER~1 is C:\Users\runneradmin): what a $I record says.
+@(private = "file")
+long_path :: proc(path: string) -> string {
+	w := win.utf8_to_wstring(path, context.temp_allocator)
+	buf := make([]u16, 1024, context.temp_allocator)
+	n := win.GetLongPathNameW(w, cstring16(raw_data(buf)), u32(len(buf)))
+	if n == 0 || int(n) >= len(buf) { return path }
+	long, _ := win.utf16_to_utf8(buf[:n], context.temp_allocator)
+	return long
 }
 
 // The $R file of the Recycle Bin that holds `path` (trashed since `since`, ns), by the $I records of its drive's
@@ -229,7 +241,8 @@ recycle_find :: proc(path: string, since: i64, allocator := context.allocator) -
 		defer listing_destroy(&items)
 		if list_native(&items, dir) != .None { continue }
 		for it in items.entries {
-			if !strings.has_prefix(it.name, "$I") { continue }
+			// (a record written before the trash began is not read: the bin may hold thousands)
+			if !strings.has_prefix(it.name, "$I") || it.mtime < since { continue }
 			from, at, ok := recycle_record(join(dir, it.name, context.temp_allocator))
 			if !ok || at < since || at < best_at || !strings.equal_fold(from, path) { continue }
 			best, best_at = join(dir, strings.concatenate({"$R", it.name[2:]}, context.temp_allocator), context.temp_allocator), at

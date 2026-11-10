@@ -2,6 +2,7 @@ package fs
 
 import "base:runtime"
 import "core:fmt"
+import "gt:testkit"
 import "core:os"
 import "core:strings"
 import "core:testing"
@@ -170,9 +171,7 @@ test_operations :: proc(t: ^testing.T) {
 @(test)
 test_walk_progress :: proc(t: ^testing.T) {
 	context.allocator = runtime.heap_allocator()   // (the walk's threads allocate: the test's tracking allocator is one thread's)
-	root := join(os.get_env("TMPDIR", context.temp_allocator) != "" ? os.get_env("TMPDIR", context.temp_allocator) : "/tmp", fmt.tprintf("classeur_walk_%d", os.get_pid()), context.temp_allocator)
-	when ODIN_OS == .Windows { root = join(os.get_env("TEMP", context.temp_allocator), fmt.tprintf("classeur_walk_%d", os.get_pid()), context.temp_allocator) }
-	defer os.remove_all(root)
+	root := testkit.temp_folder(t)
 	FOLDERS :: 300
 	for i in 0 ..< FOLDERS {
 		dir := join(root, fmt.tprintf("d%d", i), context.temp_allocator)
@@ -207,27 +206,13 @@ test_recycle_bin :: proc(t: ^testing.T) {
 	testing.expect(t, os.write_entire_file(file, "back") == nil)
 	in_trash, err := trash(file, context.temp_allocator)
 	testing.expect_value(t, err, Error.None)
-	if in_trash == "" {
-		// (a drive with no Recycle Bin the runner can read): what there is, to tell why
-		fmt.println("recycle bin: none found, nothing to put back; the file still there:", exists(file))
-		bin := join(file[:root_length(file)], "$Recycle.Bin", context.temp_allocator)
-		users: Listing
-		defer listing_destroy(&users)
-		fmt.println("recycle bin:", bin, list_native(&users, bin), len(users.entries))
-		for u in users.entries {
-			items: Listing
-			defer listing_destroy(&items)
-			e := list_native(&items, join(bin, u.name, context.temp_allocator))
-			fmt.println("recycle bin:", u.name, e, len(items.entries))
-			for it in items.entries { fmt.println("recycle bin:   ", it.name, it.size) }
-		}
-		return
-	}
+	// (found by its record: the item put back below, the person's bin left as it was)
+	testing.expect(t, in_trash != "", "found in the Recycle Bin")
+	if in_trash == "" { return }
 	testing.expect(t, !exists(file), "gone")
 	from, uerr := untrash(in_trash, context.temp_allocator)
 	testing.expect_value(t, uerr, Error.None)
 	testing.expect(t, strings.equal_fold(from, file), "where it was")
 	data, _ := os.read_entire_file(file, context.temp_allocator)
 	testing.expect_value(t, string(data), "back")
-	fmt.println("recycle bin: put back")
 }

@@ -74,6 +74,7 @@ batch_clear :: proc(b: ^Batch) {
 }
 
 batch_open :: proc(app: ^App, t: ^Tab) {
+	if read_only_here(app, t) { return }
 	b := &app.batch
 	batch_clear(b)
 	b.open, b.tab, b.focus_due, b.scroll, b.casing = true, t.id, true, 0, .Keep

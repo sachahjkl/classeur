@@ -18,6 +18,14 @@ and the versions follow [semantic versioning](https://semver.org/).
   has a bar of each row's share of the largest (File Pilot's).
 
 ### Fixed
+- A malicious archive (an entry named "../..") lists nothing that a copy could follow out of its folder (the toolkit's
+  archive leaves such entries out); a file opened out of an archive goes to a folder of the person's alone, named after
+  the archive and the file, removed at the end; what writes is refused at once in an archive.
+- The search's batches are merged into the order, not sorted again whole; a short search shows at once; a new search
+  starts at its top.
+- A folder's measured size goes to the listing shown, at its date; the bars follow it; the sort by size at most every
+  250 ms; the selection's size counts files only.
+- The inspector works a source file's colours out once, not each frame.
 - Windows: a move to the Recycle Bin is undone (Ctrl+Z): the item is found by its $I record and put back where it was.
 - Wayland: a second start brings the window up with its launcher's activation token (the toolkit's
   raise_window_token), which the compositor honours where it may refuse the window's own.

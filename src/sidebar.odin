@@ -135,10 +135,10 @@ section :: proc(app: ^App, s: Side_Section, em: f32) -> bool {
 	// dragged past a few pixels: the section moves where it is let go (side_drag_end); a right click: its menu
 	// (a drag cancelled by Escape stays so until its button comes up)
 	if app.side_cancelled && s == app.side_drag && !sig.dragging { app.side_cancelled = false }
-	if sig.dragging && abs(sig.drag_delta.y) > em * 0.5 && !app.side_cancelled { app.side_drag, app.side_dragging, app.side_menu_of = s, true, s }
+	if sig.dragging && abs(sig.drag_delta.y) > em * 0.5 && !app.side_cancelled { app.side_drag, app.side_dragging, app.side_menu_of, app.side_touched = s, true, s, true }
 	if app.side_dragging && app.side_drag == s { app.side_held = sig.dragging }
 	if sig.clicked && !(app.side_dragging && app.side_drag == s) { app.side_open[s] = !open }
-	if sig.clicked || sig.right_clicked { app.side_menu_of = s }   // (the section the commands move)
+	if sig.clicked || sig.right_clicked { app.side_menu_of, app.side_touched = s, true }   // (the section the commands move)
 	if sig.right_clicked { side_menu_open(app, s) }
 	hover_tip(sig, "Drag it, or right-click it, to move the section")
 	return app.side_open[s]
@@ -218,7 +218,7 @@ side_drag_end :: proc(app: ^App, em: f32) {
 // A section's menu: where it goes.
 side_menu_open :: proc(app: ^App, s: Side_Section) {
 	if app.side_menu_key == 0 { app.side_menu_key = ui.key_from_string(0, "classeur_side_menu") }
-	app.side_menu_of = s
+	app.side_menu_of, app.side_touched = s, true
 	ui.ctx_menu_open(app.side_menu_key, ui.mouse_pos())
 }
 
@@ -333,6 +333,8 @@ act_side_down :: proc(app: ^App) { side_step(app, 1) }
 
 @(private = "file")
 side_step :: proc(app: ^App, by: int) {
+	// (no section touched yet: none to move)
+	if !app.side_touched { say(app, "Click a section's heading first: its keys move that one."); return }
 	s := app.side_menu_of
 	for x, i in app.side_order { if x == s { side_move(app, s, i + by); return } }
 }

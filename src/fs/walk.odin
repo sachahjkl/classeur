@@ -50,14 +50,21 @@ walk :: proc(l: ^Listing, root: string, count: ^int = nil, stop: proc(user: rawp
 	if l.error != .None { return l.error }
 	threads: [WALK_THREADS]^thread.Thread
 	// (each thread with a context of its own: its temporary memory is not the caller's)
-	for &th in threads { th = thread.create_and_start_with_data(&w, walk_thread) }
+	started := 0
+	for &th in threads {
+		th = thread.create_and_start_with_data(&w, walk_thread)
+		if th != nil { started += 1 }
+	}
+	// (no thread could start: the walk is the caller's alone)
+	if started == 0 { for walk_one(&w) {} }
 	given := 0
 	for {
+		// (woken by the end at once: a short walk does not wait a period)
 		sync.mutex_lock(&w.lock)
+		if !w.done { _ = sync.cond_wait_with_timeout(&w.wake, &w.lock, WALK_PROGRESS_MS * time.Millisecond) }
 		finished := w.done
 		sync.mutex_unlock(&w.lock)
 		if finished { break }
-		time.sleep(WALK_PROGRESS_MS * time.Millisecond)
 		if progress != nil { given = walk_progress(&w, given, progress) }
 	}
 	for th in threads {

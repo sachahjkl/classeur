@@ -1850,7 +1850,9 @@ test_archive_folders :: proc(t: ^testing.T) {
 	// a write in it: refused
 	testing.expect_value(t, fs.make_folder(fs.join(tab.path, "new", context.temp_allocator)), fs.Error.Read_Only)
 	testing.expect_value(t, fs.remove(hello), fs.Error.Read_Only)
-	// opened: taken out first, then given to the system (headless: noted)
+	// opened: taken out first (to a folder of the test's), then given to the system (headless: noted)
+	fs.take_out_root = fs.join(dir, ".taken", context.temp_allocator)
+	defer fs.take_out_root = ""
 	before := len(app.opened)
 	open_system(app, hello)
 	session.wait_until(s, proc(s: ^session.Session) -> bool { return len((^App)(s.user).opened) > 0 && strings.has_suffix((^App)(s.user).opened[len((^App)(s.user).opened) - 1], "hello.txt") }, "taken out and opened")
@@ -1919,4 +1921,31 @@ test_app_message :: proc(t: ^testing.T) {
 	testing.expect_value(t, len(folders), 1)
 	_, folders = app_message_read(app_message_make("t", nil))
 	testing.expect_value(t, len(folders), 0)
+}
+
+// A walk's batch added to a folder that filters: the order merged stays sorted, the lower-case names follow, the cursor
+// stays on its entry.
+@(test)
+test_folder_add_entries :: proc(t: ^testing.T) {
+	context.allocator = runtime.heap_allocator()
+	f: Folder
+	defer folder_destroy(&f)
+	first: fs.Listing
+	first.path = fs.keep_name(&first, "/x")
+	for name in ([]string{"b.txt", "d.txt", "f.txt"}) { append(&first.entries, fs.Entry{name = fs.keep_name(&first, name), kind = .File, size = 1}) }
+	folder_set_listing(&f, &first)
+	folder_set_filter(&f, "txt")
+	folder_cursor_to_name(&f, "d.txt")
+	batch: fs.Listing
+	defer fs.listing_destroy(&batch)
+	for name in ([]string{"e.txt", "a.txt", "c.txt"}) { append(&batch.entries, fs.Entry{name = fs.keep_name(&batch, name), kind = .File, size = 1}) }
+	folder_add_entries(&f, &batch)
+	testing.expect_value(t, len(f.order), 6)
+	for k in 1 ..< len(f.order) {
+		testing.expect(t, !fs.entry_less(f.listing.entries[f.order[k]], f.listing.entries[f.order[k - 1]], f.sort), "sorted")
+	}
+	testing.expect_value(t, len(f.lowered), len(f.listing.entries))
+	testing.expect_value(t, len(f.shown), 6)
+	e := folder_cursor_entry(&f)
+	testing.expect(t, e != nil && e.name == "d.txt", "the cursor on its entry")
 }
