@@ -11,6 +11,7 @@ import "core:math"
 import "core:strings"
 import "gt:desktop"
 import "gt:draw"
+import lucide "gt:lucide"
 import "gt:render"
 import "gt:ui"
 import "fs"
@@ -77,19 +78,19 @@ icon_size_for :: proc(px: int) -> int {
 
 // The system's icon of `path` at `px` pixels (made at icon_size_for(px)), if it is made; else it is asked (once), and
 // meanwhile the picture of another size made already stands in (`ready` false then): no box goes blank as the zoom moves.
-sys_icon :: proc(app: ^App, path: string, folder: bool, px: int) -> (ic: ^Sys_Icon, ready: bool) {
+sys_icon :: proc(app: ^App, path: string, folder: bool, px: int) -> (ic: ^Sys_Icon, ready: bool, failed: bool) {
 	made := icon_size_for(px)
 	key := icon_key(app, path, folder, made)
 	if c, ok := &app.icons_cache[key]; ok {
 		c.used = app.frame
-		if c.state == .Ready { return c, true }
-		return icon_stand_in(app, key, made), false
+		if c.state == .Ready { return c, true, false }
+		return icon_stand_in(app, key, made), false, c.state == .Failed
 	}
 	app.icons_cache[strings.clone(key)] = {state = .Asked, used = app.frame}
 	job := new(Icon_Job)
 	job^ = {app = app, key = strings.clone(key), path = strings.clone(path), folder = folder, px = made}
 	pool_submit(&app.thumb_pool, icon_run, job)
-	return icon_stand_in(app, key, made), false
+	return icon_stand_in(app, key, made), false, false
 }
 
 // The picture of the same icon at the nearest size made already (nil: none).
@@ -193,14 +194,19 @@ icon_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 path_icon :: proc(app: ^App, path: string, folder: bool, width: f32) {
 	px := max(16, int(math.round(width * 0.8)))
 	ui.next({width = ui.px(width), height = ui.pct(1)})
-	if ic, ready := sys_icon(app, path, folder, px); ic != nil {
+	ic, ready, failed := sys_icon(app, path, folder, px)
+	if ic != nil {
 		// (made at its size: never larger than the theme drew it; a stand-in at another size: scaled to fit)
 		side := f32(max(ic.size.x, ic.size.y))
 		d := ui.frame_new(Icon_Draw)
 		d^ = {ic.tex, {f32(ic.size.x), f32(ic.size.y)}, ready ? min(f32(px), side) : f32(px)}
 		ui.custom("###icon", icon_draw, d)
+	} else if failed {
+		// (no picture of the system's: no icon theme, a type it does not know): Lucide's folder or file
+		ui.next_merge({font = app.icons, text_align = .Center, font_size = math.round(width * 0.62)})
+		if ui.tags("weak") { ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###icon", folder ? lucide.FOLDER : lucide.FILE)) }
 	} else {
-		ui.build_box({}, "###icon")
+		ui.build_box({}, "###icon")   // (the first time it is asked: an instant)
 	}
 }
 

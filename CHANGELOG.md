@@ -5,6 +5,10 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Where the system has no picture for an icon (no icon theme, a type it does not know), Lucide's folder or file stands
+  in: no empty icon. (The 0.13.0 release stopped on this: the CI's machines have no icon theme.)
+
 ## [0.13.0] - 2026-11-10
 
 ### Added

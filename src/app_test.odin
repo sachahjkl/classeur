@@ -1656,9 +1656,11 @@ test_zoom_icons_stay :: proc(t: ^testing.T) {
 	s, app := start(t, {dir}, size = {1100, 700})
 	tab := current_tab(app)
 	wait_read(s)
+	// (a picture of the system's, or Lucide's where the system has none: the CI's machines have no icon theme)
+	shown :: proc(b: ^ui.Box) -> bool { return b.custom != nil || .Draw_Text in b.flags }
 	session.wait_until(s, proc(s: ^session.Session) -> bool {
 		b := session.find(s, "icon")
-		return b != nil && b.custom != nil
+		return b != nil && (b.custom != nil || .Draw_Text in b.flags)
 	}, "the first icons")
 	session.frames(s, 4)
 	blank := 0
@@ -1671,7 +1673,7 @@ test_zoom_icons_stay :: proc(t: ^testing.T) {
 			for i in 0 ..< 200 {
 				b := session.find(s, "icon", i)
 				if b == nil { break }
-				if b.custom == nil { blank += 1 }
+				if !shown(b) { blank += 1 }
 			}
 		}
 	}
