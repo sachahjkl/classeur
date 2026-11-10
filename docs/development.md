@@ -18,10 +18,10 @@ Every step is a command of `tools/classeurtool`:
 
 | Command | |
 |---|---|
-| `build [release]` | the toolkit's text library when its sources changed (Linux), then `build/classeur` |
+| `build [release]` | the toolkit's text library when its sources changed (Linux); Windows: `build/classeur.com` (the console launcher, which classeur embeds) and the icon of `res/classeur.rc`; then `build/classeur` |
 | `test` | `src` (the whole program, no window of the system: `-define:ODIN_TEST_THREADS=1`), `src/fs`, the tool |
-| `check` | `odin check -vet` of the program, of `src/fs` for the other system and of the tool, the tests, a release build |
-| `logo` | `assets/logo*.png` and `.project/image.png`, drawn by gui_toolkit's `paint` |
+| `check` | `odin check -vet` of the program, of `src/fs` for the other system and of the tool, the tests, a release build; Windows: `classeur.com version` gives classeur's output, `classeur.exe` has its icon |
+| `logo` | `assets/logo*.png`, `assets/classeur.ico` (the exe's icon) and `.project/image.png`, drawn by gui_toolkit's `paint` |
 | `shots [--out folder]` | `docs/screenshots/*.png`, from `test_shots` in `src/app_test.odin` |
 
 ## Tests

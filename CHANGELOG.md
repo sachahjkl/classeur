@@ -5,6 +5,11 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Windows: classeur.exe has its icon (Explorer, the taskbar, the window), from `res/classeur.rc`.
+- Windows: `classeur` typed in cmd or PowerShell gives its output and exit code: `install` writes classeur.com (the
+  toolkit's console launcher) beside classeur.exe with the PATH entry; a folder opens a window and gives the prompt back.
+
 ## [0.11.0] - 2026-11-10
 
 ### Changed

@@ -12,6 +12,9 @@ import paint "gt:paint"
 LOGO_DIR    :: "assets"
 LOGO_MASTER :: 1024
 LOGO_SIZES  :: [?]int{16, 32, 64, 128, 256}
+// The sizes of the .ico of classeur.exe (Explorer's lists and tiles, the taskbar, the window's corner, at every scale).
+ICO_SIZES   :: [?]int{16, 20, 24, 32, 40, 48, 64, 96, 128, 256}
+ICO_FILE    :: "assets/classeur.ico"
 // The drawing's own units: a square of LOGO_UNITS, scaled to the canvas.
 LOGO_UNITS  :: 512.0
 // The transparent space around the front panel, and the width of an edge, in units.
@@ -146,6 +149,16 @@ run_logo :: proc(args: []string) -> int {
 		if !paint.write_png(c, p) { fmt.eprintfln("classeurtool: %s cannot be written", p); return 1 }
 		fmt.printfln("wrote %s", p)
 	}
+	// the icon of classeur.exe (res/classeur.rc): every size Windows asks for, each a PNG
+	entries := make([dynamic]paint.Ico_Entry, context.temp_allocator)
+	for size in ICO_SIZES {
+		c := logo_render(size)
+		defer paint.canvas_destroy(&c)
+		append(&entries, paint.Ico_Entry{size, paint.png_encode(c, context.temp_allocator)})
+	}
+	ico := paint.ico_encode(entries[:], context.temp_allocator)
+	if os.write_entire_file(ICO_FILE, ico) != nil { fmt.eprintfln("classeurtool: %s cannot be written", ICO_FILE); return 1 }
+	fmt.printfln("wrote %s", ICO_FILE)
 	// the project's picture (.project/image.png, 512 px): what the repository and opencode's sessions of it show
 	project := logo_render(PROJECT_IMAGE_SIZE)
 	defer paint.canvas_destroy(&project)

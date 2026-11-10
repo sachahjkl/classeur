@@ -1,0 +1,4 @@
+// Resources of classeur.exe (classeurtool build passes it on Windows).
+//   id 1, ICON  the exe's icon (Explorer, shortcuts, Settings > Apps) and the window's and the taskbar's
+//               (platform.open_window loads id 1). Written by classeurtool logo.
+1 ICON "..\\assets\\classeur.ico"

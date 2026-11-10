@@ -44,13 +44,19 @@ classeur_identity :: proc() -> desktop.Identity {
 		keywords = "folder;manager;explore;disk;filesystem;files;",
 		env_prefix = "CLASSEUR_DESKTOP_",
 		uninstall_arguments = "--setup",
+		launcher_mark = LAUNCHER_MARK,
 	}
 }
 
 // classeur's own parts of an install: the PATH.
 classeur_parts :: proc(o: ^desktop.Options) {
 	o.add_to_path = true
+	o.launcher = CONSOLE_LAUNCHER   // (Windows: classeur.com with the PATH entry; nothing elsewhere)
 }
+
+// What classeur.com carries (the toolkit finds it there before it replaces or removes the file); the same as
+// classeurtool's LAUNCHER_DEFINES.
+LAUNCHER_MARK :: "(classeur console launcher)"
 
 @(private = "file")
 integration_options :: proc(args: []string) -> desktop.Options {

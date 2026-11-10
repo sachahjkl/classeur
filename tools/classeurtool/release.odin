@@ -4,6 +4,7 @@ package classeurtool
 // `notes <version>` the changelog's section, `ship <version> [--dry-run]` the changelog dated, APP_VERSION set, the
 // checks, a commit, the tag, the push. The release workflow (.github/workflows/release.yml) builds and publishes a tag.
 
+import "core:os"
 import release "gt:release"
 
 @(private = "file")
@@ -22,3 +23,9 @@ release_config :: proc() -> release.Config {
 run_package :: proc(args: []string) -> int { return release.package_(release_config(), args) }
 run_notes :: proc(args: []string) -> int { return release.notes(release_config(), args) }
 run_ship :: proc(args: []string) -> int { return release.ship(release_config(), args) }
+
+// The version src/main.odin says (APP_VERSION), "" when it cannot be read.
+app_version :: proc() -> string {
+	source, err := os.read_entire_file("src/main.odin", context.temp_allocator)
+	return err == nil ? release.version_of(string(source), "APP_VERSION :: ") : ""
+}

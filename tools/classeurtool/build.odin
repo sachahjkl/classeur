@@ -48,22 +48,66 @@ build_text :: proc() -> bool {
 	}
 }
 
+// classeur.com, the console launcher (the toolkit's tools/console_launcher) that classeur embeds (src/system_windows.odin):
+// its mark, and its rules: a folder (or none) opens a window and gives the prompt back; a command waits and gives its
+// output and exit code through.
+LAUNCHER_OUT :: "build/classeur.com"
+LAUNCHER_DEFINES :: [?]string{
+	"-define:LAUNCHER_MARK=(classeur console launcher)",
+	"-define:LAUNCHER_DEFAULT=detach",
+	"-define:LAUNCHER_OTHERS=install,uninstall,status,version,--version,help,-h,--help",
+}
+
+build_launcher :: proc() -> bool {
+	when ODIN_OS == .Windows {
+		_ = os.make_directory_all("build")
+		cmd := make([dynamic]string, context.temp_allocator)
+		append(&cmd, "odin", "build", fmt.tprintf("%s/tools/console_launcher", toolkit()), "-vet", "-subsystem:console", "-o:size", fmt.tprintf("-out:%s", LAUNCHER_OUT))
+		defines := LAUNCHER_DEFINES
+		append(&cmd, ..defines[:])
+		return toolbox.run(cmd[:], {echo = true})
+	} else {
+		return true
+	}
+}
+
+// Windows: classeur.com, beside the release build, gives classeur's output and exit code through.
+check_launcher :: proc() -> bool {
+	when ODIN_OS == .Windows {
+		out, code := toolbox.capture({LAUNCHER_OUT, "version"})
+		want := fmt.tprintf("classeur %s", app_version())
+		if code != 0 || strings.trim_space(out) != want {
+			fmt.eprintfln("classeurtool: classeur.com version gave %q (exit code %d), not %q", strings.trim_space(out), code, want)
+			return false
+		}
+		fmt.println("classeur.com: classeur's output and exit code")
+	}
+	return true
+}
+
+// The icon of classeur.exe (resource 1: Explorer's, and the window's: platform.open_window loads it); `logo` writes
+// the .ico it names.
+RESOURCE :: "res/classeur.rc"
+
 run_build :: proc(args: []string) -> int {
 	release := len(args) > 0 && args[0] == "release"
-	if !build_text() { return 1 }
+	if !build_text() || !build_launcher() { return 1 }
 	_ = os.make_directory("build")
 	mode := release ? []string{"-o:speed"} : []string{"-debug"}
 	extra := make([dynamic]string, context.temp_allocator)
 	append(&extra, fmt.tprintf("-out:%s", PROGRAM))
 	append(&extra, ..mode)
-	when ODIN_OS == .Windows { if release { append(&extra, "-subsystem:windows") } }
+	when ODIN_OS == .Windows {
+		if release { append(&extra, "-subsystem:windows") }
+		append(&extra, fmt.tprintf("-resource:%s", RESOURCE))
+	}
 	if !toolbox.run(odin_cmd("build", "src", extra[:]), {echo = true}) { return 1 }
 	fmt.printfln("built %s", PROGRAM)
 	return 0
 }
 
 run_test :: proc(args: []string) -> int {
-	if !build_text() { return 1 }
+	if !build_text() || !build_launcher() { return 1 }
 	_ = os.make_directory("build")
 	for pkg in TEST_PACKAGES {
 		name, _ := strings.replace_all(pkg, "/", "_", context.temp_allocator)
@@ -78,6 +122,7 @@ run_test :: proc(args: []string) -> int {
 run_check :: proc(args: []string) -> int {
 	if !check_scopes() { return 1 }
 	if !check_systems() { return 1 }
+	if !build_launcher() { return 1 }   // (classeur embeds it: odin check reads it)
 	if !toolbox.run(odin_cmd("check", "src", nil), {echo = true}) { return 1 }
 	// (the file system's code of the other system is checked too: the program is written for both; the whole program
 	// cannot be, the renderer of the other system needs its libraries)
@@ -85,7 +130,8 @@ run_check :: proc(args: []string) -> int {
 	if !toolbox.run({"odin", "check", "src/fs", "-vet", "-no-entry-point", other}, {echo = true}) { return 1 }
 	if !toolbox.run({"odin", "check", "tools/classeurtool", collection(), "-vet"}, {echo = true}) { return 1 }
 	if run_test(nil) != 0 { return 1 }
-	return run_build({"release"})
+	if run_build({"release"}) != 0 { return 1 }
+	return check_launcher() && check_exe_icon() ? 0 : 1
 }
 
 // The scopes of gui_toolkit (ui.row, ui.parent...) end with the statement they open: `if !ui.row(...) { return }` closes
