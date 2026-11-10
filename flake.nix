@@ -112,8 +112,10 @@
           desktopName = "Classeur";
           genericName = "File Manager";
           comment = "A fast file manager: tabs, panels, search, preview, keyboard first.";
-          exec = "classeur";
+          # (folders, as paths: a file manager's entry for inode/directory)
+          exec = "classeur %F";
           icon = "classeur";
+          mimeTypes = ["inode/directory"];
           categories = ["System" "FileTools" "FileManager"];
           keywords = ["files" "folders" "explorer" "browser"];
           startupWMClass = "classeur";
