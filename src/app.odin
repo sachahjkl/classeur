@@ -17,6 +17,7 @@ import "gt:instance"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:render"
+import setup "gt:setup"
 import "gt:ui"
 import "fs"
 
@@ -95,6 +96,10 @@ App :: struct {
 	drop_hover:  string,            // owned: the folder a drop would go into now ("": none)
 	drag_paths:  [dynamic]string,   // owned: what the next drag_start carries
 	drag_started: bool,             // the press that is held has started its drag
+	setup:       setup.Dialog,      // the Setup (integration.odin)
+	logo:        render.Texture,    // its logo, made at its first show
+	logo_made:   bool,
+	launch_after: string,           // owned: the installed copy, started once this one has ended ("": none)
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
 	session_path: string,           // owned: the tests' session file ("": the person's, none when headless)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
@@ -113,7 +118,7 @@ Open_Options :: struct {
 	session:  string,     // the session file ("": the person's; headless: none)
 }
 
-app_run :: proc(folders: []string) -> int {
+app_run :: proc(folders: []string, setup_asked := false) -> int {
 	// one window per person: a second start hands its folders to the first, which opens them in tabs, and ends
 	message := strings.join(folders, "\n", context.temp_allocator)
 	name := instance.key(ODIN_DEBUG ? "classeur.dev" : "classeur", platform.config_dir(context.temp_allocator))
@@ -127,12 +132,17 @@ app_run :: proc(folders: []string) -> int {
 	server: ^instance.Server
 	if outcome == .First { server = instance.serve_start(owner, app_message, app) }
 	platform.show_window(app.main.win)
+	setup_offer(app, setup_asked)
 	for !platform.is_closed(app.main.win) {
 		host.hosts_wait({&app.main})
 		app_frame(app)
 	}
 	instance.serve_stop(server)
+	launch := strings.clone(app.launch_after, context.temp_allocator)
+	setup.finish(&app.setup, setup_config())
 	app_close(app)
+	// (the Setup installed a copy and asked to open it: it starts once this one let go of the instance)
+	if launch != "" { _ = setup.launch(launch) }
 	return 0
 }
 
@@ -232,6 +242,7 @@ app_close :: proc(app: ^App) {
 	pool_stop(&app.thumb_pool, proc(data: rawptr) {})
 	thumbs_free(app)
 	icons_free(app)
+	if app.logo_made { render.destroy_texture(&app.shared.r, app.logo) }
 	inspector_free(app)   // (before the renderer goes: the textures are its)
 	devtools.stop(app.devtools)
 	if global_app == app { global_app = nil }
@@ -254,6 +265,8 @@ app_free :: proc(app: ^App) {
 	batch_free(&app.batch)
 	band_free(&app.band)
 	layouts_free(&app.layouts)
+	setup.destroy(&app.setup)
+	delete(app.launch_after)
 	delete(app.tab_rects)
 	delete(app.tab_rects_last)
 	rename_free(&app.rename)

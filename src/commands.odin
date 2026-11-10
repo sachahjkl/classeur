@@ -88,6 +88,7 @@ COMMANDS := [?]Command{
 	{id = "sort_size", title = "Sort by size", icon = lucide.ARROW_UP_DOWN, keys = {{.N3, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_sort_size},
 	{id = "sort_type", title = "Sort by type", icon = lucide.ARROW_UP_DOWN, keys = {{.N4, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_sort_type},
 	{id = "folders_mixed", title = "Folders first, or among the files", icon = lucide.FOLDER, keys = {{.N0, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_folders_mixed},
+	{id = "setup", title = "Setup: install classeur, repair, upgrade or uninstall it", icon = lucide.PACKAGE, keys = {{.F12, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_setup},
 	{id = "layout_save", title = "Save the panels and tabs as a layout", icon = lucide.LAYOUT_GRID, keys = {{.S, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_layout_save},
 	{id = "layout_open", title = "Open a layout", icon = lucide.LAYOUT_GRID, keys = {{.L, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_layout_open},
 	{id = "view_list", title = "Names view", icon = lucide.LIST, keys = {{.N3, {.Ctrl}}, {}}, in_text = true, run = act_view_list},

@@ -40,7 +40,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	append(&app.text_keys_before, ..app.text_keys[:])
 	clear(&app.text_keys)
 	typing := slice.contains(app.text_keys_before[:], ui.focus_key())
-	if !app.palette.open && !app.goto.open && !app.batch.open && !app.layouts.naming && !app.confirm.open && !app.conflict.open && !app.options.open {
+	if !app.palette.open && !app.goto.open && !app.batch.open && !app.layouts.naming && !app.setup.open && !app.confirm.open && !app.conflict.open && !app.options.open {
 		commands_keys(app, typing)
 		if !typing { list_keys(app) }
 	}
@@ -58,6 +58,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	goto_build(app)
 	batch_build(app, em)
 	layouts_build(app, em)
+	setup_build(app, em)
 	options_build(app)
 	dialogs_build(app, em)
 	jobs_tidy(app)

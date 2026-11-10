@@ -963,3 +963,25 @@ test_layouts :: proc(t: ^testing.T) {
 	wait_read(s)
 	testing.expect_value(t, len(app.panels), 2)
 }
+
+// classeur install, status, uninstall, on the test's own folders (never the person's desktop).
+@(test)
+test_install :: proc(t: ^testing.T) {
+	when ODIN_OS != .Linux { return }
+	root := testkit.temp_folder(t, "classeur_install")
+	for name in ([]string{"APPLICATIONS_DIR", "ICONS_DIR", "BIN_DIR", "AUTOSTART_DIR", "MENU_DIR"}) {
+		dir := fs.join(root, name, context.temp_allocator)
+		_ = os.make_directory_all(dir)
+		os.set_env(fmt.tprintf("CLASSEUR_DESKTOP_%s", name), dir)
+	}
+	defer for name in ([]string{"APPLICATIONS_DIR", "ICONS_DIR", "BIN_DIR", "AUTOSTART_DIR", "MENU_DIR"}) { os.unset_env(fmt.tprintf("CLASSEUR_DESKTOP_%s", name)) }
+	entry := fs.join(root, "APPLICATIONS_DIR/classeur.desktop", context.temp_allocator)
+	testing.expect_value(t, cmd_install({}), 0)
+	testing.expect(t, fs.exists(entry), "the menu's entry")
+	testing.expect(t, fs.exists(fs.join(root, "BIN_DIR/classeur", context.temp_allocator)), "on the PATH")
+	text, _ := os.read_entire_file(entry, context.temp_allocator)
+	testing.expect(t, strings.contains(string(text), "FileManager"), "a file manager for the menus")
+	testing.expect_value(t, cmd_status({}), 0)
+	testing.expect_value(t, cmd_uninstall({}), 0)
+	testing.expect(t, !fs.exists(entry), "taken away")
+}
