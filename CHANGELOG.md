@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-10
+
 ### Added
 - Windows: classeur.exe has its icon (Explorer, the taskbar, the window), from `res/classeur.rc`.
 - Windows: `classeur` typed in cmd or PowerShell gives its output and exit code: `install` writes classeur.com (the
@@ -152,3 +154,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.9.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.9.0
 [0.10.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.10.0
 [0.11.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.11.0
+[0.12.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.12.0
