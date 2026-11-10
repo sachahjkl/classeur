@@ -1400,3 +1400,25 @@ test_address_suggest :: proc(t: ^testing.T) {
 	wait_read(s)
 	testing.expect_value(t, tab.path, fs.join(dir, "Projects", context.temp_allocator))
 }
+
+// The palette: nothing typed, every command under its group's title, the ones run last first; the wheel scrolls.
+@(test)
+test_palette_groups :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1200, 800})
+	session.key(s, .P, {.Ctrl, .Shift})
+	session.type_text(s, "hidden files")
+	session.key(s, .Return)
+	session.frames(s, 1)
+	session.key(s, .P, {.Ctrl, .Shift})
+	session.frames(s, 3)
+	testing.expect(t, session.find_text(s, "Recent") != nil && session.find_text(s, "Go") != nil, "the groups' titles")
+	testing.expect(t, session.find(s, "pal_row_hidden") != nil, "the command run last, shown first")
+	when SHOTS { session.save_png(s, "palette_groups.png") }
+	rows := session.get(s, "pal_rows")
+	session.wheel(s, (rows.rect.min + rows.rect.max) * 0.5, {0, 3})
+	session.frames(s, 2)
+	testing.expect(t, app.palette.scroll > 0, "scrolled")
+	session.key(s, .Escape)
+}

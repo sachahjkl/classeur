@@ -5,6 +5,12 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The path field suggests the folders of the path typed: Up and Down choose, Tab completes, Enter or a click goes.
+- The zoom's slider: a row per step with its icon, its name and its percent; a click on a row goes to that step.
+- The palette: with nothing typed, the commands run last under Recent, then every command under its group's title; the
+  wheel scrolls it, a bar shows where; each row shows its aliases, and its group while searching.
+
 ## [0.8.0] - 2026-11-10
 
 ### Changed

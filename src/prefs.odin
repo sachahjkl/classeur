@@ -22,6 +22,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "view.columns", description = "The columns of the details, in their order (modified, type, counts, size).", kind = .String, default = {s = "modified,type,counts,size"}, hidden = true},
 	{name = "keys.custom", description = "The person's keys of the commands (palette: Ctrl+Enter).", kind = .String, default = {s = ""}, hidden = true},
 	{name = "keys.aliases", description = "The aliases of the commands (palette: Alt+Enter).", kind = .String, default = {s = ""}, hidden = true},
+	{name = "palette.recent", description = "The commands run last from the palette.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "open.single_click", description = "Opens an item with one click instead of two.", kind = .Bool, default = {b = false}},
 }
 
