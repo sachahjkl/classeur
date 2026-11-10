@@ -2,7 +2,6 @@ package classeur
 
 // The places of the sidebar: the person's folders (those that exist), then the volumes (fs.volumes).
 
-import "core:os"
 import "core:strings"
 import "gt:platform"
 import "fs"
@@ -38,17 +37,9 @@ places_load :: proc(app: ^App) {
 		}
 		append(&app.places, Place{name = strings.clone(k.name), path = path})
 	}
-	// the root of the system (File Pilot's This PC) and the trash
-	when ODIN_OS != .Windows {
-		append(&app.places, Place{name = strings.clone("Computer"), path = strings.clone("/")})
-		data := os.get_env("XDG_DATA_HOME", context.temp_allocator)
-		if data == "" { data = fs.join(app.home, ".local/share", context.temp_allocator) }
-		trash := fs.join(data, "Trash/files")
-		if info, ok := fs.stat(trash); ok && info.kind == .Directory {
-			append(&app.places, Place{name = strings.clone("Trash"), path = trash})
-		} else {
-			delete(trash)
-		}
+	// the root of the system (File Pilot's This PC) and the trash, as the system has them
+	for sp in fs.system_places(app.home, context.temp_allocator) {
+		append(&app.places, Place{name = strings.clone(sp.name), path = strings.clone(sp.path)})
 	}
 	app.volumes = fs.volumes()
 	clear(&app.volume_space)

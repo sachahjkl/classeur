@@ -152,3 +152,15 @@ free_name :: proc(dir, name: string, allocator := context.allocator) -> string {
 		if !exists(join(dir, candidate, context.temp_allocator)) { return strings.clone(candidate, allocator) }
 	}
 }
+
+// A name as the file system compares it: as it is on Linux, its case folded on Windows (names that differ by their case
+// alone are one).
+name_key :: proc(name: string, allocator := context.allocator) -> string {
+	when ODIN_OS == .Windows { return strings.to_lower(name, allocator) }
+	return strings.clone(name, allocator)
+}
+
+// Whether a text typed names a path (a root at its start, or the home folder's "~") rather than words.
+looks_like_path :: proc(text: string) -> bool {
+	return root_length(text) > 0 || strings.has_prefix(text, "~") || (len(text) > 0 && is_separator(text[0]))
+}

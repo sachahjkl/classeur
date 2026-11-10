@@ -52,3 +52,16 @@ is immediate-mode); the data changes only on the interface's thread.
 with gui_toolkit's `testkit/session`: keys and clicks go through the event path, the workers really read a folder made
 for the test, and `wait_read` makes frames until every tab has its folder. `test_shots` makes the README's pictures
 (`classeurtool shots`).
+
+## The system and the interface
+
+The interface (`src/*.odin`) never says which system it runs on. What differs between Linux and Windows is asked of:
+
+- `src/fs`: the file system (reading folders, statx or FindFirstFileExW, copies, renames that never replace, the trash,
+  the volumes, watching, the places of the system, how names compare, what a typed path looks like), one file per
+  system (`*_linux.odin`, `*_windows.odin`);
+- gui_toolkit: the window, the input, the clipboard, drag and drop (`platform`), the icons of files, Open with, the
+  terminal, the install (`desktop`, `setup`), one window per person (`instance`);
+- a constant of the program's own in `src/system_<os>.odin` (`SETUP_AT_START`).
+
+`classeurtool check` refuses `ODIN_OS` anywhere else in `src/` (`check_systems`).

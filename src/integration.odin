@@ -137,9 +137,7 @@ setup_offer :: proc(app: ^App, asked: bool) {
 		setup.open(&app.setup, setup_config())
 		return
 	}
-	when ODIN_OS == .Windows {
-		if setup.wanted(setup.facts(setup_config()), APP_VERSION, setup_choice_read()) { setup.open(&app.setup, setup_config()) }
-	}
+	if SETUP_AT_START && setup.wanted(setup.facts(setup_config()), APP_VERSION, setup_choice_read()) { setup.open(&app.setup, setup_config()) }
 }
 
 act_setup :: proc(app: ^App) { setup.open(&app.setup, setup_config()) }

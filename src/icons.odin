@@ -41,10 +41,9 @@ Icon_Job :: struct {
 @(private = "file")
 icon_key :: proc(app: ^App, path: string, folder: bool, px: int) -> string {
 	if folder {
-		special := path == app.home || path == "/"
+		special := path == app.home || fs.is_root(path)
 		for p in app.places { if p.path == path { special = true } }
 		for v in app.volumes { if v.path == path { special = true } }
-		when ODIN_OS == .Windows { if fs.is_root(path) { special = true } }
 		return special ? fmt.tprintf("dir:%s@%d", path, px) : fmt.tprintf("dir@%d", px)
 	}
 	name := fs.base(path)

@@ -64,17 +64,6 @@ Goto_Row :: struct {
 	ranges: []ui.Fuzzy_Range,
 }
 
-// Whether the text names a path rather than words.
-@(private = "file")
-is_path_text :: proc(s: string) -> bool {
-	if strings.has_prefix(s, "/") || strings.has_prefix(s, "~") { return true }
-	when ODIN_OS == .Windows {
-		if len(s) >= 2 && s[1] == ':' { return true }
-		if strings.has_prefix(s, "\\") { return true }
-	}
-	return false
-}
-
 // "~/x" with the home folder in full.
 @(private = "file")
 expand_home :: proc(app: ^App, s: string) -> string {
@@ -145,7 +134,7 @@ goto_read_done :: proc(data: rawptr, word: u64) {
 goto_rows :: proc(app: ^App, text: string) -> []Goto_Row {
 	g := &app.goto
 	rows := make([dynamic]Goto_Row, context.temp_allocator)
-	if is_path_text(text) {
+	if fs.looks_like_path(text) {
 		full := expand_home(app, text)
 		// the folder named so far, and the letters after it
 		cut := len(full)
@@ -199,7 +188,7 @@ goto_path :: proc(app: ^App, path: string) -> bool {
 @(private = "file")
 typed_is_whole :: proc(app: ^App, text: string) -> bool {
 	g := &app.goto
-	if !is_path_text(text) { return false }
+	if !fs.looks_like_path(text) { return false }
 	full := expand_home(app, text)
 	if len(full) > 0 && fs.is_separator(full[len(full) - 1]) { return true }
 	cut := len(full)
@@ -256,7 +245,7 @@ goto_build :: proc(app: ^App) {
 					switch {
 					case typed_is_whole(app, text) && !g.moved: go_to = expand_home(app, text)
 					case n > 0:                                 go_to = rows[g.sel].path
-					case is_path_text(text):                    go_to = expand_home(app, text)
+					case fs.looks_like_path(text):                    go_to = expand_home(app, text)
 					}
 				}
 				if g.focus_due { ui.set_focus(input_key); g.focus_due = false }
@@ -295,7 +284,7 @@ goto_build :: proc(app: ^App) {
 			if n == 0 {
 				if ui.tags("weak") {
 					ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 3.5)), text_align = .Center})
-					ui.label(is_path_text(text) ? "No folder there has these letters. Enter goes to the path typed.###goto_none" : "No folder has these letters.###goto_none")
+					ui.label(fs.looks_like_path(text) ? "No folder there has these letters. Enter goes to the path typed.###goto_none" : "No folder has these letters.###goto_none")
 				}
 			}
 			ui.hline(ui.px(pw))

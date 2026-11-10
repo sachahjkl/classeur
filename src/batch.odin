@@ -82,7 +82,7 @@ batch_open :: proc(app: ^App, t: ^Tab) {
 	alphabet := "abcdefghijkmnpqrstuvwxyz23456789"
 	mine := make(map[string]bool, context.temp_allocator)
 	for e in folder_targets(&t.folder) { mine[e.name] = true }
-	for e in t.folder.listing.entries { if e.name not_in mine { b.taken[name_key(e.name)] = true } }
+	for e in t.folder.listing.entries { if e.name not_in mine { b.taken[fs.name_key(e.name)] = true } }
 	for e in folder_targets(&t.folder) {
 		append(&b.names, strings.clone(e.name))
 		append(&b.mtimes, e.mtime)
@@ -157,22 +157,15 @@ batch_field :: proc(sb: ^strings.Builder, b: ^Batch, i: int, field, stem, ext: s
 	return true
 }
 
-// A name as the file systems compare it: as it is on Linux, its case folded on Windows (names that differ by their case
-// alone are one).
-name_key :: proc(name: string, allocator := context.allocator) -> string {
-	when ODIN_OS == .Windows { return strings.to_lower(name, allocator) }
-	return strings.clone(name, allocator)
-}
-
 // Why each new name cannot be had ("": it can). From the folder's names read at the opening: nothing is asked of the
 // file system while the pattern is typed.
 @(private = "file")
 batch_problems :: proc(b: ^Batch, news: []string) -> []string {
 	out := make([]string, len(news), context.temp_allocator)
 	seen := make(map[string]int, len(news), context.temp_allocator)
-	for n in news { seen[name_key(n, context.temp_allocator)] += 1 }
+	for n in news { seen[fs.name_key(n, context.temp_allocator)] += 1 }
 	for n, i in news {
-		k := name_key(n, context.temp_allocator)
+		k := fs.name_key(n, context.temp_allocator)
 		switch {
 		case n == "":                                                      out[i] = "empty"
 		case strings.contains_any(n, fs.SEPARATOR_STRING) || n == "." || n == "..": out[i] = "not a name"

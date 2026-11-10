@@ -77,6 +77,7 @@ run_test :: proc(args: []string) -> int {
 
 run_check :: proc(args: []string) -> int {
 	if !check_scopes() { return 1 }
+	if !check_systems() { return 1 }
 	if !toolbox.run(odin_cmd("check", "src", nil), {echo = true}) { return 1 }
 	// (the file system's code of the other system is checked too: the program is written for both; the whole program
 	// cannot be, the renderer of the other system needs its libraries)
@@ -109,6 +110,30 @@ check_scopes :: proc() -> bool {
 					fmt.eprintfln("%s:%d: `if !ui.%s(...)` ends the scope at once: build inside `if ui.%s(...)` and its block", f.fullpath, n, sc, sc)
 					ok = false
 				}
+			}
+		}
+	}
+	return ok
+}
+
+// The system and the interface apart: the interface (src/*.odin) asks src/fs and the toolkit (platform, desktop) what
+// differs between the systems, and says nothing of them itself. A difference of the program's own is a constant in a
+// file of the system's name (system_windows.odin, system_other.odin), never a `when ODIN_OS` in the interface.
+check_systems :: proc() -> bool {
+	files, err := os.read_all_directory_by_path("src", context.temp_allocator)
+	if err != nil { return false }
+	ok := true
+	for f in files {
+		if !strings.has_suffix(f.name, ".odin") || strings.has_suffix(f.name, "_test.odin") || strings.has_prefix(f.name, "system_") { continue }
+		data, rerr := os.read_entire_file(f.fullpath, context.temp_allocator)
+		if rerr != nil { continue }
+		text := string(data)
+		n := 0
+		for line in strings.split_lines_iterator(&text) {
+			n += 1
+			if strings.contains(line, "ODIN_OS") {
+				fmt.eprintfln("%s:%d: the interface knows the system: ask src/fs or the toolkit, or put a constant in a system_<os>.odin", f.fullpath, n)
+				ok = false
 			}
 		}
 	}
