@@ -217,3 +217,83 @@ test_recycle_bin :: proc(t: ^testing.T) {
 	data, _ := os.read_entire_file(file, context.temp_allocator)
 	testing.expect_value(t, string(data), "back")
 }
+
+// The parts of the URIs the locations read, on every system.
+@(test)
+test_uri_parts :: proc(t: ^testing.T) {
+	u, ok := uri_parse("smb://ann@files.local:445/Shared%20Docs/a%20b")
+	testing.expect(t, ok)
+	testing.expect_value(t, u.scheme, "smb")
+	testing.expect_value(t, u.user, "ann")
+	testing.expect_value(t, u.host, "files.local")
+	testing.expect_value(t, u.port, 445)
+	testing.expect_value(t, u.path, "/Shared Docs/a b")
+	v, _ := uri_parse("sftp://[fe80::1]:2222/home")
+	testing.expect_value(t, v.host, "[fe80::1]")
+	testing.expect_value(t, v.port, 2222)
+	testing.expect(t, !is_uri("C:\\Users") && !is_uri("/home/a") && is_uri("trash:///") && is_uri("davs://h/x"), "a drive is no scheme")
+	testing.expect_value(t, uri_text({scheme = "smb", host = "h", path = "/Shared Docs"}), "smb://h/Shared%20Docs")
+	testing.expect_value(t, percent_decode("a%2Fb%zz"), "a/b%zz")
+	// gvfs's names, both ways
+	g, gok := gvfs_name_parse("smb-share:server=files.local,share=docs,user=ann")
+	testing.expect(t, gok && g.type == "smb-share")
+	testing.expect_value(t, gvfs_uri(g), "smb://ann@files.local/docs")
+	rest, holds := gvfs_holds(g, Uri{scheme = "smb", host = "FILES.local", path = "/docs/a/b"})
+	testing.expect(t, holds && rest == "a/b", "the share holds its URI's path, the host's case aside")
+	_, other := gvfs_holds(g, Uri{scheme = "smb", host = "files.local", path = "/other/a"})
+	testing.expect(t, !other, "not another share")
+	d, _ := gvfs_name_parse("dav:host=cloud.example,ssl=true,prefix=%2Fremote.php%2Fdav")
+	testing.expect_value(t, gvfs_uri(d), "davs://cloud.example/remote.php/dav")
+	r2, h2 := gvfs_holds(d, Uri{scheme = "davs", host = "cloud.example", path = "/remote.php/dav/files/x"})
+	testing.expect(t, h2 && r2 == "files/x", "under its prefix")
+	// the kernel's mounts of shares
+	testing.expect_value(t, mount_source_uri("nfs4", "nas:/export/media"), "nfs://nas/export/media")
+	testing.expect_value(t, mount_source_uri("cifs", "//nas/music"), "smb://nas/music")
+	testing.expect_value(t, mount_source_uri("fuse.sshfs", "me@box:/srv"), "sftp://me@box/srv")
+	testing.expect_value(t, mount_source_uri("ext4", "/dev/sda1"), "")
+	testing.expect_value(t, share_label("smb://nas/music", context.temp_allocator), "music on nas")
+}
+
+// The locations of this system: a path as it is, a file's URI, the trash, a share mounted (by gvfs on Linux: a folder
+// of a runtime folder made for the test) and one that is not, and the URI a path under a share stands for.
+@(test)
+test_locations :: proc(t: ^testing.T) {
+	r, e := location_resolve("file:///tmp/a%20b", context.temp_allocator)
+	testing.expect_value(t, e, Location_Error.None)
+	when ODIN_OS == .Windows {
+		testing.expect_value(t, r.path, "tmp\\a b")
+		s, se := location_resolve("smb://nas/docs/a%20b/c", context.temp_allocator)
+		testing.expect(t, se == .None && s.path == "\\\\nas\\docs\\a b\\c", "smb: its UNC path")
+		f, _ := location_resolve("file://nas/docs/x", context.temp_allocator)
+		testing.expect_value(t, f.path, "\\\\nas\\docs\\x")
+		testing.expect_value(t, location_display("\\\\nas\\docs\\a b", context.temp_allocator), "smb://nas/docs/a%20b")
+		_, te := location_resolve("trash:///", context.temp_allocator)
+		testing.expect_value(t, te, Location_Error.Unsupported)
+		_, fe := location_resolve("sftp://box/srv", context.temp_allocator)
+		testing.expect_value(t, fe, Location_Error.Unsupported)
+	} else {
+		testing.expect_value(t, r.path, "/tmp/a b")
+		// a runtime folder of the test's, with gvfs's folder of a share in it
+		run := testkit.temp_folder(t, "classeur_run")
+		share := join(run, "gvfs/smb-share:server=nas,share=docs", context.temp_allocator)
+		testing.expect(t, os.make_directory_all(join(share, "a b", context.temp_allocator)) == nil)
+		before := os.get_env("XDG_RUNTIME_DIR", context.temp_allocator)
+		os.set_env("XDG_RUNTIME_DIR", run)
+		defer os.set_env("XDG_RUNTIME_DIR", before)
+		s, se := location_resolve("smb://nas/docs/a%20b", context.temp_allocator)
+		testing.expect_value(t, se, Location_Error.None)
+		testing.expect_value(t, s.path, join(share, "a b", context.temp_allocator))
+		testing.expect_value(t, location_display(s.path, context.temp_allocator), "smb://nas/docs/a%20b")
+		root, uri, ok := share_root(s.path, context.temp_allocator)
+		testing.expect(t, ok && root == share && uri == "smb://nas/docs", "its share's root")
+		_, ne := location_resolve("smb://nas/other", context.temp_allocator)
+		testing.expect_value(t, ne, Location_Error.Not_Mounted)
+		found := false
+		for m in network_shares(context.temp_allocator) { if m.path == share && m.label == "docs on nas" { found = true } }
+		testing.expect(t, found, "listed among the shares")
+		tr, _ := location_resolve("trash:///old", context.temp_allocator)
+		testing.expect(t, tr.kind == .Trash && strings.has_suffix(tr.path, "/Trash/files/old"), "the trash's files")
+	}
+	_, x := location_resolve("gopher://h/x", context.temp_allocator)
+	testing.expect_value(t, x, Location_Error.Not_A_Location)
+}

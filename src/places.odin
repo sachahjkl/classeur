@@ -42,6 +42,7 @@ places_load :: proc(app: ^App) {
 		append(&app.places, Place{name = strings.clone(sp.name), path = strings.clone(sp.path)})
 	}
 	app.volumes = fs.volumes()
+	app.shares = fs.network_shares()
 	clear(&app.volume_space)
 	for v in app.volumes {
 		sp, _ := fs.space(v.path)
@@ -57,4 +58,6 @@ places_free :: proc(app: ^App) {
 	clear(&app.places)
 	if app.volumes != nil { fs.volumes_destroy(app.volumes) }
 	app.volumes = nil
+	if app.shares != nil { fs.shares_destroy(app.shares) }
+	app.shares = nil
 }

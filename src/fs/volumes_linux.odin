@@ -36,7 +36,7 @@ is_person_mount :: proc(at: string) -> bool {
 }
 
 // mountinfo writes a space as \040, a tab as \011, a backslash as \134.
-@(private = "file")
+// (locations_linux.odin reads mountinfo too)
 unescape_octal :: proc(s: string, allocator := context.allocator) -> string {
 	if strings.index_byte(s, '\\') < 0 { return s }
 	b := strings.builder_make(allocator)
@@ -51,5 +51,4 @@ unescape_octal :: proc(s: string, allocator := context.allocator) -> string {
 	return strings.to_string(b)
 }
 
-@(private = "file")
 is_octal :: proc(c: u8) -> bool { return c >= '0' && c <= '7' }

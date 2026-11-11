@@ -1155,6 +1155,15 @@ filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 // The crumbs of a path; under the home folder they start at it, named "Home".
 home_crumbs :: proc(app: ^App, path: string) -> []fs.Crumb {
 	parts := fs.crumbs(path)
+	// (under a share: from its root, named by its URI, "smb://nas/docs")
+	if root, uri, ok := fs.share_root(path, context.temp_allocator); ok {
+		for c, i in parts {
+			if c.path != root { continue }
+			out := parts[i:]
+			out[0].name = uri
+			return out
+		}
+	}
 	home := fs.crumbs(app.home)
 	if len(home) == 0 || len(parts) < len(home) || parts[len(home) - 1].path != app.home { return parts }
 	out := parts[len(home) - 1:]

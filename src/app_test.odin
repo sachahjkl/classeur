@@ -1758,7 +1758,7 @@ test_side_order :: proc(t: ^testing.T) {
 		session.key(s, .Return)
 		session.frames(s, 2)
 		testing.expect_value(t, app.side_order[0], Side_Section.Places)
-		testing.expect_value(t, config.string_of(&app.prefs, "side.order"), "places,recents,bookmarks,storage")
+		testing.expect_value(t, config.string_of(&app.prefs, "side.order"), "places,recents,bookmarks,storage,network")
 		// a drag: Places, now first, let go under Storage's heading (the last)
 		from := session.center(session.get(s, "sec_Places"))
 		to := session.center(session.get(s, "sec_Storage")) + {0, 30}
@@ -1771,10 +1771,14 @@ test_side_order :: proc(t: ^testing.T) {
 		session.release(s, to)
 		session.frames(s, 2)
 		testing.expect_value(t, app.side_order[len(Side_Section) - 1], Side_Section.Places)
-		// its keys: the section last touched (Places, dragged) a place up
+		// its keys: the section last touched (Places, dragged) a place up, over Storage (Network, with no share, is not
+		// shown: the move skips it)
 		session.key(s, .Up, {.Ctrl, .Alt, .Shift})
 		session.frames(s, 1)
-		testing.expect_value(t, app.side_order[len(Side_Section) - 2], Side_Section.Places)
+		at := map[Side_Section]int{}
+		defer delete(at)
+		for x, i in app.side_order { at[x] = i }
+		testing.expectf(t, at[.Places] + 1 == at[.Storage], "Places just over Storage: %v", app.side_order)
 	})
 }
 
@@ -2610,5 +2614,52 @@ test_columns_aligned :: proc(t: ^testing.T) {
 			if title == nil || cell == nil { continue }
 			testing.expectf(t, abs(cell.rect.min.x - title.rect.min.x) < 1 && abs(cell.rect.max.x - title.rect.max.x) < 1, "%v: the cell %v under its title %v", d, cell.rect, title.rect)
 		}
+	})
+}
+
+// The places that are not paths (Linux: a share gvfs mounted, in a runtime folder made for the test): smb:// goes to
+// its folder, the tab named by the share, the first crumb its URI, the sidebar's Network section lists it; trash:///
+// is the trash's folder.
+@(test)
+test_locations_in_tabs :: proc(t: ^testing.T) {
+	when ODIN_OS != .Linux { return }
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		run := strings.clone(testkit.temp_folder(t, "classeur_run"))
+		defer delete(run)
+		share := fs.join(run, "gvfs/smb-share:server=nas,share=docs")
+		defer delete(share)
+		_ = os.make_directory_all(fs.join(share, "Reports", context.temp_allocator))
+		before := strings.clone(os.get_env("XDG_RUNTIME_DIR", context.temp_allocator))
+		defer { os.set_env("XDG_RUNTIME_DIR", before); delete(before) }
+		os.set_env("XDG_RUNTIME_DIR", run)
+		// (the trash of a data folder of the test's)
+		data := fs.join(run, "data")
+		defer delete(data)
+		_ = os.make_directory_all(fs.join(data, "Trash/files", context.temp_allocator))
+		data_before := strings.clone(os.get_env("XDG_DATA_HOME", context.temp_allocator))
+		defer { os.set_env("XDG_DATA_HOME", data_before); delete(data_before) }
+		os.set_env("XDG_DATA_HOME", data)
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir}, size = {1200, 700})
+		tab := current_tab(app)
+		tab_go(app, tab, "smb://nas/docs")
+		wait_read(s)
+		session.frames(s, 3)
+		testing.expect_value(t, tab.path, share)
+		testing.expect_value(t, tab_title(app, tab), "docs on nas")
+		crumbs := home_crumbs(app, tab.path)
+		testing.expect(t, len(crumbs) > 0 && crumbs[0].name == "smb://nas/docs", "the first crumb, the share's URI")
+		testing.expect(t, session.find_text(s, "Reports") != nil, "its folders")
+		testing.expect(t, session.find_text(s, "Network") != nil && session.find_text(s, "docs on nas") != nil, "the sidebar's Network section")
+		when SHOTS { session.save_png(s, "share.png") }
+		tab_go(app, tab, "trash:///")
+		wait_read(s)
+		testing.expect_value(t, tab.path, fs.join(data, "Trash/files", context.temp_allocator))
+		// a new tab on a share (a second start, the command line)
+		tab_open(app, current_panel(app), "smb://nas/docs/Reports")
+		wait_read(s)
+		testing.expect_value(t, current_tab(app).path, fs.join(share, "Reports", context.temp_allocator))
 	})
 }

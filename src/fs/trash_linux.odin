@@ -67,7 +67,7 @@ untrash :: proc(in_trash: string, allocator := context.allocator) -> (original: 
 	text := string(data)
 	to := ""
 	for line in strings.split_lines_iterator(&text) {
-		if strings.has_prefix(line, "Path=") { to = url_decode(strings.trim_space(line[len("Path="):])) }
+		if strings.has_prefix(line, "Path=") { to = percent_decode(strings.trim_space(line[len("Path="):])) }
 	}
 	if to == "" { return "", .Other }
 	_ = os.make_directory_all(parent(to))
@@ -76,38 +76,9 @@ untrash :: proc(in_trash: string, allocator := context.allocator) -> (original: 
 	return strings.clone(to, allocator), .None
 }
 
-// The bytes a %XX stands for, back.
-@(private = "file")
-url_decode :: proc(s: string) -> string {
-	b := strings.builder_make(context.temp_allocator)
-	for i := 0; i < len(s); i += 1 {
-		if s[i] == '%' && i + 2 < len(s) {
-			hi, lo := hex_value(s[i + 1]), hex_value(s[i + 2])
-			if hi >= 0 && lo >= 0 {
-				strings.write_byte(&b, u8(hi * 16 + lo))
-				i += 2
-				continue
-			}
-		}
-		strings.write_byte(&b, s[i])
-	}
-	return strings.to_string(b)
-}
-
-@(private = "file")
-hex_value :: proc(c: u8) -> int {
-	switch c {
-	case '0' ..= '9': return int(c - '0')
-	case 'a' ..= 'f': return int(c - 'a') + 10
-	case 'A' ..= 'F': return int(c - 'A') + 10
-	}
-	return -1
-}
-
 @(private = "file")
 cpath_t :: proc(path: string) -> cstring { return strings.clone_to_cstring(path, context.temp_allocator) }
 
-@(private = "file")
 home_trash :: proc(allocator := context.allocator) -> string {
 	data := os.get_env("XDG_DATA_HOME", context.temp_allocator)
 	if data == "" { data = join(home(context.temp_allocator), ".local/share", context.temp_allocator) }

@@ -137,7 +137,9 @@ App :: struct {
 	tab_coming:   bool,             // a tab of another window is dragged over this one (tab_drop) ...
 	tab_coming_at: [2]f32,          // ... the pointer there
 	tab_coming_path: string,        // owned: ... its folder, "" until the system gives it (Linux: at the drop)
-	session_writer: Session_Writer,  // the session's writes on a worker, one at a time (session_save)
+	session_writer: Session_Writer,
+	mounting:     [dynamic]string,  // owned: the shares being mounted on a worker (locations.odin)
+	shares:       []fs.Share,       // the shares of the network mounted now (the sidebar's Network section)  // the session's writes on a worker, one at a time (session_save)
 	session_written: string,        // owned: the session (but the window's place) as last written (session_autosave)
 	tab_image:    platform.Drag_Image,   // owned: the dragged tab's picture, read back from the renderer (tab_drag_poll)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
@@ -280,7 +282,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	pool_start(&app.measure_pool, MEASURE_THREADS)
 	pool_start(&app.thumb_pool, THUMB_THREADS)
 	app.palette.recording = -1   // (no command's keys recorded: the recorder is shut)
-	app.side_open = {.Recents = false, .Bookmarks = true, .Storage = true, .Places = true}
+	app.side_open = {.Recents = false, .Bookmarks = true, .Storage = true, .Network = true, .Places = true}
 	jobs_start(app)
 	watcher_start(app)
 	places_load(app)
@@ -385,6 +387,8 @@ app_free :: proc(app: ^App) {
 	delete(app.tab_coming_path)
 	delete(app.session_written)
 	session_writer_free(&app.session_writer)
+	for u in app.mounting { delete(u) }
+	delete(app.mounting)
 	ui.field_destroy(&app.side_filter)
 	delete(app.volume_space)
 	delete(app.panel_rects)

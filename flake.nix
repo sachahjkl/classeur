@@ -112,8 +112,8 @@
           desktopName = "Classeur";
           genericName = "File Manager";
           comment = "A fast file manager: tabs, panels, search, preview, keyboard first.";
-          # (folders, as paths: a file manager's entry for inode/directory)
-          exec = "classeur %F";
+          # (folders as paths, and the places that are not paths as URIs: trash:///, smb://..., which classeur reads)
+          exec = "classeur %U";
           icon = "classeur";
           mimeTypes = ["inode/directory"];
           categories = ["System" "FileTools" "FileManager"];

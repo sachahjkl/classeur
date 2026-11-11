@@ -115,12 +115,20 @@ tab_destroy :: proc(t: ^Tab) {
 
 tab_title :: proc(app: ^App, t: ^Tab) -> string {
 	if t.path == app.home { return "Home" }
+	if s := share_title(t.path); s != "" { return s }
 	b := fs.base(t.path)
 	return b != "" ? b : t.path
 }
 
-// Goes to `path` (made clean). The place left goes to the history unless `history` is false.
+// Goes to `path` (made clean): a path, or a place that stands for one (a file's URI, trash:///, smb://...: locations.odin;
+// a share not mounted yet: the tab goes there once it is). The place left goes to the history unless `history` is false.
 tab_go :: proc(app: ^App, t: ^Tab, path: string, history := true) {
+	path := path
+	if fs.is_uri(path) {
+		p, ok := location_path(app, path, t.id)
+		if !ok { return }
+		path = p
+	}
 	clean := fs.clean(path)
 	if clean == t.path {
 		delete(clean)
@@ -374,7 +382,9 @@ current_panel :: proc(app: ^App) -> ^Panel {
 }
 
 tab_open :: proc(app: ^App, p: ^Panel, path: string, at := -1) {
-	t := tab_new(app, path)
+	// (a place that stands for a path: the tab opens on the home folder and goes there, once mounted for a share)
+	t := tab_new(app, fs.is_uri(path) ? app.home : path)
+	if fs.is_uri(path) { tab_go(app, t, path, history = false) }
 	i := at < 0 ? len(p.tabs) : min(at, len(p.tabs))
 	inject_at(&p.tabs, i, t)
 	p.active = i

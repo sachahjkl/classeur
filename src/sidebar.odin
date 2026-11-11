@@ -12,12 +12,12 @@ import lucide "gt:lucide"
 import "gt:ui"
 import "fs"
 
-Side_Section :: enum u8 { Recents, Bookmarks, Storage, Places }
+Side_Section :: enum u8 { Recents, Bookmarks, Storage, Network, Places }
 
 @(private = "file", rodata)
-SECTION_TITLES := [Side_Section]string{.Recents = "Recents", .Bookmarks = "Bookmarks", .Storage = "Storage", .Places = "Places"}
+SECTION_TITLES := [Side_Section]string{.Recents = "Recents", .Bookmarks = "Bookmarks", .Storage = "Storage", .Network = "Network", .Places = "Places"}
 @(private = "file", rodata)
-SECTION_ICONS := [Side_Section]string{.Recents = lucide.HISTORY, .Bookmarks = lucide.BOOKMARK, .Storage = lucide.HARD_DRIVE, .Places = lucide.FOLDER}
+SECTION_ICONS := [Side_Section]string{.Recents = lucide.HISTORY, .Bookmarks = lucide.BOOKMARK, .Storage = lucide.HARD_DRIVE, .Network = lucide.NETWORK, .Places = lucide.FOLDER}
 
 
 // How full a volume is: its bar under its name.
@@ -66,6 +66,16 @@ sidebar_build :: proc(app: ^App, em: f32) {
 							if !keeps(query, v.label) { continue }
 							sp := i < len(app.volume_space) ? app.volume_space[i] : fs.Space{}
 							if side_volume(app, i, v, sp, v.path == here, em) && t != nil { tab_go(app, t, v.path) }
+						}
+					}
+				case .Network:
+				// (the shares of the network mounted now: gvfs's and the kernel's on Linux, the network's drives on Windows;
+				// none: no section)
+				if len(app.shares) > 0 && section(app, .Network, em) {
+						for sh, i in app.shares {
+							if !keeps(query, sh.label) { continue }
+							sig := side_row(app, fmt.tprintf("###share%d", i), sh.path, sh.label, sh.path == here, em)
+							go_from(app, t, sig, sh.path)
 						}
 					}
 				case .Places:
@@ -143,7 +153,7 @@ section :: proc(app: ^App, s: Side_Section, em: f32) -> bool {
 	return app.side_open[s]
 }
 
-// The order of the sections as the preference says it ("recents,bookmarks,storage,places"); a name it does not know,
+// The order of the sections as the preference says it ("recents,bookmarks,storage,network,places"); a name it does not know,
 // or one missing, keeps the default's place.
 side_order_read :: proc(app: ^App, text: string) {
 	order: [dynamic]Side_Section
@@ -334,5 +344,15 @@ side_step :: proc(app: ^App, by: int) {
 	// (no section touched yet: none to move)
 	if !app.side_touched { say(app, "Click a section's heading first: its keys move that one."); return }
 	s := app.side_menu_of
-	for x, i in app.side_order { if x == s { side_move(app, s, i + by); return } }
+	for x, i in app.side_order {
+		if x != s { continue }
+		// (past the sections not shown, Network with no share: the move is one the person sees)
+		to := i + by
+		for to >= 0 && to < len(app.side_order) && !side_shown(app, app.side_order[to]) { to += by }
+		side_move(app, s, to)
+		return
+	}
 }
+
+// Whether a section shows in the sidebar (Network: when a share is mounted).
+side_shown :: proc(app: ^App, s: Side_Section) -> bool { return s != .Network || len(app.shares) > 0 }
