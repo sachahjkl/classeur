@@ -2200,3 +2200,36 @@ mouse_matrix :: proc(t: ^testing.T, zoom: int) {
 @(test) test_mouse_list    :: proc(t: ^testing.T) { mouse_matrix(t, 1) }
 @(test) test_mouse_columns :: proc(t: ^testing.T) { mouse_matrix(t, 2) }
 @(test) test_mouse_grid    :: proc(t: ^testing.T) { mouse_matrix(t, ZOOM_GRID) }
+
+// A column's title clicked three times: its first way, the other way, then the names' order again.
+@(test)
+test_sort_three_clicks :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 600})
+	tab := current_tab(app)
+	tab.zoom = 0
+	wait_read(s)
+	session.frames(s, 2)
+	before := slice.clone(shown_names(tab), context.temp_allocator)
+	head := session.get(s, "col_Size")
+	testing.expect(t, head != nil, "the Size column")
+	if head == nil { return }
+	at := (head.rect.min + head.rect.max) * 0.5
+	want := [3]fs.Sort{{key = .Size, descending = true}, {key = .Size, descending = false}, {key = .Name, descending = false}}
+	for w, i in want {
+		session.click_at(s, at)
+		session.frames(s, 2)
+		testing.expectf(t, tab.folder.sort.key == w.key && tab.folder.sort.descending == w.descending, "click %d: %v", i + 1, tab.folder.sort)
+	}
+	testing.expect(t, slice.equal(shown_names(tab), before), "the order there was")
+	testing.expect_value(t, app.default_sort.key, fs.Sort_Key.Name)
+	// the name's: down, then up again
+	name := session.get(s, "col_Name")
+	session.click_at(s, (name.rect.min + name.rect.max) * 0.5)
+	session.frames(s, 2)
+	testing.expect(t, tab.folder.sort.key == .Name && tab.folder.sort.descending, "the names down")
+	session.click_at(s, (name.rect.min + name.rect.max) * 0.5)
+	session.frames(s, 2)
+	testing.expect(t, tab.folder.sort.key == .Name && !tab.folder.sort.descending, "the names up")
+}

@@ -171,16 +171,24 @@ folder_resort :: proc(f: ^Folder) {
 }
 
 // Sorts by `key`; the same key again turns the order around. Dates and sizes start with the largest.
+// A column's sort, a click after another: its first way (dates and sizes the largest first), the other way, then the
+// order there was before any (the names going up); the name's has two, the second being that order.
 folder_sort_by :: proc(f: ^Folder, key: fs.Sort_Key) {
 	s := f.sort
-	if s.key == key {
+	first_down := sort_first_down(key)
+	switch {
+	case s.key != key:
+		s.key, s.descending = key, first_down
+	case key != .Name && s.descending != first_down:
+		s.key, s.descending = .Name, false
+	case:
 		s.descending = !s.descending
-	} else {
-		s.key = key
-		s.descending = key == .Modified || key == .Size
 	}
 	folder_set_sort(f, s)
 }
+
+// Whether a column sorts the largest first at its first click (dates, sizes).
+sort_first_down :: proc(key: fs.Sort_Key) -> bool { return key == .Modified || key == .Size }
 
 folder_set_filter :: proc(f: ^Folder, text: string) {
 	lower := strings.to_lower(text, context.temp_allocator)

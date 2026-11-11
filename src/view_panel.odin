@@ -438,7 +438,10 @@ column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: 
 		folder_sort_by(&t.folder, key)
 		app.default_sort = t.folder.sort
 	}
-	hover_tip(sig, on ? (s.descending ? "Sorted down: a click sorts up" : "Sorted up: a click sorts down") : fmt.tprintf("Sort by %s", title))
+	// (the click after the second goes back to the names' order: folder_sort_by)
+	back := on && key != .Name && s.descending != sort_first_down(key)
+	tip := !on ? fmt.tprintf("Sort by %s", title) : back ? (s.descending ? "Sorted down: a click goes back to the order by name" : "Sorted up: a click goes back to the order by name") : (s.descending ? "Sorted down: a click sorts up" : "Sorted up: a click sorts down")
+	hover_tip(sig, tip)
 }
 
 // The column's filter (File Pilot's and Explorer's): its funnel, over the column or lit while it filters.
