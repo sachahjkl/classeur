@@ -74,7 +74,7 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 - The session (`src/session.odin`), one window per person (`gt:instance` `serve_start`), the types' popup, menus
   searched by typing (gui_toolkit's `ctx_menu_open(search)`), Open with, a terminal here (gui_toolkit's
   `desktop.open_terminal`), the system's icons (gui_toolkit's `desktop.file_icon`).
-- The site (`site/`, `classeurtool site`, published by `.github/workflows/pages.yml` at classeur.sacha.house).
+- The site (`site/`, `classeurtool site`, published by `.github/workflows/pages.yml` at classeur.froment.software).
 - The settings on gui_toolkit's `prefs_page` (the rounding of the whole interface, the density, the animations, live
   sliders), updates by the toolkit's `update.Updater` (signed manifests in each release), the columns' filters, the
   icons as boxes, the sidebar's sections moved, tabs dragged with their feedback and torn off at the window's edge, the

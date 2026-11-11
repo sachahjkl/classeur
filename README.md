@@ -23,7 +23,7 @@ Windows too, but Linux is the reason.
 classeur is not affiliated with File Pilot or its authors. If you are on Windows and want the original, use
 [File Pilot](https://filepilot.tech).
 
-Its site: [classeur.sacha.house](https://classeur.sacha.house/).
+Its site: [classeur.froment.software](https://classeur.froment.software/).
 
 ## Features
 

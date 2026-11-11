@@ -135,7 +135,7 @@
 
       meta = {
         description = "A fast file manager for Linux and Windows";
-        homepage = "https://classeur.sacha.house/";
+        homepage = "https://classeur.froment.software/";
         license = lib.licenses.mit;
         platforms = [system];
         mainProgram = "classeur";
