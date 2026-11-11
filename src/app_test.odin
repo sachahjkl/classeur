@@ -2308,7 +2308,22 @@ mouse_matrix :: proc(t: ^testing.T, zoom: int) {
 	testing.expectf(t, tab.folder.count == n - 2, "%v: Ctrl and a drag deselect: %d of %d", mode, tab.folder.count, n)
 	testing.expectf(t, !app.file_drag && len(app.drag_paths) == 0, "%v: no file dragged by Ctrl", mode)
 
-	// 4. notes.txt dragged onto Photos: moved there
+	// 4. a click of the wheel on a folder: its tab (the toolkit's autoscroll leaves the rows' middle button alone)
+	{
+		tabs := len(current_panel(app).tabs)
+		rp, _ := rect_of(s, tab, lb, index_of(tab, "Photos"))
+		session.click_at(s, middle(rp), .Middle)
+		session.frames(s, 3)
+		testing.expectf(t, len(current_panel(app).tabs) == tabs + 1, "%v: a click of the wheel opens a tab", mode)
+		current_panel(app).active = 0
+		tab = current_tab(app)
+		session.frames(s, 2)
+		lb = band_box(tab)
+		testing.expectf(t, lb != nil, "%v: the first tab's list again", mode)
+		if lb == nil { return }
+	}
+
+	// 5. notes.txt dragged onto Photos: moved there
 	folder_select_none(&tab.folder)
 	session.frames(s, 2)
 	rn, okn := rect_of(s, tab, lb, index_of(tab, "notes.txt"))

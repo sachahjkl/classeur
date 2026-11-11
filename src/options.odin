@@ -48,9 +48,10 @@ options_build :: proc(app: ^App) {
 	}
 	o.shown = true
 	em := ui.font_size()
-	// (Escape closes it, unless a field of the page has the keyboard: that Escape is the field's)
-	if !prefs_page.editing(&o.page) && ui.key_press(.Escape) { o.open = false; return }
 	if ui.modal_sized("options", OPTIONS_PREFERRED_EM * em, &o.size, &o.open, OPTIONS_MIN_EM * em) {
+		// (Escape closes it, unless a field of the page has the keyboard: that Escape is the field's; read in its scope,
+		// where an open dialog's keys are)
+		if !prefs_page.editing(&o.page) && ui.key_press(.Escape) { o.open = false }
 		ui.next({width = ui.fill(), height = ui.fill()})
 		prefs_page.build(&o.page, &app.prefs, {
 			user = app,

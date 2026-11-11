@@ -127,6 +127,7 @@ run_test :: proc(args: []string) -> int {
 }
 
 run_check :: proc(args: []string) -> int {
+	if !changelog_check() { return 1 }
 	if !check_scopes() { return 1 }
 	if !check_systems() { return 1 }
 	if !build_launcher() { return 1 }   // (classeur embeds it: odin check reads it)

@@ -208,27 +208,28 @@ goto_build :: proc(app: ^App) {
 	text := ui.field_string(&g.field)
 	rows := goto_rows(app, text)
 	n := len(rows)
-	if n > 0 {
-		if ui.key_press(.Down) { g.sel = (g.sel + 1) % n; g.moved = true }
-		if ui.key_press(.Up) { g.sel = (g.sel + n - 1) % n; g.moved = true }
-		if ui.key_press(.Page_Down) { g.sel = min(g.sel + GOTO_ROWS, n - 1) }
-		if ui.key_press(.Page_Up) { g.sel = max(g.sel - GOTO_ROWS, 0) }
-		g.sel = clamp(g.sel, 0, n - 1)
-		if g.sel < g.scroll { g.scroll = g.sel }
-		if g.sel >= g.scroll + GOTO_ROWS { g.scroll = g.sel - GOTO_ROWS + 1 }
-		g.scroll = clamp(g.scroll, 0, max(n - GOTO_ROWS, 0))
-		// Tab: the path completed to the row chosen, ready for the next folder
-		if ui.key_press(.Tab) {
-			ui.field_set(&g.field, fmt.tprintf("%s%s", home_path(app, rows[g.sel].path), fs.SEPARATOR_STRING))
-			g.sel, g.scroll = 0, 0
-		}
-	}
 	mouse := ui.mouse_pos()
 	moved := abs(mouse.x - g.mouse.x) + abs(mouse.y - g.mouse.y) > 0.5
 	g.mouse = mouse
 	go_to := ""
 
 	if ui.modal("goto", pw, &g.open, 0.12) {
+		// (its keys read in its scope: an open dialog holds them, code built outside it gets none)
+		if n > 0 {
+			if ui.key_press(.Down) { g.sel = (g.sel + 1) % n; g.moved = true }
+			if ui.key_press(.Up) { g.sel = (g.sel + n - 1) % n; g.moved = true }
+			if ui.key_press(.Page_Down) { g.sel = min(g.sel + GOTO_ROWS, n - 1) }
+			if ui.key_press(.Page_Up) { g.sel = max(g.sel - GOTO_ROWS, 0) }
+			g.sel = clamp(g.sel, 0, n - 1)
+			if g.sel < g.scroll { g.scroll = g.sel }
+			if g.sel >= g.scroll + GOTO_ROWS { g.scroll = g.sel - GOTO_ROWS + 1 }
+			g.scroll = clamp(g.scroll, 0, max(n - GOTO_ROWS, 0))
+			// Tab: the path completed to the row chosen, ready for the next folder
+			if ui.key_press(.Tab) {
+				ui.field_set(&g.field, fmt.tprintf("%s%s", home_path(app, rows[g.sel].path), fs.SEPARATOR_STRING))
+				g.sel, g.scroll = 0, 0
+			}
+		}
 		if ui.style({width = ui.px(pw)}) {
 			ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 3.2))})
 			if ui.row(.Center, id = "###goto_head") {

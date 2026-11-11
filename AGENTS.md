@@ -28,6 +28,8 @@ Every step is a command of `tools/classeurtool` (`help` lists them):
   `open_system` starts nothing when the program is headless.
 - What more than one program needs goes in gui_toolkit, generic, with its docs, test and changelog fragment; classeur then
   points to the toolkit's new commit.
+- A change a person sees adds one fragment to `changelog.d/` (`classeurtool changelog new ...`), in the same commit;
+  `CHANGELOG.md` is never edited by hand: `ship` assembles the fragments.
 - Automation is a command of `tools/classeurtool`, never a shell, batch, PowerShell, Python or Node script.
 - Comments and commit messages are in English. Comments say why.
 - Commits: author and committer `sachahjkl <sacha@sacha.house>`, no attribution trailer, no session link.

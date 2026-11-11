@@ -624,6 +624,8 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 		ui.next({height = ui.px(folded ? head : ui.dense(em * ROW_EM) + head), radius = 0, bg = ui.Color{}})
 		if selected && focused { ui.push_tags("selected") }
 		sig := ui.list_row(&t.vl, row, e.name)
+		// (the wheel's click on a row is the row's: a folder opens in a tab; elsewhere it scrolls, the toolkit's autoscroll)
+		if sig.box != nil { sig.box.flags += {.Middle_Click} }
 		if selected && focused { ui.pop_tags() }
 		if !folded { row_paint(sig.box, look, selected, row == f.cursor && (!selected || f.count > 1), row & 1 == 1, head) }
 		check := false

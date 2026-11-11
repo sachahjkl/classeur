@@ -129,20 +129,6 @@ palette_build :: proc(app: ^App) {
 		}
 	}
 	n := len(rows)
-	// recording a command's keys: what is pressed is taken (Enter keeps it, Escape forgets it, Backspace first: its
-	// own keys again)
-	if p.recording >= 0 {
-		palette_record(app)
-	} else if n > 0 {
-		if ui.key_press(.Down) { p.sel = (p.sel + 1) % n }
-		if ui.key_press(.Up) { p.sel = (p.sel + n - 1) % n }
-		// (a page: the rows the list showed at the last build, as large as the person made the palette)
-		page := max(int(p.view_h / ui.dense(em * 2.3)), 1)
-		if ui.key_press(.Page_Down) { p.sel = min(p.sel + page, n - 1) }
-		if ui.key_press(.Page_Up) { p.sel = max(p.sel - page, 0) }
-		if ui.key_press(.Down) || ui.key_press(.Up) || ui.key_press(.Page_Down) || ui.key_press(.Page_Up) { p.reveal = true }
-		p.sel = clamp(p.sel, 0, n - 1)
-	}
 	mouse := ui.mouse_pos()
 	moved := abs(mouse.x - p.mouse.x) + abs(mouse.y - p.mouse.y) > 0.5
 	p.mouse = mouse
@@ -152,6 +138,21 @@ palette_build :: proc(app: ^App) {
 	head_h := ui.dense(em * 1.7)
 	// (resizable by its edges and corner, its size kept; its top held where a palette is)
 	if ui.modal_sized("palette", PALETTE_PREFERRED_EM * em, &p.size, &p.open, PALETTE_MIN_EM * em, top = PALETTE_TOP) {
+		// (its keys read in its scope: an open dialog holds them, code built outside it gets none)
+		// recording a command's keys: what is pressed is taken (Enter keeps it, Escape forgets it, Backspace first: its
+		// own keys again)
+		if p.recording >= 0 {
+			palette_record(app)
+		} else if n > 0 {
+			if ui.key_press(.Down) { p.sel = (p.sel + 1) % n }
+			if ui.key_press(.Up) { p.sel = (p.sel + n - 1) % n }
+			// (a page: the rows the list showed at the last build, as large as the person made the palette)
+			page := max(int(p.view_h / ui.dense(em * 2.3)), 1)
+			if ui.key_press(.Page_Down) { p.sel = min(p.sel + page, n - 1) }
+			if ui.key_press(.Page_Up) { p.sel = max(p.sel - page, 0) }
+			if ui.key_press(.Down) || ui.key_press(.Up) || ui.key_press(.Page_Down) || ui.key_press(.Page_Up) { p.reveal = true }
+			p.sel = clamp(p.sel, 0, n - 1)
+		}
 		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 3.2))})
 		if ui.row(.Center, id = "###pal_head") {
 			ui.spacer(ui.px(em * 0.8))
