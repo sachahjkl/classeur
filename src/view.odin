@@ -62,6 +62,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 		if ui.row() { build_body(app, em) }
 	}
 	tab_drag_overlay(app, em)
+	file_drag_frame(app, em)
 	entry_menu_build(app, em)
 	side_menu_build(app, em)
 	panel_menus_build(app, em)

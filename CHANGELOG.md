@@ -5,6 +5,14 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Files dragged in the window are classeur's own drag (File Pilot's): the folder under the pointer (a row, a tab, a place
+  or a bookmark of the sidebar) is lit, a ghost beside the pointer says what a release does, and the release makes the
+  job. The system's drag, which takes the files at the window's edge (to another program, the desktop), blocked the
+  window: nothing was lit, and on some compositors the drop never came.
+- A tab dragged from another classeur window shows its ghost where it lands in this one's row, and lands there.
+- 0.14.1 was not published (its Windows build failed a test that assumed the tabs' widths).
+
 ## [0.14.1] - 2026-11-11
 
 ### Added

@@ -842,14 +842,31 @@ test_drag_and_drop :: proc(t: ^testing.T) {
 	for z in app.drop_zones_last { if strings.has_suffix(z.path, fs.SEPARATOR_STRING + "Photos") { to = (z.rect.min + z.rect.max) * 0.5 } }
 	from = (tab.cursor_rect.min + tab.cursor_rect.max) * 0.5
 	from.x = tab.cursor_rect.min.x + 120
-	platform.drag_script(app.main.win, {{to, {}}, {to, {}}})
+	// (in the window: classeur's own, Photos lit and the ghost beside the pointer while it is held)
 	session.press(s, from)
-	session.move(s, from + {0, 30})
-	session.move(s, from + {0, 60})
-	session.release(s, from + {0, 60})
+	session.move(s, from + {0, 12})
+	session.move(s, to)
+	session.frames(s, 2)
+	testing.expect(t, strings.has_suffix(app.drop_hover, fs.SEPARATOR_STRING + "Photos"), "Photos lit")
+	testing.expect(t, session.find(s, "file_ghost") != nil, "the ghost")
+	when SHOTS { session.save_png(s, "file_drag.png") }
+	session.release(s, to)
 	session.frames(s, 2)
 	wait_jobs(s)
 	testing.expect(t, fs.exists(fs.join(dir, "Photos/archive.zip", context.temp_allocator)), "dragged into Photos")
+	testing.expect(t, !app.file_drag && len(app.drag_paths) == 0, "the drag over")
+	// to the window's edge: the system's drag takes it (scripted: back over Photos, let go there)
+	point_at(t, tab, "notes.txt")
+	session.frames(s, 2)
+	from = {tab.cursor_rect.min.x + 120, (tab.cursor_rect.min.y + tab.cursor_rect.max.y) * 0.5}
+	platform.drag_script(app.main.win, {{to, {}}, {to, {}}})
+	session.press(s, from)
+	session.move(s, from + {0, 12})
+	session.move(s, {2, from.y})
+	session.release(s, {2, from.y})
+	session.frames(s, 2)
+	wait_jobs(s)
+	testing.expect(t, fs.exists(fs.join(dir, "Photos/notes.txt", context.temp_allocator)), "out and back by the system's drag")
 
 	// files of this folder dropped on its own list: nothing
 	here := fs.join(dir, "notes.txt", context.temp_allocator)
@@ -1141,12 +1158,20 @@ test_tab_out :: proc(t: ^testing.T) {
 	append(&data.custom, platform.Drag_Entry{TAB_MIME, tab_mime_data(1, 7, photos)})   // (another process's tab)
 	defer delete(data.custom)
 	at := (app.tab_rects_last[0].rect.min + app.tab_rects_last[0].rect.max) * 0.5
+	// (past the first tab's middle: after it; its ghost there while it is over the row)
+	at.x = app.tab_rects_last[0].rect.max.x - 4
 	platform.drop_inject(app.main.win, .Drop_Enter, at, &data, {.Move})
+	platform.drop_inject(app.main.win, .Drop_Over, at, nil, {.Move})
+	session.frames(s, 3)
+	testing.expect(t, session.find(s, "tab_land") != nil, "its ghost in the row")
+	when SHOTS { session.save_png(s, "tab_coming.png") }
 	platform.drop_inject(app.main.win, .Drop, at, nil, {.Move})
 	session.frames(s, 2)
 	wait_read(s)
 	testing.expect_value(t, len(p.tabs), 2)
+	testing.expect_value(t, p.tabs[1].path, photos)
 	testing.expect_value(t, current_tab(app).path, photos)
+	testing.expect(t, !app.tab_coming && session.find(s, "tab_land") == nil, "the ghost gone")
 	delete(documents)
 }
 
@@ -1700,7 +1725,9 @@ test_tab_drag_feedback :: proc(t: ^testing.T) {
 	from := (first.min + first.max) * 0.5
 	session.press(s, from)
 	session.move(s, from + {12, 0})
-	session.move(s, from + {(first.max.x - first.min.x) * 1.4, 0})
+	// (past the second tab's middle, whatever the tabs' widths: after it)
+	last := app.tab_rects_last[1].rect
+	session.move(s, {last.max.x - 3, from.y})
 	session.frames(s, 2)
 	testing.expect(t, session.find(s, "tab_land") != nil, "its ghost where it lands in the row")
 	testing.expect(t, session.find(s, "tab_ghost") == nil, "nothing else over it")

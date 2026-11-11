@@ -119,6 +119,8 @@ App :: struct {
 	drag_paths:  [dynamic]string,   // owned: what the next drag_start carries
 	dragging:    []string,          // the files of the drag that runs now (drag_paths'), nil between drags
 	drag_started: bool,             // the press that is held has started its drag
+	file_drag:   bool,              // drag_paths are dragged in the window (file_drag_frame) ...
+	drag_out:    bool,              // ... or left it: the system's drag takes them after this frame (drag_run)
 	setup:       setup.Dialog,      // the Setup (integration.odin)
 	logo:        render.Texture,    // its logo, made at its first show
 	logo_made:   bool,
@@ -134,6 +136,9 @@ App :: struct {
 	                                // its place, Linux reads the running one as "<path> (deleted)")
 	tab_out:     u64,               // a tab dragged out of the window: the drag of the system starts after this frame
 	tab_out_home: bool,             // that drag came back and was dropped in this window
+	tab_coming:   bool,             // a tab of another window is dragged over this one (tab_drop) ...
+	tab_coming_at: [2]f32,          // ... the pointer there
+	tab_coming_path: string,        // owned: ... its folder, "" until the system gives it (Linux: at the drop)
 	tab_image:    platform.Drag_Image,   // owned: the dragged tab's picture, read back from the renderer (tab_drag_poll)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
 }
@@ -356,6 +361,7 @@ app_free :: proc(app: ^App) {
 	dnd_free(app)
 	delete(app.vol_from)
 	delete(app.vol_to)
+	delete(app.tab_coming_path)
 	ui.field_destroy(&app.side_filter)
 	delete(app.volume_space)
 	delete(app.panel_rects)

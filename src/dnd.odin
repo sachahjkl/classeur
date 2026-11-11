@@ -8,11 +8,16 @@ package classeur
 //   - What it does: Ctrl copies, Shift moves, Alt makes no link (refused); with no key, a move on the same volume and a
 //     copy across volumes (as the systems' file managers do). Into the folder the files are in, or a folder into
 //     itself: refused.
-//   - A drag of classeur's own blocks in drag_start: the window answers at once (drop_sync_set) and the drop is a job
-//     before drag_start returns. A drag of another program's comes as events (app_input).
+//   - A drag of classeur's own rows stays in the window while the pointer does (file_drag_frame, File Pilot's): the
+//     folder under the pointer lit, a ghost of the files beside it, the drop a job at the release. At the window's edge
+//     the system's drag takes it (drag_run), to another program, the desktop or another window; it blocks in
+//     drag_start: the window answers at once (drop_sync_set) and a drop back on it is a job before drag_start returns.
+//     A drag of another program's comes as events (app_input).
 
+import "core:fmt"
 import "core:slice"
 import "core:strings"
+import "gt:draw"
 import "gt:platform"
 import "gt:ui"
 import "fs"
@@ -74,6 +79,7 @@ same_volume_cached :: proc(app: ^App, file, dir: string) -> bool {
 drop_answer :: proc(app: ^App, kind: platform.Event_Kind, pos: [2]f32, mods: platform.Modifiers, allowed: platform.Drop_Effects) -> Maybe(platform.Drop_Effect) {
 	data := platform.drop_data(app.main.win)
 	if kind == .Drop_Leave || data == nil {
+		tab_coming_end(app)
 		delete(app.drop_hover)
 		app.drop_hover = ""
 		return nil
@@ -122,10 +128,81 @@ drag_maybe :: proc(app: ^App, t: ^Tab, sig: ui.Signal) {
 	for p in app.drag_paths { delete(p) }
 	clear(&app.drag_paths)
 	for e in folder_targets(&t.folder) { append(&app.drag_paths, fs.join(t.path, e.name)) }
+	app.file_drag = len(app.drag_paths) > 0
+	app_frames(app)
+}
+
+// Each build while the files are dragged in the window: the folder under the pointer lit, the ghost; the release
+// makes the job, Escape gives it up, the window's edge hands it to the system's drag.
+file_drag_frame :: proc(app: ^App, em: f32) {
+	if !app.file_drag { return }
+	m := ui.mouse_pos()
+	dir := drop_target(app, m)
+	effect := drop_effect(app, app.drag_paths[:], dir, {.Copy, .Move}, ui.current_state().mods)
+	delete(app.drop_hover)
+	app.drop_hover = effect != nil ? strings.clone(dir) : ""
+	if ui.key_press(.Escape) {
+		file_drag_end(app)
+		return
+	}
+	// (let go: the press's box has no longer the pointer's)
+	if ui.active_key() == 0 {
+		if e, ok := effect.?; ok { job_add(app, e == .Move ? .Move : .Copy, app.drag_paths[:], dir) }
+		file_drag_end(app)
+		return
+	}
+	// at the window's left, right or bottom edge, or above it: the system's drag, started while the pointer is still
+	// in the window (as a tab's)
+	size := app.window_px
+	edge := em * TAB_OUT_EDGE_EM
+	if m.x < edge || m.x >= size.x - edge || m.y >= size.y - edge || m.y < 0 {
+		app.file_drag, app.drag_out = false, true
+		delete(app.drop_hover)
+		app.drop_hover = ""
+		return
+	}
+	app_frames(app)
+	file_ghost(app, m, effect, dir, em)
+}
+
+// The files dragged, beside the pointer: the first one's icon, its name or how many they are, what a release does.
+@(private = "file")
+file_ghost :: proc(app: ^App, m: [2]f32, effect: Maybe(platform.Drop_Effect), dir: string, em: f32) {
+	first := app.drag_paths[0]
+	name := len(app.drag_paths) == 1 ? fs.base(first) : fmt.tprintf("%d items", len(app.drag_paths))
+	what := ""
+	if e, ok := effect.?; ok { what = fmt.tprintf("%s to %s", e == .Move ? "Move" : "Copy", fs.base(dir)) }
+	info, _ := fs.stat(first)
+	ui.next({width = ui.children_sum(), height = ui.px(em * 2.2), axis = .X, cross = .Center,
+		bg = draw.hex(surfaces(app).raised), border = draw.hex(surfaces(app).edge), radius = em * 0.3 * corner_k()})
+	b := ui.build_box({.Floating_X, .Floating_Y, .Draw_Background, .Draw_Border}, "###file_ghost")
+	b.fixed_pos = m + {em, em * 1.1}
+	if ui.parent(b) {
+		ui.spacer(ui.px(em * 0.5))
+		path_icon(app, first, info.kind == .Directory, em * 1.6)
+		ui.next({width = ui.text_size(em * 0.4), height = ui.pct(1)})
+		ui.label(fmt.tprintf("%s###name", name))
+		if what != "" {
+			ui.next({width = ui.text_size(em * 0.2), height = ui.pct(1)})
+			if ui.tags("weak") { ui.label(fmt.tprintf("%s###what", what)) }
+		}
+		ui.spacer(ui.px(em * 0.4))
+	}
+}
+
+file_drag_end :: proc(app: ^App) {
+	app.file_drag = false
+	for p in app.drag_paths { delete(p) }
+	clear(&app.drag_paths)
+	delete(app.drop_hover)
+	app.drop_hover = ""
+	app_frames(app)
 }
 
 // Between frames: the drag asked by the last one runs (it blocks until the drop).
 drag_run :: proc(app: ^App) {
+	if !app.drag_out { return }
+	app.drag_out = false
 	if len(app.drag_paths) == 0 { return }
 	data: platform.Drag_Data
 	for p in app.drag_paths { append(&data.files, p) }

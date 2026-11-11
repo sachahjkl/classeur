@@ -15,6 +15,7 @@ import "gt:render"
 import setup "gt:setup"
 import "gt:platform"
 import "gt:ui"
+import "fs"
 
 Tab_Rect :: struct {
 	panel, index: int,
@@ -45,6 +46,11 @@ Split :: enum u8 { None, Right, Below }
 tab_drag_land :: proc(app: ^App) {
 	d := &app.tab_drag
 	d.land_at, d.land_split = -1, .None
+	// (a tab of another window over this one: its ghost where the drop puts it)
+	if !d.active && app.tab_coming {
+		if to, at, _, ok := tab_drop_place(app, app.tab_coming_at, own = false); ok { d.land_panel, d.land_at = to, at }
+		return
+	}
 	if !d.active || d.capture { return }
 	to, at, split, ok := tab_drop_place(app, ui.mouse_pos())
 	if !ok { return }
@@ -59,23 +65,30 @@ tab_drag_land :: proc(app: ^App) {
 // The place in panel `index`'s row where the dragged tab's ghost goes (-1: none).
 tab_ghost_slot :: proc(app: ^App, index: int) -> int {
 	d := &app.tab_drag
-	if !d.active || d.land_split != .None || d.land_panel != index { return -1 }
+	if !(d.active || app.tab_coming) || d.land_split != .None || d.land_panel != index { return -1 }
 	return d.land_at
 }
 
 // The dragged tab's ghost in a row: its icon and its title, faint, a line around it.
 tab_ghost :: proc(app: ^App, width, em: f32) {
-	t := find_tab(app, app.tab_drag.tab)
-	if t == nil { return }
+	// (this window's tab, or another window's: its folder when the system gave it already, else a tab with no name)
+	path, title := app.tab_coming_path, app.tab_coming_path != "" ? fs.base(app.tab_coming_path) : "Tab"
+	if app.tab_drag.active {
+		t := find_tab(app, app.tab_drag.tab)
+		if t == nil { return }
+		path, title = t.path, shown_text(tab_title(app, t))
+	}
 	ui.next({width = ui.px(width), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .X, cross = .Center,
 		bg = draw.hex(surfaces(app).list) * {1, 1, 1, 0.6}, border = ui.color("accent"), radius = em * TAB_RADIUS_EM, transparency = 0.25})
 	b := ui.build_box({.Draw_Background, .Draw_Border}, "###tab_land")
 	if ui.parent(b) {
 		ui.spacer(ui.px(em * 0.7))
-		path_icon(app, t.path, true, em * 1.6)
-		ui.spacer(ui.px(em * 0.4))
+		if path != "" {
+			path_icon(app, path, true, em * 1.6)
+			ui.spacer(ui.px(em * 0.4))
+		}
 		ui.next({width = ui.fill(), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###title", shown_text(tab_title(app, t))))
+		ui.label(fmt.tprintf("%s###title", title))
 	}
 }
 
@@ -97,7 +110,7 @@ tab_drag_apply :: proc(app: ^App) {
 
 // Where a tab let go at `pos` goes: a panel and the place in its row, or a new panel after `panel` (`split`).
 @(private = "file")
-tab_drop_place :: proc(app: ^App, pos: [2]f32) -> (panel, at: int, split: Split, ok: bool) {
+tab_drop_place :: proc(app: ^App, pos: [2]f32, own := true) -> (panel, at: int, split: Split, ok: bool) {
 	// a row of tabs: before the tab whose middle is right of the pointer
 	for tr in app.tab_rects_last {
 		r := tr.rect
@@ -115,6 +128,8 @@ tab_drop_place :: proc(app: ^App, pos: [2]f32) -> (panel, at: int, split: Split,
 		if i >= len(app.panels) { break }
 		if pos.x < pr.min.x || pos.x >= pr.max.x || pos.y < pr.min.y || pos.y >= pr.max.y { continue }
 		// (a panel's only tab beside itself: nothing to split)
+		// (a tab of another window: a new tab in the panel, at the end of its row)
+		if !own { return i, len(app.panels[i].tabs), .None, true }
 		alone := i == app.tab_drag.panel_now && len(app.panels[i].tabs) == 1
 		if pos.x > pr.max.x - (pr.max.x - pr.min.x) * 0.25 { return i, 0, .Right, !alone }
 		if pos.y > pr.max.y - (pr.max.y - pr.min.y) * 0.25 { return i, 0, .Below, !alone }
@@ -396,29 +411,32 @@ tab_drop :: proc(app: ^App, data: ^platform.Drag_Data, pos: [2]f32, kind: platfo
 		if p, i, at, ok := tab_mime_parse(e.data); ok { pid, id, path = p, i, at }
 	}
 	// (Linux reads the data at the drop only: before it, a tab is told by its type, and taken)
-	if kind != .Drop && path == "" && slice.contains(platform.drop_types(app.main.win), TAB_MIME) { return .Move, true }
+	if kind != .Drop && path == "" && slice.contains(platform.drop_types(app.main.win), TAB_MIME) {
+		tab_coming(app, pos, "")
+		return .Move, true
+	}
 	if path == "" { return nil, false }
-	if kind != .Drop { return .Move, true }
-	panel := app.focus
-	for pr, i in app.panel_rects {
-		if i < len(app.panels) && pos.x >= pr.min.x && pos.x < pr.max.x && pos.y >= pr.min.y && pos.y < pr.max.y { panel = i }
+	// (over the window: its ghost where it would land, its folder known on Windows)
+	if kind != .Drop {
+		tab_coming(app, pos, pid == os.get_pid() ? "" : path)
+		return .Move, true
 	}
-	for tr in app.tab_rects_last {
-		if pos.x >= tr.rect.min.x && pos.x < tr.rect.max.x && pos.y >= tr.rect.min.y && pos.y < tr.rect.max.y { panel = tr.panel }
-	}
+	tab_coming_end(app)
+	panel, at := app.focus, -1
+	if to, place, _, ok := tab_drop_place(app, pos, own = false); ok { panel, at = to, place }
 	panel = clamp(panel, 0, len(app.panels) - 1)
 	if pid == os.get_pid() {
 		// (our own tab back home: that very tab moved to that panel, or left where it was)
 		app.tab_out_home = true
 		for p, pi in app.panels {
 			for q, ti in p.tabs {
-				if q.id == id && pi != panel { tab_move(app, pi, ti, panel, len(app.panels[panel].tabs), .None); return .Move, true }
+				if q.id == id && pi != panel { tab_move(app, pi, ti, panel, at >= 0 ? at : len(app.panels[panel].tabs), .None); return .Move, true }
 			}
 		}
 		return .Move, true
 	}
 	p := app.panels[panel]
-	tab_open(app, p, path, p.active + 1)
+	tab_open(app, p, path, at >= 0 ? at : p.active + 1)
 	app.focus = panel
 	platform.raise_window(app.main.win)
 	return .Move, true
@@ -431,4 +449,22 @@ act_tab_window :: proc(app: ^App) {
 	if p == nil || t == nil || len(app.panels) == 1 && len(p.tabs) == 1 { return }
 	if !tab_window(app, strings.clone(t.path, context.temp_allocator)) { say(app, "No window could be started."); return }
 	tab_close(app, p, p.active)
+}
+
+// A tab of another window over this one, at `pos` (`path`: its folder when known): its ghost shows in the row there.
+tab_coming :: proc(app: ^App, pos: [2]f32, path: string) {
+	app.tab_coming, app.tab_coming_at = true, pos
+	if path != app.tab_coming_path {
+		delete(app.tab_coming_path)
+		app.tab_coming_path = strings.clone(path)
+	}
+	app_frames(app)
+}
+
+tab_coming_end :: proc(app: ^App) {
+	if !app.tab_coming { return }
+	app.tab_coming = false
+	delete(app.tab_coming_path)
+	app.tab_coming_path = ""
+	app_frames(app)
 }
