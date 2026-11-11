@@ -19,8 +19,14 @@ jobs:
   linux:
     name: Linux x64
     runs-on: ubuntu-24.04
+    container: debian:bookworm
     timeout-minutes: 15
     steps:
+      # Debian 12 (bookworm): its packages from deb.debian.org, not from the runner's Ubuntu mirrors (their DNS failed for hours),
+      # and its glibc 2.36: the oldest a Linux build then needs. First: checkout needs git for the submodules.
+      - name: Debian's packages
+        run: apt-get update -qq && apt-get install -y -qq --no-install-recommends git ca-certificates curl jq xz-utils zstd unzip clang lld libfontconfig-dev mesa-vulkan-drivers libvulkan1 libxkbcommon0 librsvg2-2 >/dev/null
+
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -31,8 +37,6 @@ jobs:
             ext/gui_toolkit/build/text
             ~/.cargo/registry
           key: text-linux-${{ hashFiles('ext/gui_toolkit/native/text/**') }}
-      - name: Mesa's software Vulkan (the tests render headless)
-        run: sudo apt-get install -y -qq mesa-vulkan-drivers libvulkan1 libxkbcommon0 librsvg2-2
       - name: classeurtool check
         run: |
           odin build tools/classeurtool -collection:gt=ext/gui_toolkit/src -out:build/classeurtool -vet
