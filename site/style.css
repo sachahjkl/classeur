@@ -124,6 +124,12 @@ main { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
 
 footer { border-top: 1px solid #000; padding: 24px 16px 40px; text-align: center; color: var(--faint); font-size: 0.85rem; }
 footer p { max-width: 760px; margin: 0 auto; }
+/* the maker on a line of its own; under it, short pieces that wrap between them, never inside one */
+footer .by { font-size: 0.95rem; margin-bottom: 6px; }
+footer .small span, footer .small a { white-space: nowrap; }
+.maker { white-space: nowrap; }
+.maker img { display: inline-block; width: 18px; height: 18px; vertical-align: -4px; margin: 0 6px 0 2px; }
+.maker a { color: var(--text); font-weight: 700; }
 
 /* the changelog: the last versions on the home page, all of them on their page */
 .news { margin-bottom: 72px; }
