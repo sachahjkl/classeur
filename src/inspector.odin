@@ -9,7 +9,6 @@ import config "gt:config"
 import "core:os"
 import "core:strings"
 import "core:unicode/utf8"
-import "gt:draw"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:render"
@@ -37,6 +36,7 @@ Inspector :: struct {
 	tex:      render.Texture,
 	has_tex:  bool,
 	size:     [2]int,
+	preview:  ui.Preview,      // the picture's zoom and pan (the wheel, a drag, a double click: the toolkit's preview)
 	listing:  fs.Listing,
 	props:    fs.Properties,   // owned strings: what the system says of it besides its size and date
 	has_props: bool,
@@ -74,6 +74,7 @@ inspector_clear :: proc(app: ^App) {
 	insp.spans, insp.language = nil, false
 	if insp.has_tex { render.destroy_texture(&app.shared.r, insp.tex) }
 	insp.has_tex = false
+	insp.preview = {}   // (another picture: fitted again)
 	fs.listing_destroy(&insp.listing)
 	props_free(&insp.props)
 	insp.ready, insp.kind, insp.has_props = false, .None, false
@@ -170,7 +171,10 @@ inspect_run :: proc(data: rawptr) {
 		for len(text) > 0 && !utf8.valid_string(text) { text = text[:len(text) - 1] }   // (cut inside a character)
 		if strings.index_byte(text, 0) >= 0 || (n > 0 && len(text) == 0) { job.kind = .Other; return }
 		job.text = strings.clone(text)
-		if l, ok := syntax.language_of_file(job.path); ok {
+		// (its language by its name, else by what it holds: a script with no extension)
+		l, ok := syntax.language_of_file(job.path)
+		if !ok { l, ok = syntax.guess(job.text) }
+		if ok {
 			job.spans = make([dynamic]syntax.Span)
 			syntax.spans(job.text, l, &job.spans)
 			job.language = true
@@ -268,13 +272,13 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 		}
 		switch insp.kind {
 		case .Picture:
-			d := ui.frame_new(Inspect_Picture)
-			d^ = {insp.tex, {f32(insp.size.x), f32(insp.size.y)}, corner_k()}
+			// (fitted; the wheel zooms about the pointer, a drag moves it, a double click goes to its pixels and back; its
+			// keys stay the list's: the arrows move the cursor, Space closes the inspector)
 			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.row() {
 				ui.spacer(ui.px(em * 0.8))
 				ui.next({width = ui.fill(), height = ui.fill()})
-				ui.custom("###insp_pic", inspect_picture_draw, d)
+				ui.preview_image("###insp_pic", &insp.preview, insp.tex, {f32(insp.size.x), f32(insp.size.y)}, {buttons = true, radius = 3 * corner_k(), no_keys = true})
 				ui.spacer(ui.px(em * 0.8))
 			}
 		case .Text:
@@ -324,25 +328,6 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 	}
 }
 
-@(private = "file")
-Inspect_Picture :: struct {
-	tex:  render.Texture,
-	size: [2]f32,
-	round: f32,   // corner_k(): the settings' rounding
-}
-
-@(private = "file")
-inspect_picture_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-	d := (^Inspect_Picture)(user)
-	r := b.rect
-	room := r.max - r.min
-	if d.size.x <= 0 || d.size.y <= 0 || room.x <= 0 || room.y <= 0 { return }
-	scale := min(room.x / d.size.x, room.y / d.size.y, 1)
-	sz := d.size * scale
-	at := r.min + (room - sz) * 0.5
-	draw.image(dc, d.tex, {at, at + sz}, radius = 3 * d.round)
-}
-
 // Its properties (File Pilot's): where it is, its dates, its permissions and its owner (Linux) or attributes (Windows).
 @(private = "file")
 inspector_props :: proc(app: ^App, t: ^Tab, e: fs.Entry, em: f32) {
@@ -379,19 +364,15 @@ inspector_props :: proc(app: ^App, t: ^Tab, e: fs.Entry, em: f32) {
 	}
 }
 
-// The runs of a source text in its language's colours (the theme's: keywords in the accent, strings good, comments weak,
-// types and numbers warm, calls the text's).
+// The runs of a source text in its language's colours: the theme's code colours (ui.code_color, as the toolkit's
+// code_runs), the spans worked out on the worker (not lexed again each frame).
 @(private = "file")
 code_runs :: proc(text: string, spans: []syntax.Span) -> []ui.Rich_Run {
-	colors := [syntax.Class]ui.Color{
-		.Plain = {}, .Keyword = ui.color("accent"), .Str = ui.color("good text"), .Comment = ui.color("weak text"),
-		.Func = {}, .Type = ui.color("warn text"),
-	}
 	runs := make([dynamic]ui.Rich_Run, context.temp_allocator)
 	at := 0
 	for sp in spans {
 		if sp.start > at { append(&runs, ui.Rich_Run{text = text[at:sp.start]}) }
-		append(&runs, ui.Rich_Run{text = text[sp.start:sp.end], style = {color = colors[sp.class], bold = sp.class == .Func}})
+		append(&runs, ui.Rich_Run{text = text[sp.start:sp.end], style = {color = sp.class == .Plain ? ui.Color{} : ui.code_color(sp.class), italic = sp.class == .Comment}})
 		at = sp.end
 	}
 	if at < len(text) { append(&runs, ui.Rich_Run{text = text[at:]}) }

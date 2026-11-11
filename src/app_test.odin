@@ -391,6 +391,16 @@ test_inspector :: proc(t: ^testing.T) {
 		session.wait_until(s, inspected, "the inspector")
 		testing.expect_value(t, app.inspector.kind, Inspect_Kind.Picture)
 		testing.expect_value(t, app.inspector.size, [2]int{480, 320})
+		// the wheel over it zooms (the toolkit's preview); the arrows stay the list's
+		session.frames(s, 2)
+		pic := session.get(s, "insp_pic")
+		session.wheel(s, session.center(pic), {0, -3})   // (up: larger)
+		session.frames(s, 4)
+		testing.expectf(t, app.inspector.preview.zoom > 1, "zoomed: %v", app.inspector.preview.zoom)
+		cursor := tab.folder.cursor
+		session.key(s, .Down)
+		session.frames(s, 2)
+		testing.expect(t, tab.folder.cursor != cursor || len(tab.folder.shown) < 2, "Down moves the list's cursor")
 		session.key(s, .Space)
 		testing.expect(t, !app.inspector.open)
 	})
@@ -2051,6 +2061,7 @@ test_inspector_code :: proc(t: ^testing.T) {
 		dir := make_fixture(t, files[:])
 		testing.expect(t, os.write_entire_file(fs.join(dir, "main.odin", context.temp_allocator), "package main\n\n// the start\nmain :: proc() {\n\tfmt.println(\"hello\", 42)\n}\n") == nil)
 		s, app := start(t, {dir}, size = {1200, 700})
+		context.allocator = runtime.heap_allocator()
 		tab := current_tab(app)
 		tab.zoom = 0
 		wait_read(s)
@@ -2061,6 +2072,14 @@ test_inspector_code :: proc(t: ^testing.T) {
 		testing.expect_value(t, app.inspector.kind, Inspect_Kind.Text)
 		testing.expect(t, session.find(s, "insp_body") != nil, "its text")
 		when SHOTS { session.save_png(s, "inspector_code.png") }
+		// a script with no extension: its language from what it holds
+		testing.expect(t, os.write_entire_file(fs.join(dir, "deploy", context.temp_allocator), "#!/bin/sh\nset -e\necho \"done\"\n") == nil)
+		act_refresh(app)
+		wait_read(s)
+		point_at(t, tab, "deploy")
+		session.frames(s, 2)
+		session.wait_until(s, proc(s: ^session.Session) -> bool { a := (^App)(s.user); return a.inspector.ready && strings.has_suffix(a.inspector.path, "deploy") }, "the script inspected")
+		testing.expect(t, app.inspector.language, "its colours, by its #! line")
 	})
 }
 
