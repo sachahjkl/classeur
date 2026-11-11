@@ -23,7 +23,17 @@ when ODIN_OS == .Windows {
 		fmt.eprintfln("probe: fault %x at %p, thread %d", code, info.ExceptionRecord.ExceptionAddress, win.GetCurrentThreadId())
 		bt := trace.capture()
 		locations, _ := trace.resolve(bt)
-		for l in locations { fmt.eprintfln("probe:   %s %s:%d", l.procedure, l.file_path, l.line) }
+		for l, i in locations {
+			// (the module each address is in: a library of the system has no symbols here)
+			module: win.HMODULE
+			name: [260]u16
+			n: u32
+			if i < bt.len && GetModuleHandleExW(0x4 | 0x2, rawptr(uintptr(bt.trace[i])), &module) {
+				n = win.GetModuleFileNameW(module, &name[0], len(name))
+			}
+			mod, _ := win.utf16_to_utf8(name[:n], context.temp_allocator)
+			fmt.eprintfln("probe:   %s %s:%d  [%s]", l.procedure, l.file_path, l.line, mod)
+		}
 		return 0
 	}
 	@(private = "file")
@@ -35,6 +45,7 @@ when ODIN_OS == .Windows {
 	foreign kernel32 {
 		GetCurrentProcess :: proc() -> rawptr ---
 		GetProcessHandleCount :: proc(process: rawptr, count: ^u32) -> i32 ---
+		GetModuleHandleExW :: proc(flags: u32, address: rawptr, module: ^win.HMODULE) -> win.BOOL ---
 	}
 	@(default_calling_convention = "system")
 	foreign user32 {
