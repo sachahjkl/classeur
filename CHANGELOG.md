@@ -10,6 +10,8 @@ and the versions follow [semantic versioning](https://semver.org/).
   or a bookmark of the sidebar) is lit, a ghost beside the pointer says what a release does, and the release makes the
   job. The system's drag, which takes the files at the window's edge (to another program, the desktop), blocked the
   window: nothing was lit, and on some compositors the drop never came.
+- A dragged tab's ghost, the place it lands and the half a new panel takes show at once: they waited for the tab's picture
+  (read back from the renderer for the system's drag), which comes late on some systems, never on some.
 - A tab dragged from another classeur window shows its ghost where it lands in this one's row, and lands there.
 - 0.14.1 was not published (its Windows build failed a test that assumed the tabs' widths).
 

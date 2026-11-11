@@ -270,7 +270,7 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 			append(&app.tab_rects, Tab_Rect{index, i, tab.rect})
 			tab_drag_signal(app, index, i, sig)
 			// (the tab dragged, dimmed where it was: its ghost follows the pointer; not while its picture is read)
-			if app.tab_drag.active && app.tab_drag.tab == t.id && !app.tab_drag.capture { tab.transparency = 0.5 }
+			if app.tab_drag.active && app.tab_drag.tab == t.id && app.tab_drag.alone == 0 { tab.transparency = 0.5 }
 			if sig.middle_clicked { close = i }
 			if sig.right_clicked {
 				p.active, app.focus = i, index

@@ -31,7 +31,8 @@ Tab_Drag :: struct {
 	split:        Split,
 	grab:         [2]f32,           // where the pointer holds it: pointer minus the tab's corner (the ghost and the picture)
 	size:         [2]f32,           // the tab's size (the ghost's)
-	capture:      bool,             // a picture of the tab was asked of the renderer (the system's drag shows it)
+	capture:      bool,             // a picture of the tab was asked of the renderer (the system's drag shows it) ...
+	alone:        int,              // ... the builds left that show the tab alone for it (its ghost and marks after them)
 	panel_now:    int,              // the panel the dragged tab is in (found by its id each frame)
 	land_panel:   int,              // where it would land now (tab_drag_land, before the build): a panel's row ...
 	land_at:      int,              // ... its place there (-1: none, or nowhere it would move)
@@ -51,7 +52,7 @@ tab_drag_land :: proc(app: ^App) {
 		if to, at, _, ok := tab_drop_place(app, app.tab_coming_at, own = false); ok { d.land_panel, d.land_at = to, at }
 		return
 	}
-	if !d.active || d.capture { return }
+	if !d.active || d.alone > 0 { return }
 	to, at, split, ok := tab_drop_place(app, ui.mouse_pos())
 	if !ok { return }
 	d.land_panel, d.land_split = to, split
@@ -152,6 +153,8 @@ tab_drag_signal :: proc(app: ^App, panel, index: int, sig: ui.Signal) {
 			// (its picture, read back from the next frame: what the system's drag shows out of the window)
 			tab_image_free(app)
 			d.capture = render.capture_request(&app.shared.r, {int(r.min.x), int(r.min.y), int(r.max.x - r.min.x), int(r.max.y - r.min.y)})
+			// (this build and the next, the frames read back; however long the reading takes, the ghost shows after)
+			d.alone = d.capture ? 2 : 0
 		}
 	}
 	// (the dragged tab is told by its id: the tabs may shift while it is dragged)
@@ -255,6 +258,10 @@ TAB_OUT_EDGE_EM :: 1.2
 // Each frame of a tab's drag: its picture, once the renderer has read it back (faded: the usual ghost).
 tab_drag_poll :: proc(app: ^App) {
 	d := &app.tab_drag
+	if d.alone > 0 {
+		d.alone -= 1
+		app_frames(app)
+	}
 	if !d.capture { return }
 	pixels, size, status := render.capture_poll(&app.shared.r)
 	switch status {
@@ -284,8 +291,8 @@ tab_image_free :: proc(app: ^App) {
 // window, a window of its own (said under the ghost).
 tab_drag_overlay :: proc(app: ^App, em: f32) {
 	d := &app.tab_drag
-	// (while its picture is read back: the frame shows the tab alone, no ghost over it)
-	if d.capture { return }
+	// (while its picture is taken: the frame shows the tab alone, no ghost over it)
+	if d.alone > 0 { return }
 	// (after the tabs' signals: a press that ended out of its tab's box, a capture lost, ends the drag)
 	if d.active && ui.active_key() == 0 {
 		d.active = false
