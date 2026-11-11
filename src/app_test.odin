@@ -2767,3 +2767,22 @@ test_tabs_follow_a_resize :: proc(t: ^testing.T) {
 		}
 	})
 }
+
+// The palette forgives a slip (the toolkit's palette_match): "new foldr" still finds New folder, and Enter makes one.
+@(test)
+test_palette_slip :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir})
+		context.allocator = runtime.heap_allocator()
+		session.key(s, .P, {.Ctrl, .Shift})
+		session.type_text(s, "new foldr")
+		session.frames(s, 2)
+		testing.expect_value(t, COMMANDS[palette_first(app)].id, "new_folder")
+		session.key(s, .Return)
+		session.frames(s, 2)
+		_, made := fs.stat(fs.join(dir, "New folder", context.temp_allocator))
+		testing.expect(t, made, "Enter on the slip made the folder")
+	})
+}

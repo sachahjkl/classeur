@@ -212,10 +212,13 @@ palette_first :: proc(app: ^App) -> int {
 	if a := alias_command(app, ui.field_string(&app.palette.field)); a != nil {
 		for &c, i in COMMANDS { if &c == a { return i } }
 	}
-	best, at := -1, -1
-	for c, i in COMMANDS {
-		score, _, ok := ui.fuzzy_words(ui.field_string(&app.palette.field), c.title)
-		if ok && score > best { best, at = score, i }
+	// (ranked as the palette ranks them: ui.palette_match, the label, then the aliases, the group, then with slips)
+	l := palette_list(app)
+	query := ui.field_string(&app.palette.field)
+	best, at := min(int), -1
+	for c, line in l.commands[:len(l.order)] {
+		score, _, ok := ui.palette_match(query, c.label, c.group, c.tags)
+		if ok && score > best { best, at = score, l.order[line] }
 	}
 	return at
 }
