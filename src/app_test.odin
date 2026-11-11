@@ -1729,7 +1729,12 @@ test_tab_drag_feedback :: proc(t: ^testing.T) {
 	last := app.tab_rects_last[1].rect
 	session.move(s, {last.max.x - 3, from.y})
 	session.frames(s, 2)
-	testing.expect(t, session.find(s, "tab_land") != nil, "its ghost where it lands in the row")
+	{
+		d := app.tab_drag
+		to, at, split, ok := tab_drop_place(app, ui.mouse_pos())
+		testing.expectf(t, session.find(s, "tab_land") != nil, "its ghost where it lands in the row: active %v land %v/%v/%v place %v/%v/%v/%v mouse %v from %v last %v window %v out %v tabs %v panels %v",
+			d.active, d.land_panel, d.land_at, d.land_split, to, at, split, ok, ui.mouse_pos(), from, last, app.window_px, app.tab_out, app.tab_rects_last[:], app.panel_rects[:])
+	}
 	testing.expect(t, session.find(s, "tab_ghost") == nil, "nothing else over it")
 	when SHOTS { session.save_png(s, "tab_land.png") }
 	// the right quarter of the panel: a new panel at the right
