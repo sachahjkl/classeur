@@ -4,7 +4,7 @@ package classeur
 // each frame from the App (view.odin); the workers change nothing of it themselves: their results come through ui.post.
 
 import "core:fmt"
-import "core:log"
+@(require) import "core:log"
 import "core:strings"
 import "core:sync"
 import "core:time/datetime"
