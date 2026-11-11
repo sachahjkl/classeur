@@ -184,7 +184,6 @@ side_move :: proc(app: ^App, s: Side_Section, to: int) {
 @(private = "file")
 side_drag_end :: proc(app: ^App, em: f32) {
 	if !app.side_dragging { return }
-	if ui.key_press(.Escape) { app.side_dragging, app.side_held, app.side_cancelled = false, false, true; return }   // (let go nowhere)
 	y := ui.mouse_pos().y
 	slot := 0
 	for sec, i in app.side_order {

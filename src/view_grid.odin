@@ -80,7 +80,10 @@ item :: proc(app: ^App, t: ^Tab, row: int, look: ^Row_Look, line: bool, width, h
 	selected := f.selected[f.shown[row]]
 	cursor := row == f.cursor && (!selected || f.count > 1)
 	ui.next({width = ui.px(width), height = ui.px(height), axis = line ? .X : .Y, radius = 0, cross = line ? .Center : nil})
-	b := ui.build_box({.Clickable, .Draw_Hot_Effects, .Hot_Within, .Middle_Click}, fmt.tprintf("###item%d", row))
+	// (the wheel's click on a folder opens it in a tab; on a file it scrolls, the toolkit's autoscroll)
+	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Hot_Within}
+	if e.kind == .Directory { flags += {.Middle_Click} }
+	b := ui.build_box(flags, fmt.tprintf("###item%d", row))
 	// (the pill and the ring of the rows; a card has no line under it)
 	card_look := look
 	if !line {

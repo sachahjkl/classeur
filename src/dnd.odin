@@ -120,7 +120,7 @@ dnd_start :: proc(app: ^App) {
 // A press on a selected row that moved past the system's distance: the selection is dragged (after this frame).
 drag_maybe :: proc(app: ^App, t: ^Tab, sig: ui.Signal) {
 	if sig.pressed { app.drag_started = false }   // (a new press: it may drag)
-	if !sig.dragging || app.drag_started || app.band.active { return }   // (a band of Ctrl selects; it drags no file)
+	if !sig.dragging || app.drag_started || app.band.active || app.gesture_cancelled { return }   // (a band of Ctrl selects; it drags no file)
 	d := sig.drag_delta
 	th := platform.drag_threshold(app.main.win)
 	if abs(d.x) < th.x && abs(d.y) < th.y { return }
@@ -141,10 +141,6 @@ file_drag_frame :: proc(app: ^App, em: f32) {
 	effect := drop_effect(app, app.drag_paths[:], dir, {.Copy, .Move}, ui.current_state().mods)
 	delete(app.drop_hover)
 	app.drop_hover = effect != nil ? strings.clone(dir) : ""
-	if ui.key_press(.Escape) {
-		file_drag_end(app)
-		return
-	}
 	// (let go: the press's box has no longer the pointer's)
 	if ui.active_key() == 0 {
 		if e, ok := effect.?; ok { job_add(app, e == .Move ? .Move : .Copy, app.drag_paths[:], dir) }

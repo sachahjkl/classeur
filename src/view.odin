@@ -45,6 +45,8 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	tab_drag_poll(app)
 	// (a band whose tab went, or whose press ended out of its list: over)
 	if app.band.active && (find_tab(app, app.band.tab) == nil || ui.active_key() == 0) { app.band.active = false }
+	// (a gesture Escape ended: its press is over once nothing is held)
+	if ui.active_key() == 0 { app.gesture_cancelled = false }
 	// a text field had the keyboard at the end of the last build: only the commands that work while typing run
 	clear(&app.text_keys_before)
 	append(&app.text_keys_before, ..app.text_keys[:])
@@ -52,6 +54,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	typing := slice.contains(app.text_keys_before[:], ui.focus_key())
 	app.no_dialog = !app.palette.open && !app.goto.open && !app.batch.open && !app.layouts.naming && !app.setup.open && !app.confirm.open && !app.conflict.open && !app.options.open
 	if app.no_dialog {
+		gesture_escape(app)
 		commands_keys(app, typing)
 		if !typing { list_keys(app) }
 	}
@@ -390,10 +393,41 @@ list_keys :: proc(app: ^App) {
 			}
 		}
 	}
-	if ui.key_press(.Escape) && f.count > 1 { folder_pick(f, f.cursor) }
+	// (Escape ends a gesture first: a drag, a rectangle, the jobs' view; then the selection becomes the cursor's row)
+	if f.count > 1 && !gesture_running(app) && ui.key_press(.Escape) { folder_pick(f, f.cursor) }
 	if ui.key_press(.Menu) || ui.key_press(.F10, {.Shift}) {
 		if f.cursor >= 0 { entry_menu_open(app, t, {t.cursor_rect.min.x + 24, t.cursor_rect.max.y}, from_keyboard = true) }
 	}
+}
+
+// A gesture that Escape ends is running: files or a tab dragged, a rectangle drawn, a section of the sidebar dragged,
+// the jobs' view open.
+gesture_running :: proc(app: ^App) -> bool {
+	return app.file_drag || app.tab_drag.active || app.band.active || app.side_dragging || app.jobs_view.open
+}
+
+// Escape ends the gesture running, before anything built takes it (a focused list takes Escape for itself): the files'
+// or the tab's drag given up, the rectangle's selection undone, the jobs' view closed. A press still held starts nothing
+// more till its release (gesture_cancelled).
+gesture_escape :: proc(app: ^App) {
+	if !gesture_running(app) || !ui.key_press(.Escape) { return }
+	switch {
+	case app.file_drag:
+		file_drag_end(app)
+		app.gesture_cancelled = true
+	case app.tab_drag.active:
+		app.tab_drag.active = false
+		tab_image_free(app)
+		app.gesture_cancelled = true
+	case app.band.active:
+		band_cancel(app)
+		app.gesture_cancelled = true
+	case app.side_dragging:
+		app.side_dragging, app.side_held, app.side_cancelled = false, false, true
+	case app.jobs_view.open:
+		app.jobs_view.open = false
+	}
+	app_frames(app)
 }
 
 // The path with "~" for the home folder.

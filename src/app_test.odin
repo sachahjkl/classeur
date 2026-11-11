@@ -2323,13 +2323,58 @@ mouse_matrix :: proc(t: ^testing.T, zoom: int) {
 		if lb == nil { return }
 	}
 
-	// 5. notes.txt dragged onto Photos: moved there
+	// 5. the wheel's click on a file opens nothing (it scrolls)
+	{
+		tabs := len(current_panel(app).tabs)
+		rf, _ := rect_of(s, tab, lb, index_of(tab, "notes.txt"))
+		session.click_at(s, middle(rf), .Middle)
+		session.click_at(s, middle(rf) + {0, 2})   // (a click ends the autoscroll it started)
+		session.frames(s, 3)
+		testing.expectf(t, len(current_panel(app).tabs) == tabs, "%v: the wheel's click on a file opens no tab", mode)
+	}
+
+	// 6. Escape in a rectangle: the selection there was, and nothing else starts till the release
 	folder_select_none(&tab.folder)
+	r1, _ := rect_of(s, tab, lb, index_of(tab, "report 2.pdf"))
+	folder_pick(&tab.folder, index_of(tab, "report 2.pdf"))
 	session.frames(s, 2)
+	session.press(s, empty)
+	session.move(s, empty + {-10, -10})
+	session.move(s, middle(r0))
+	session.frames(s, 2)
+	testing.expectf(t, app.band.active, "%v: a rectangle", mode)
+	session.key(s, .Escape)
+	session.frames(s, 2)
+	session.move(s, middle(r0) + {4, 4})
+	session.frames(s, 2)
+	testing.expectf(t, !app.band.active && tab.folder.count == 1 && folder_row_selected(&tab.folder, index_of(tab, "report 2.pdf")), "%v: Escape gives the selection back: %d", mode, tab.folder.count)
+	session.release(s, middle(r0) + {4, 4})
+	session.frames(s, 2)
+	_ = r1
+
+	// 7. Escape in a file drag: nothing moves
 	rn, okn := rect_of(s, tab, lb, index_of(tab, "notes.txt"))
 	rp, okp := rect_of(s, tab, lb, index_of(tab, "Photos"))
 	testing.expectf(t, okn && okp, "%v: notes.txt and Photos shown", mode)
+	folder_select_none(&tab.folder)
+	session.frames(s, 2)
 	from, into := middle(rn), middle(rp)
+	session.press(s, from)
+	session.move(s, from + {0, -12})
+	session.move(s, into)
+	session.frames(s, 2)
+	testing.expectf(t, app.file_drag, "%v: a file drag", mode)
+	session.key(s, .Escape)
+	session.frames(s, 2)
+	testing.expectf(t, !app.file_drag, "%v: Escape ends it", mode)
+	session.release(s, into)
+	session.frames(s, 2)
+	wait_jobs(s)
+	testing.expectf(t, fs.exists(fs.join(dir, "notes.txt", context.temp_allocator)), "%v: Escape: notes.txt stays", mode)
+
+	// 8. notes.txt dragged onto Photos: moved there
+	folder_select_none(&tab.folder)
+	session.frames(s, 2)
 	session.press(s, from)
 	session.move(s, from + {0, -12})
 	session.move(s, into)
@@ -2410,5 +2455,80 @@ test_tab_ghost_narrow :: proc(t: ^testing.T) {
 		platform.drop_inject(app.main.win, .Drop_Leave, at, nil, {.Move})
 		session.frames(s, 2)
 		testing.expect(t, session.find(s, "tab_land") == nil, "gone when it leaves")
+	})
+}
+
+// Many writes of the session in a row, on the workers: the file holds the last one (one writer, the latest text wins).
+@(test)
+test_session_writes_in_order :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		context.allocator = runtime.heap_allocator()
+		dir := strings.clone(testkit.temp_folder(t, "classeur_writes"))
+		defer delete(dir)
+		file := fs.join(dir, ".session")
+		defer delete(file)
+		app := app_open({folders = {dir}, headless = true, session = file})
+		testing.expect(t, app != nil)
+		if app == nil { return }
+		defer app_close(app)
+		for i in 0 ..< 200 {
+			append(&app.bookmarks, strings.clone(fmt.tprintf("/mark/%d", i)))
+			session_save(app, later = true)
+		}
+		// (the writer done: nothing pending, none running)
+		for _ in 0 ..< 2000 {
+			sync.mutex_lock(&app.session_writer.mutex)
+			idle := !app.session_writer.running
+			sync.mutex_unlock(&app.session_writer.mutex)
+			if idle { break }
+			time.sleep(time.Millisecond)
+		}
+		data, err := os.read_entire_file(file, context.temp_allocator)
+		testing.expect(t, err == nil, "written")
+		testing.expect(t, strings.contains(string(data), "bookmark /mark/199\n"), "the last text")
+		testing.expect_value(t, strings.count(string(data), "\nsidebar "), 1)
+	})
+}
+
+// Escape ends a tab's drag (the tab stays) and closes the jobs' view, before the list takes it.
+@(test)
+test_escape_ends_gestures :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir}, size = {1200, 700})
+		context.allocator = runtime.heap_allocator()
+		session.key(s, .T, {.Ctrl})
+		wait_read(s)
+		session.frames(s, 2)
+		p := current_panel(app)
+		first_id := p.tabs[0].id
+		first := app.tab_rects_last[0].rect
+		last := app.tab_rects_last[1].rect
+		from := (first.min + first.max) * 0.5
+		session.press(s, from)
+		session.move(s, from + {12, 0})
+		session.move(s, {last.max.x - 3, from.y})
+		session.frames(s, 2)
+		testing.expect(t, app.tab_drag.active, "a tab's drag")
+		session.key(s, .Escape)
+		session.frames(s, 2)
+		session.move(s, {last.max.x - 6, from.y})
+		session.frames(s, 2)
+		testing.expect(t, !app.tab_drag.active, "Escape ends it")
+		session.release(s, {last.max.x - 6, from.y})
+		session.frames(s, 3)
+		testing.expect_value(t, p.tabs[0].id, first_id)
+		// the jobs' view: Escape closes it, the selection of the list untouched
+		tab := current_tab(app)
+		folder_select_all(&tab.folder)
+		n := tab.folder.count
+		session.key(s, .J, {.Ctrl, .Alt})
+		session.frames(s, 2)
+		testing.expect(t, app.jobs_view.open, "the jobs' view")
+		session.key(s, .Escape)
+		session.frames(s, 2)
+		testing.expect(t, !app.jobs_view.open, "Escape closes it")
+		testing.expect_value(t, tab.folder.count, n)
 	})
 }

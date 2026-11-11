@@ -72,7 +72,6 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 	v := &app.jobs_view
 	jobs_view_follow(app)
 	if !v.open { return }
-	if ui.key_press(.Escape) { v.open = false; return }
 	w := min(em * 44, app.room * ui.scale() * 0.9)
 	list := app.jobs.list[:]
 	n := len(list)

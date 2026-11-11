@@ -145,7 +145,7 @@ tab_drop_place :: proc(app: ^App, pos: [2]f32, own := true) -> (panel, at: int, 
 // A tab's signal: a drag past the system's distance starts the tab's drag; its release moves it.
 tab_drag_signal :: proc(app: ^App, panel, index: int, sig: ui.Signal) {
 	d := &app.tab_drag
-	if sig.dragging && !d.active {
+	if sig.dragging && !d.active && !app.gesture_cancelled {
 		th := platform.drag_threshold(app.main.win)
 		if abs(sig.drag_delta.x) >= th.x || abs(sig.drag_delta.y) >= th.y {
 			d.active, d.panel, d.index, d.tab, d.panel_now = true, panel, index, app.panels[panel].tabs[index].id, panel
@@ -161,6 +161,7 @@ tab_drag_signal :: proc(app: ^App, panel, index: int, sig: ui.Signal) {
 	// (the dragged tab is told by its id: the tabs may shift while it is dragged)
 	mine := d.active && app.panels[panel].tabs[index].id == d.tab
 	if mine { d.panel_now = panel }
+
 	if mine && sig.dragging {
 		app_frames(app)
 		// at the window's left, right or bottom edge, or out of it: the drag of the system takes it, started while the
