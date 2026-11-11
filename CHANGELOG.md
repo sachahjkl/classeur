@@ -6,6 +6,7 @@ and the versions follow [semantic versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Letters typed while the list has the keyboard go to the panel's filter (File Pilot's); Space still opens the inspector.
 - Ctrl and a drag from a row (Explorer's): from a selected row, the rows it passes leave the selection; from another, they
   join it.
 - A right click on the empty part of a list opens the folder's menu (New folder, New file, Paste...).

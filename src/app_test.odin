@@ -2004,3 +2004,26 @@ test_ctrl_band_and_empty_menu :: proc(t: ^testing.T) {
 	when SHOTS { session.save_png(s, "empty_menu.png") }
 	session.key(s, .Escape)
 }
+
+// Letters typed with the list's keyboard go to the panel's filter (File Pilot's); Space still opens the inspector.
+@(test)
+test_type_to_filter :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 700})
+	tab := current_tab(app)
+	wait_read(s)
+	session.frames(s, 2)
+	session.type_text(s, "rep")
+	session.frames(s, 2)
+	testing.expect_value(t, ui.field_string(&tab.filter), "rep")
+	names := shown_names(tab)
+	testing.expect(t, slice.contains(names, "report 2.pdf") && slice.contains(names, "report 10.pdf") && !slice.contains(names, "notes.txt"), "filtered")
+	session.key(s, .Escape)
+	session.frames(s, 2)
+	testing.expect_value(t, ui.field_string(&tab.filter), "")
+	session.key(s, .Space)
+	session.frames(s, 2)
+	testing.expect(t, app.inspector.open, "Space: the inspector")
+	testing.expect_value(t, ui.field_string(&tab.filter), "")
+}

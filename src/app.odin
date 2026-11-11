@@ -58,7 +58,8 @@ App :: struct {
 	side_cancelled: bool,               // Escape cancelled it, its button still down
 	side_menu_key: ui.Key,              // a heading's menu: Move up, Move down...
 	side_menu_of:  Side_Section,
-	side_touched:  bool,                // a heading was clicked or dragged: the section the commands move is known
+	side_touched:  bool,
+	no_dialog:     bool,                // this build: no dialog takes the keys (typing goes to the filter)                // a heading was clicked or dragged: the section the commands move is known
 	side_filter: ui.Text_Field,
 	volume_space: [dynamic]fs.Space,   // of each volume, read with the places
 	panel_rects: [dynamic]ui.Rect,  // each panel's box as last laid out (the tabs above are as wide)

@@ -919,7 +919,7 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	f := &t.folder
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * FOOTER_EM)), bg = draw.hex(surfaces(app).side)})
 	if ui.row(.Center, {.Draw_Background, .Draw_Side_Top}, "###footer") {
-		filter_field(app, t, em)
+		filter_field(app, t, focused, em)
 		cell_rule()
 		ui.spacer(ui.fill())
 		if focused {
@@ -1120,7 +1120,7 @@ stat :: proc(app: ^App, id, icon, text, tip: string, em: f32) {
 }
 
 @(private = "file")
-filter_field :: proc(app: ^App, t: ^Tab, em: f32) {
+filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	// (a well, the whole height of the footer: darker than it; a line of the accent along its top while it searches
 	// every folder below)
 	ui.next({width = ui.px(em * FILTER_EM), height = ui.pct(1), bg = draw.hex(surfaces(app).top)})
@@ -1129,6 +1129,11 @@ filter_field :: proc(app: ^App, t: ^Tab, em: f32) {
 		ui.spacer(ui.px(em * 0.5))
 		if ui.tags("weak") { glyph(app, lucide.SEARCH, em * 1.5) }
 		key := ui.key_from_string(ui.parent_box().key, "###filter")
+		// text typed in the panel that has the keyboard, no field and no dialog taking it: into its filter (File
+		// Pilot's); Space is the inspector's, not a letter
+		if focused && app.no_dialog && !ui.key_pressed_peek(.Space) && !ui.ctx_menu_any_open() && ui.type_to_field(key) {
+			t.filter_open = true
+		}
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		res: ui.Edit_Result
 		if ui.tags("bare") { res = ui.line_edit("###filter", &t.filter, "Filter...") }
