@@ -5,6 +5,14 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The rectangle selection in the Grid and Columns views (it was the Details and List views' only): from the empty part,
+  between the cards too, it selects the items it touches. Ctrl and a drag from a card deselects as in the list.
+- A right click on the empty part of the Grid view opens the folder's menu (the Columns view's goes through the same
+  place now).
+- A test goes through the pointer's gestures in every view: the rectangle, the empty part's menu, Ctrl and a drag, a
+  file dragged onto a folder.
+
 ## [0.14.2] - 2026-11-11
 
 ### Fixed

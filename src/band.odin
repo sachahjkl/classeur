@@ -19,7 +19,7 @@ Band :: struct {
 // Ctrl and a press on a row: a band from there, its rows taken out of the selection when that row was in it (`base`: the
 // selection before the press toggled the row).
 band_begin_on_row :: proc(app: ^App, t: ^Tab, removing: bool, base: []bool) {
-	lb := ui.box_from_key(t.vl.key)
+	lb := band_box(t)
 	if lb == nil { return }
 	b := &app.band
 	b.active, b.tab, b.removing = true, t.id, removing
@@ -28,23 +28,44 @@ band_begin_on_row :: proc(app: ^App, t: ^Tab, removing: bool, base: []bool) {
 	append(&b.base, ..base)
 }
 
+// Where the items are in the content of the box the band is drawn over:
+//   .Rows: the list's rows, one a row of the virtual list (t.vl.offsets);
+//   .Grid: `count` cards a row of the virtual list, each `item_w` wide, `gap` between them and before the first;
+//   .Columns: `count` lines a column, columns `step` wide, each line `item_w` wide and `row_h` high.
+Band_Layout :: struct {
+	kind:   enum u8 { Rows, Grid, Columns },
+	count:  int,
+	item_w: f32,
+	gap:    f32,
+	step:   f32,
+	row_h:  f32,
+}
+
+// The box the items of `t` are laid out in: the columns view's, or the virtual list's.
+band_box :: proc(t: ^Tab) -> ^ui.Box {
+	if ZOOMS[clamp(t.zoom, 0, len(ZOOMS) - 1)].mode == .Columns { return ui.box_from_key(t.cols_key) }
+	return ui.box_from_key(t.vl.key)
+}
+
 band_free :: proc(b: ^Band) {
 	delete(b.base)
 	b^ = {}
 }
 
-// After the rows of `t`'s list: a band starts, follows the pointer, or ends. `pressed_row`: a row took the press.
-band_update :: proc(app: ^App, t: ^Tab, pressed_row: bool) {
+// After the items of `t`'s list: a band starts, follows the pointer, or ends; a right click on the empty part opens the
+// folder's menu. `pressed_row`: an item took the press; `pressed_empty`, `right_empty`: a press, a right click on an
+// empty part that is not the box itself (between the grid's cards); `layout`: where the items are.
+band_update :: proc(app: ^App, t: ^Tab, pressed_row: bool, pressed_empty := false, right_empty := false, layout := Band_Layout{}) {
 	f := &t.folder
-	lb := ui.box_from_key(t.vl.key)
+	lb := band_box(t)
 	if lb == nil { return }
 	b := &app.band
 	sig := ui.signal(lb)
 	m := ui.mouse_pos()
 	content := m - lb.rect.min + lb.view_off
 	// (a right click on the empty part: the folder's menu, what makes and pastes)
-	if sig.right_clicked && !pressed_row { entry_menu_open(app, t, m, on_entry = false) }
-	if sig.pressed && !pressed_row && !b.active {
+	if (sig.right_clicked || right_empty) && !pressed_row { entry_menu_open(app, t, m, on_entry = false) }
+	if (sig.pressed || pressed_empty) && !pressed_row && !b.active {
 		b.active, b.tab, b.start, b.removing = true, t.id, content, false
 		clear(&b.base)
 		if .Ctrl in sig.mods {
@@ -60,10 +81,27 @@ band_update :: proc(app: ^App, t: ^Tab, pressed_row: bool) {
 		return
 	}
 	y0, y1 := min(b.start.y, content.y), max(b.start.y, content.y)
+	x0, x1 := min(b.start.x, content.x), max(b.start.x, content.x)
 	offs := t.vl.offsets[:]
 	for row in 0 ..< len(f.shown) {
-		if row + 1 >= len(offs) { break }
-		touched := offs[row + 1] > y0 && offs[row] < y1
+		touched: bool
+		g := layout
+		switch g.kind {
+		case .Rows:
+			if row + 1 >= len(offs) { break }
+			touched = offs[row + 1] > y0 && offs[row] < y1
+		case .Grid:
+			// (a card: its column's span, its row's less the gap around it)
+			gr, c := row / g.count, row % g.count
+			if gr + 1 >= len(offs) { break }
+			ix0 := g.gap + f32(c) * (g.item_w + g.gap)
+			iy0, iy1 := offs[gr] + g.gap * 0.5, offs[gr + 1] - g.gap * 0.5
+			touched = ix0 + g.item_w > x0 && ix0 < x1 && iy1 > y0 && iy0 < y1
+		case .Columns:
+			c, r := row / g.count, row % g.count
+			ix0, iy0 := f32(c) * g.step, f32(r) * g.row_h
+			touched = ix0 + g.item_w > x0 && ix0 < x1 && iy0 + g.row_h > y0 && iy0 < y1
+		}
 		was := len(b.base) == len(f.selected) && b.base[f.shown[row]]
 		on := b.removing ? was && !touched : was || touched
 		folder_set_row(f, row, on)

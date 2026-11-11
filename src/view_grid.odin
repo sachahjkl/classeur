@@ -5,6 +5,7 @@ package classeur
 // the cursor card by card (view.odin's list_keys); a row of the list is a row of cards.
 
 import "core:fmt"
+import "core:slice"
 import "gt:draw"
 import "gt:render"
 import "gt:ui"
@@ -46,27 +47,34 @@ grid_list :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 		t.focus_due = .None
 	}
 	look := row_look(app, focused, em)
+	pressed_item, pressed_empty, right_empty := false, false, false
 	for r in rows.first ..< rows.last {
 		ui.next({height = ui.px(item_h + (lines ? 0 : gap)), radius = 0, cross = .Center})
 		row := ui.list_row(&t.vl, r, "", selectable = false)
+		if row.pressed { pressed_empty = true }
+		if row.right_clicked { right_empty = true }
 		opened := false
 		if ui.parent(row.box) {
 			ui.spacer(ui.px(gap))
 			for c in 0 ..< cols {
 				at := r * cols + c
 				if at >= n { break }
-				if item(app, t, at, look, lines, item_w, item_h, em) { opened = true; break }
+				open, pressed := item(app, t, at, look, lines, item_w, item_h, em)
+				if pressed { pressed_item = true }
+				if open { opened = true; break }
 				ui.spacer(ui.px(gap))
 			}
 		}
 		if opened { return }
 	}
+	// (a press on the empty part, between the cards or under them: the rectangle selection, as in the list)
+	band_update(app, t, pressed_item, pressed_empty, right_empty, {kind = .Grid, count = cols, item_w = item_w, gap = gap})
 }
 
 // One item: a line (the icon, the name) or a card (the thumbnail or the icon large, the name, the size). True: it
 // opened what it shows (the list is gone).
 @(private = "file")
-item :: proc(app: ^App, t: ^Tab, row: int, look: ^Row_Look, line: bool, width, height, em: f32) -> bool {
+item :: proc(app: ^App, t: ^Tab, row: int, look: ^Row_Look, line: bool, width, height, em: f32) -> (opened, pressed: bool) {
 	f := &t.folder
 	e := &f.listing.entries[f.shown[row]]
 	selected := f.selected[f.shown[row]]
@@ -97,8 +105,14 @@ item :: proc(app: ^App, t: ^Tab, row: int, look: ^Row_Look, line: bool, width, h
 		}
 	}
 	if selected && look.focused { ui.pop_tags() }
+	pressed = sig.pressed || sig.right_clicked
 	if sig.pressed && selected && sig.mods == {} && f.count > 1 {
 		f.cursor = row   // (a press on the selection may drag it: the item alone is picked at the click)
+	} else if sig.pressed && .Ctrl in sig.mods && .Shift not_in sig.mods {
+		// (Ctrl: the card toggled, and a drag from it does the same to the cards it passes, as the list's rows)
+		base := slice.clone(f.selected[:], context.temp_allocator)
+		folder_pick(f, row, toggle = true)
+		band_begin_on_row(app, t, selected, base)
 	} else if sig.pressed {
 		folder_pick(f, row, extend = .Shift in sig.mods, toggle = .Ctrl in sig.mods)
 	}
@@ -121,9 +135,9 @@ item :: proc(app: ^App, t: ^Tab, row: int, look: ^Row_Look, line: bool, width, h
 	if sig.double_clicked {
 		folder_pick(f, row)
 		act_open(app)
-		return true
+		return true, pressed
 	}
-	return false
+	return
 }
 
 @(private = "file")
@@ -223,6 +237,7 @@ columns_list :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	first := clamp(int(off / col_w) - 1, 0, ncols)
 	last := clamp(int((off + size.x) / col_w) + 2, first, ncols)
 	look := row_look(app, focused, em)
+	pressed_item := false
 	if ui.parent(b) {
 		ui.spacer(ui.px(f32(first) * col_w))
 		for c in first ..< last {
@@ -231,11 +246,14 @@ columns_list :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 				for r in 0 ..< per {
 					at := c * per + r
 					if at >= n { break }
-					if item(app, t, at, look, true, col_w - em * ROW_INSET_EM, row_h, em) { return }
+					open, pressed := item(app, t, at, look, true, col_w - em * ROW_INSET_EM, row_h, em)
+					if pressed { pressed_item = true }
+					if open { return }
 				}
 			}
 		}
 		ui.spacer(ui.px(f32(ncols - last) * col_w))
 	}
-	if sig.right_clicked && f.loaded { entry_menu_open(app, t, ui.mouse_pos(), on_entry = false) }
+	// (a press on the empty part: the rectangle selection; a right click: the folder's menu, by band_update)
+	band_update(app, t, pressed_item, layout = {kind = .Columns, count = per, item_w = col_w - em * ROW_INSET_EM, step = col_w, row_h = row_h})
 }

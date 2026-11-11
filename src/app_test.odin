@@ -2088,3 +2088,115 @@ test_own_drag_without_data :: proc(t: ^testing.T) {
 	wait_jobs(s)
 	testing.expect(t, fs.exists(fs.join(dir, "Photos/notes.txt", context.temp_allocator)), "moved into Photos")
 }
+
+// The pointer's gestures in every view (Details, List, Columns, Grid): the rectangle from the empty part selects the
+// items it touches on screen; a right click there opens the folder's menu; Ctrl and a drag from a selected item takes
+// the items it passes out of the selection; a file dragged onto a folder goes into it.
+@(private = "file")
+mouse_matrix :: proc(t: ^testing.T, zoom: int) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1000, 700})
+	context.allocator = runtime.heap_allocator()
+	tab := current_tab(app)
+	tab.zoom = zoom
+	wait_read(s)
+	session.frames(s, 6)
+	mode := tab_mode(tab)
+	n := len(tab.folder.shown)
+	lb := band_box(tab)
+	testing.expectf(t, lb != nil, "%v: the items' box", mode)
+	if lb == nil { return }
+	// an item's rectangle on screen: its box (Columns, Grid) or its row of the list
+	rect_of :: proc(s: ^session.Session, tab: ^Tab, lb: ^ui.Box, i: int) -> (ui.Rect, bool) {
+		if tab_mode(tab) >= .Columns {
+			b := session.get(s, fmt.tprintf("item%d", i))
+			if b == nil { return {}, false }
+			return b.rect, true
+		}
+		offs := tab.vl.offsets[:]
+		if i + 1 >= len(offs) { return {}, false }
+		y := lb.rect.min.y - lb.view_off.y
+		return {{lb.rect.min.x, y + offs[i]}, {lb.rect.max.x, y + offs[i + 1]}}, true
+	}
+	middle :: proc(r: ui.Rect) -> [2]f32 { return (r.min + r.max) * 0.5 }
+	index_of :: proc(tab: ^Tab, name: string) -> int {
+		for e, i in tab.folder.shown { if tab.folder.listing.entries[e].name == name { return i } }
+		return -1
+	}
+	empty := lb.rect.max - {20, 20}
+	for i in 0 ..< n {
+		r, ok := rect_of(s, tab, lb, i)
+		if ok && empty.x >= r.min.x && empty.x < r.max.x && empty.y >= r.min.y && empty.y < r.max.y { testing.expectf(t, false, "%v: the corner is on item %d", mode, i) }
+	}
+
+	// 1. the rectangle, from the empty corner to the first item's middle
+	r0, _ := rect_of(s, tab, lb, 0)
+	to := middle(r0)
+	session.press(s, empty)
+	session.move(s, empty + {-10, -10})
+	session.move(s, to)
+	session.frames(s, 2)
+	band := ui.Rect{{min(empty.x, to.x), min(empty.y, to.y)}, {max(empty.x, to.x), max(empty.y, to.y)}}
+	want := 0
+	for i in 0 ..< n {
+		r, ok := rect_of(s, tab, lb, i)
+		if ok && r.max.x > band.min.x && r.min.x < band.max.x && r.max.y > band.min.y && r.min.y < band.max.y { want += 1 }
+	}
+	testing.expectf(t, want >= 1 && tab.folder.count == want, "%v: the rectangle selects what it touches: %d selected, %d touched", mode, tab.folder.count, want)
+	when SHOTS { session.save_png(s, fmt.tprintf("band_%v.png", mode)) }
+	session.release(s, to)
+	session.frames(s, 2)
+	testing.expectf(t, tab.folder.count == want && !app.band.active, "%v: kept when let go", mode)
+	testing.expectf(t, !app.file_drag && len(app.drag_paths) == 0, "%v: no file dragged by the rectangle", mode)
+
+	// 2. a right click on the empty part: the folder's menu
+	session.click_at(s, empty, .Right)
+	session.frames(s, 3)
+	testing.expectf(t, session.find_text(s, "New folder") != nil, "%v: the folder's menu", mode)
+	session.key(s, .Escape)
+	session.frames(s, 2)
+
+	// 3. Ctrl and a drag from a selected item to the next: both taken out of the selection
+	folder_select_all(&tab.folder)
+	session.frames(s, 2)
+	ra, _ := rect_of(s, tab, lb, 0)
+	rb, _ := rect_of(s, tab, lb, 1)
+	ctrl :: proc(s: ^session.Session, kind: platform.Event_Kind, at: [2]f32) {
+		s.pointer = at
+		if kind == .Mouse_Press { s.buttons += {.Left} }
+		if kind == .Mouse_Release { s.buttons -= {.Left} }
+		session.event(s, {kind = kind, button = .Left, pos = at, mods = {.Ctrl}})
+		session.frames(s, 2)
+	}
+	a, b := middle(ra), middle(rb)
+	session.move(s, a)
+	ctrl(s, .Mouse_Press, a)
+	ctrl(s, .Mouse_Move, a + (b - a) * 0.3)
+	ctrl(s, .Mouse_Move, b)
+	ctrl(s, .Mouse_Release, b)
+	testing.expectf(t, tab.folder.count == n - 2, "%v: Ctrl and a drag deselect: %d of %d", mode, tab.folder.count, n)
+	testing.expectf(t, !app.file_drag && len(app.drag_paths) == 0, "%v: no file dragged by Ctrl", mode)
+
+	// 4. notes.txt dragged onto Photos: moved there
+	folder_select_none(&tab.folder)
+	session.frames(s, 2)
+	rn, okn := rect_of(s, tab, lb, index_of(tab, "notes.txt"))
+	rp, okp := rect_of(s, tab, lb, index_of(tab, "Photos"))
+	testing.expectf(t, okn && okp, "%v: notes.txt and Photos shown", mode)
+	from, into := middle(rn), middle(rp)
+	session.press(s, from)
+	session.move(s, from + {0, -12})
+	session.move(s, into)
+	session.frames(s, 2)
+	testing.expectf(t, strings.has_suffix(app.drop_hover, fs.SEPARATOR_STRING + "Photos"), "%v: Photos lit", mode)
+	session.release(s, into)
+	session.frames(s, 2)
+	wait_jobs(s)
+	testing.expectf(t, fs.exists(fs.join(dir, "Photos/notes.txt", context.temp_allocator)), "%v: notes.txt dragged into Photos", mode)
+}
+
+@(test) test_mouse_details :: proc(t: ^testing.T) { mouse_matrix(t, 0) }
+@(test) test_mouse_list    :: proc(t: ^testing.T) { mouse_matrix(t, 1) }
+@(test) test_mouse_columns :: proc(t: ^testing.T) { mouse_matrix(t, 2) }
+@(test) test_mouse_grid    :: proc(t: ^testing.T) { mouse_matrix(t, ZOOM_GRID) }
