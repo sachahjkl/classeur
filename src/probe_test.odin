@@ -18,7 +18,7 @@ when ODIN_OS == .Windows {
 	@(private = "file")
 	fault_handler :: proc "system" (info: ^win.EXCEPTION_POINTERS) -> win.LONG {
 		code := info.ExceptionRecord.ExceptionCode
-		if code < 0xC000_0000 || code == 0xE06D_7363 { return 0 }   // (not a fault: a C++ exception, a message)
+		if code < 0x8000_0000 { return 0 }   // (what the test runner takes as a fault: a C++ exception too)
 		context = runtime.default_context()
 		fmt.eprintfln("probe: fault %x at %p, thread %d", code, info.ExceptionRecord.ExceptionAddress, win.GetCurrentThreadId())
 		bt := trace.capture()
@@ -28,6 +28,7 @@ when ODIN_OS == .Windows {
 	}
 	@(private = "file")
 	fault_trace :: proc() { win.AddVectoredExceptionHandler(1, fault_handler) }
+	// (said once: a C++ exception may be thrown and caught many times)
 	foreign import kernel32 "system:Kernel32.lib"
 	foreign import user32 "system:User32.lib"
 	@(default_calling_convention = "system")
