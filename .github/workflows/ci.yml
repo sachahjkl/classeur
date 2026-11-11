@@ -48,24 +48,16 @@ jobs:
         with:
           submodules: recursive
       - uses: ./ext/gui_toolkit/.github/actions/setup-odin
-      - name: probe, the zoom test alone
+      - name: probe, a hundred openings
         shell: pwsh
         continue-on-error: true
-        timeout-minutes: 4
+        timeout-minutes: 8
+        env:
+          CLASSEUR_PROBE: "1"
         run: |
           New-Item -ItemType Directory -Force build | Out-Null
           odin build tools/classeurtool -collection:gt=ext/gui_toolkit/src -out:build/classeurtool.exe -vet
-          build/classeurtool.exe test classeur.test_zoom_icons_stay
-      - name: probe, after the watch test
-        shell: pwsh
-        continue-on-error: true
-        timeout-minutes: 4
-        run: build/classeurtool.exe test classeur.test_watch,classeur.test_zoom_icons_stay
-      - name: probe, after the stripes test
-        shell: pwsh
-        continue-on-error: true
-        timeout-minutes: 4
-        run: build/classeurtool.exe test classeur.test_types,classeur.test_zoom_icons_stay
+          build/classeurtool.exe test classeur.test_probe_open_close
       - name: classeurtool check
         shell: pwsh
         run: |
