@@ -3,6 +3,11 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.15.2] - 2026-11-11
+
+### Added
+- **The details header's menu resets a column**: a right click on a column's title offers to give it back its own width and to leave its sort, the rows can go back to no sort, and Default columns shows every column again at its width and place (gui_toolkit 0.195.0).
+
 ## [0.15.1] - 2026-11-11
 
 ### Changed
@@ -307,6 +312,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.15.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.15.2
 [0.15.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.15.1
 [0.15.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.15.0
 [0.1.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.1.0
