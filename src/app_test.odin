@@ -49,12 +49,16 @@ make_fixture :: proc(t: ^testing.T, files: []string) -> string {
 @(private = "file")
 start :: proc(t: ^testing.T, folders: []string, size := [2]int{}, home := "", loc := #caller_location) -> (s: ^session.Session, app: ^App) {
 	context.allocator = runtime.heap_allocator()
+	log.info("start: app_open")
 	app = app_open({folders = folders, headless = true, size = size, home = home})
+	log.info("start: attach")
 	if !testing.expect(t, app != nil, "classeur opens", loc = loc) { session.stop_test(t, "no application", loc) }
 	testing.cleanup(t, proc(p: rawptr) { app_close((^App)(p)) }, app)
 	s = session.attach(t, {win = app.main.win, state = &app.main.state, renderer = &app.shared.r, user = app, allocator = context.allocator,
 		frame = proc(user: rawptr) { app_frame((^App)(user)) }}, loc)
+	log.info("start: wait_read")
 	wait_read(s)
+	log.info("start: ready")
 	return
 }
 

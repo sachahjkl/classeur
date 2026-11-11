@@ -4,6 +4,7 @@ package classeur
 // each frame from the App (view.odin); the workers change nothing of it themselves: their results come through ui.post.
 
 import "core:fmt"
+import "core:log"
 import "core:strings"
 import "core:sync"
 import "core:time/datetime"
@@ -243,6 +244,10 @@ app_message_open :: proc(data: rawptr, word: u64) {
 }
 
 // Opens the window and its first tabs. nil: no window (said why).
+// (the tests' log: each step of the opening, to find one that hangs on a CI's machine)
+@(private = "file")
+open_trace :: proc(step: string) { when ODIN_TEST { log.infof("app_open: %s", step) } }
+
 app_open :: proc(o: Open_Options) -> ^App {
 	app := new(App)
 	if !o.headless { global_app = app }
@@ -255,6 +260,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	app.sidebar_px = 210
 	app.tz, _ = timezone.region_load("local")
 
+	open_trace("platform.set_app_id")
 	platform.set_app_id(APP_NAME)
 	size := o.size != {} ? o.size : WINDOW_SIZE
 	if !host.host_open(&app.main, &app.shared, {title = "Classeur", size = size, integrated_title = !o.headless, headless = o.headless}, view_build, app) {
@@ -262,13 +268,16 @@ app_open :: proc(o: Open_Options) -> ^App {
 		free(app)
 		return nil
 	}
+	open_trace("h := &app.main")
 	h := &app.main
 	win := h.win
 	app.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
 	app.mono, _ = font.load_embedded(&app.shared.fonts, font.FALLBACK_MONO_DATA)
 	h.state.icon_font = app.icons   // (the menus' icons are the commands' Lucide ones; the widgets keep the toolkit's marks)
 	h.after_input = FRAMES_AFTER_INPUT
+	open_trace("dnd_start")
 	dnd_start(app)
+	open_trace("prefs_open")
 	prefs_open(app)
 	h.partial_redraw = true
 	h.params = app_params
@@ -276,18 +285,24 @@ app_open :: proc(o: Open_Options) -> ^App {
 	app.devtools = devtools.start_from_env(win, APP_NAME)
 	h.before_input = proc(h: ^host.Host) { app := (^App)(h.user); devtools.service(app.devtools, &h.state, &app.shared.r) }
 
+	open_trace("pool_start")
 	pool_start(&app.pool)
 	pool_start(&app.measure_pool, MEASURE_THREADS)
 	pool_start(&app.thumb_pool, THUMB_THREADS)
 	app.side_open = {.Recents = false, .Bookmarks = true, .Storage = true, .Places = true}
+	open_trace("jobs_start")
 	jobs_start(app)
+	open_trace("watcher_start")
 	watcher_start(app)
+	open_trace("places_load")
 	places_load(app)
+	open_trace("")
 	// (the session's tabs come back; folders given open beside them, as the second start's do)
 	if session_load(app) {
 		folders_show(app, o.folders)
 		return app
 	}
+	open_trace("first := new")
 	first := new(Panel)
 	append(&app.panels, first)
 	if len(o.folders) == 0 {
