@@ -324,7 +324,7 @@ address_field :: proc(app: ^App, t: ^Tab, em: f32) {
 				ui.spacer(ui.px(em * 0.4))
 				ui.next({width = ui.fill(), height = ui.pct(1)})
 				// (the folder's name, the letters typed lit: the path before it is the field's)
-				ui.label_fuzzy(shown_text(r.label), r.ranges)
+				ui.matched_label("###label", shown_text(r.label), r.ranges)
 			}
 			if on { ui.pop_tags() }
 			if sig.clicked {
@@ -865,27 +865,29 @@ entry_name :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, em: f32) {
 	}
 }
 
-// `text` (a part of what `ranges` were found in, from `offset`) in pieces: the matched ones in the accent's colour.
+// `text` (a part of what `ranges` were found in, from `offset`) in pieces: the matched ones in the theme's colours of
+// what a search found ("match" on "match_bg", as the toolkit's matched_label), the text's own on the selection.
 @(private = "file")
 match_text :: proc(text: string, ranges: []ui.Fuzzy_Range, offset: int, selected: bool) {
-	accent := selected ? ui.color("text") : ui.color("accent")
 	at := 0
-	piece :: proc(s: string, lit: bool, accent: ui.Color, n: int) {
+	piece :: proc(s: string, lit, selected: bool, n: int) {
 		if s == "" { return }
-		ui.next({width = ui.text_size(0), height = ui.pct(1), text_pad = 0, fg = lit ? accent : nil})
-		ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###p%d", shown_text(s), n))
+		flags := ui.Box_Flags{.Draw_Text, .No_Text_Trunc}
+		if lit && !selected { flags += {.Draw_Background} }
+		ui.next({width = ui.text_size(0), height = ui.pct(1), text_pad = 0, fg = lit && !selected ? ui.color("match") : nil, bg = ui.color("match_bg"), radius = 0})
+		ui.build_box(flags, fmt.tprintf("%s###p%d", shown_text(s), n))
 	}
 	n := 0
 	for r in ranges {
 		lo, hi := r[0] - offset, r[1] - offset
 		if hi <= 0 || lo >= len(text) { continue }
 		lo, hi = max(lo, 0), min(hi, len(text))
-		if lo > at { piece(text[at:lo], false, accent, n); n += 1 }
-		piece(text[lo:hi], true, accent, n)
+		if lo > at { piece(text[at:lo], false, selected, n); n += 1 }
+		piece(text[lo:hi], true, selected, n)
 		n += 1
 		at = hi
 	}
-	piece(text[at:], false, accent, n)
+	piece(text[at:], false, selected, n)
 }
 
 ////////////////////////////////
@@ -1115,7 +1117,7 @@ filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 		}
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		res: ui.Edit_Result
-		if ui.tags("bare") { res = ui.line_edit("###filter", &t.filter, "Filter...") }
+		if ui.tags("bare") { res = ui.line_edit("###filter", &t.filter, "Filter...", clearable = !t.flat) }
 		note_text_field(app, key)
 		if t.focus_due == .Filter {
 			ui.set_focus(key)
@@ -1141,7 +1143,8 @@ filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 				tab_load(app, t)
 				t.focus_due = .Filter
 			}
-			if len(t.filter.buf) > 0 || t.flat {
+			// (the field's own cross empties it; this one leaves the search of every folder below, its letters with it)
+			if t.flat {
 				if icon_action(app, "filter_clear", lucide.X, "Clear the filter, leave the search (Escape)", em) {
 					ui.field_clear(&t.filter)
 					if t.flat { t.flat = false; tab_load(app, t) }

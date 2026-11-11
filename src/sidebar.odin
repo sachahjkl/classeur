@@ -117,7 +117,7 @@ side_filter :: proc(app: ^App, em: f32) {
 		key := ui.key_from_string(ui.parent_box().key, "###sfilter")
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		res: ui.Edit_Result
-		if ui.tags("bare") { res = ui.line_edit("###sfilter", &app.side_filter, "Filter...") }
+		if ui.tags("bare") { res = ui.line_edit("###sfilter", &app.side_filter, "Filter...", clearable = true) }
 		note_text_field(app, key)
 		if res.cancelled { ui.field_clear(&app.side_filter) }
 		ui.spacer(ui.px(em * 0.4))

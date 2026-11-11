@@ -238,7 +238,7 @@ goto_build :: proc(app: ^App) {
 				input_key := ui.key_from_string(ui.parent_box().key, "###goto_input")
 				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.3))})
 				res: ui.Edit_Result
-				if ui.tags("bare") { res = ui.line_edit("###goto_input", &g.field, "Go to: a path, or a few letters of a folder") }
+				if ui.tags("bare") { res = ui.line_edit("###goto_input", &g.field, "Go to: a path, or a few letters of a folder", clearable = true) }
 				if res.changed { g.sel, g.scroll, g.moved = 0, 0, false }
 				if res.cancelled { g.open = false }
 				if res.committed {
@@ -270,7 +270,7 @@ goto_build :: proc(app: ^App) {
 						path_icon(app, r.path, true, em * 1.7)
 						ui.spacer(ui.px(em * 0.4))
 						ui.next({width = ui.fill(), height = ui.pct(1)})
-						ui.label_fuzzy(shown_text(r.label), r.ranges)
+						ui.matched_label("###label", shown_text(r.label), r.ranges)
 						if ui.tags("weak") {
 							ui.next({width = ui.text_size(em * 0.5), height = ui.pct(1), font_size = math.round(em * 0.85)})
 							ui.label(fmt.tprintf("%s###kind", r.kind))

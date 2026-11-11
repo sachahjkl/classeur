@@ -138,7 +138,12 @@ file_drag_frame :: proc(app: ^App, em: f32) {
 	if !app.file_drag { return }
 	m := ui.mouse_pos()
 	dir := drop_target(app, m)
-	effect := drop_effect(app, app.drag_paths[:], dir, {.Copy, .Move}, ui.current_state().mods)
+	// (the modifiers held now, by their own keys: a compositor may leave the modifiers' state stale during a drag)
+	mods: platform.Modifiers
+	if ui.key_held(.Ctrl) { mods += {.Ctrl} }
+	if ui.key_held(.Shift) { mods += {.Shift} }
+	if ui.key_held(.Alt) { mods += {.Alt} }
+	effect := drop_effect(app, app.drag_paths[:], dir, {.Copy, .Move}, mods)
 	delete(app.drop_hover)
 	app.drop_hover = effect != nil ? strings.clone(dir) : ""
 	// (let go: the press's box has no longer the pointer's)

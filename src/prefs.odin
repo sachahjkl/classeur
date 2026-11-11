@@ -16,6 +16,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "look.autohide_scrollbars", tags = {"scrollbar", "hide"}, description = "The scroll bars show only while the pointer is over what they scroll.", kind = .Bool, default = {b = false}},
 	{name = "look.follow_system", tags = {"dark", "light", "mode"}, description = "Follows the system's light or dark scheme as it changes; off, classeur stays dark.", kind = .Bool, default = {b = false}},
 	{name = "look.theme", tags = {"colours", "colors", "dark", "light"}, description = "The colours of every part of the window.", kind = .String, default = {s = "Graphite"}},
+	{name = "look.system_title", tags = {"title bar", "decorations", "window"}, description = "The system draws the window's title bar, above the tabs; off, the tabs are in the title bar.", kind = .Bool, default = {b = false}},
 	{name = "look.alternating_rows", tags = {"zebra", "stripes"}, description = "Paints every other row a shade lighter, to tell the rows apart.", kind = .Bool, default = {b = false}},
 	{name = "look.inactive_opacity", tags = {"dim", "panels", "focus"}, description = "Dims the contents of the panels that do not have the keyboard, so that the one that has it stands out.", kind = .Float, default = {f = 0.8}, min = 0.3, max = 1, bounded = true},
 	{name = "look.font_size", tags = {"text", "zoom", "scale"}, description = "The size of the text, in logical pixels.", kind = .Float, default = {f = 13.5}, min = 10, max = 22, bounded = true},
@@ -42,6 +43,7 @@ Settings :: struct {
 	compact:          bool,
 	animations:       string,   // "system", "on", "off" (in the registry)
 	smooth_scroll:    bool,
+	system_title:     bool,   // the system draws the title bar (the tabs under it, no window buttons of classeur's)
 	follow_system:    bool,
 	theme:            string,   // in the registry (valid until the next change)
 	alternating_rows: bool,
@@ -64,7 +66,11 @@ prefs_open :: proc(app: ^App) {
 	names := make([]string, len(themes()))
 	for t, i in themes() { names[i] = t.name }
 	app.theme_names = names
-	for &d in defs { if d.name == "look.theme" { d.choices = names } }
+	for &d in defs {
+		if d.name == "look.theme" { d.choices = names }
+		// (offered where the system can draw a title bar: Windows, X11, a Wayland compositor with server-side ones)
+		if d.name == "look.system_title" { d.hidden = !platform.system_title_available(app.main.win) }
+	}
 	config.register(&app.prefs, defs[:])
 	if !app.headless { config.load_file(&app.prefs, prefs_file(), .User) }
 	settings_apply(app)
@@ -89,6 +95,8 @@ settings_apply :: proc(app: ^App) {
 	s.compact = config.string_of(p, "look.density") == "compact"
 	s.animations = config.string_of(p, "look.animations")
 	s.smooth_scroll = config.bool_of(p, "look.smooth_scroll")
+	s.system_title = config.bool_of(p, "look.system_title")
+	if !app.headless { platform.set_integrated_title(app.main.win, !s.system_title) }
 	s.follow_system = config.bool_of(p, "look.follow_system")
 	s.theme = config.string_of(p, "look.theme")
 	s.alternating_rows = config.bool_of(p, "look.alternating_rows")

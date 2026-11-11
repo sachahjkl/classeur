@@ -227,13 +227,10 @@ batch_build :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 2.6))})
 			if ui.row(.Center, id = "###batch_opts") {
 				ui.spacer(ui.px(em * 0.9))
+				// (the case: three words, the chosen one marked, as the toolkit's segmented in words)
 				casing := int(b.casing)
-				labels := [Batch_Case]string{.Keep = "Case kept", .Lower = "lower", .Upper = "UPPER"}
-				for c in Batch_Case {
-					ui.next({width = ui.px(em * 9.5), height = ui.pct(1)})
-					ui.radio(fmt.tprintf("###case%d", int(c)), labels[c], &casing, int(c))
-					ui.spacer(ui.px(em * 0.6))
-				}
+				ui.next({height = ui.pct(1)})
+				ui.segmented("###case", {"Case kept", "lower", "UPPER"}, &casing, look = .Text)
 				b.casing = Batch_Case(casing)
 				ui.spacer(ui.fill())
 				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.0))})

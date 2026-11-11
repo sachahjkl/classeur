@@ -2682,3 +2682,23 @@ test_locations_in_tabs :: proc(t: ^testing.T) {
 		testing.expect_value(t, current_tab(app).path, fs.join(share, "Reports", context.temp_allocator))
 	})
 }
+
+// The system's title bar, a setting where the system can draw one (an offscreen window says it can): found by its tag
+// in the palette, read into the settings.
+@(test)
+test_system_title_setting :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir}, size = {1200, 800})
+		context.allocator = runtime.heap_allocator()
+		session.key(s, .K, {.Ctrl})
+		session.type_text(s, "title bar")
+		session.frames(s, 2)
+		testing.expect(t, session.find_text(s, "System title") != nil, "the setting, by its tag")
+		session.key(s, .Escape)
+		_ = config.set_from_string(&app.prefs, "look.system_title", "true", .User)
+		settings_apply(app)
+		testing.expect(t, app.settings.system_title, "read")
+	})
+}
