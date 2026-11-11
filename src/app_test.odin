@@ -1172,9 +1172,10 @@ test_columns :: proc(t: ^testing.T) {
 		session.click(s, "header", .Right)
 		session.frames(s, 2)
 		testing.expect(t, ui.ctx_menu_any_open(), "the columns' menu")
-		// (its second item: Type)
-		session.key(s, .Down, repeat = 2)
-		session.key(s, .Return)
+		// (its item Type)
+		item := session.find_text(s, "Type", 1)
+		testing.expect(t, item != nil, "the item Type")
+		if item != nil { session.click_at(s, (item.rect.min + item.rect.max) * 0.5) }
 		session.frames(s, 2)
 		testing.expect_value(t, columns_text(app), "Modified Folders Files Size")
 		testing.expect(t, session.find(s, "hd_2") == nil, "no Type column")
@@ -2784,5 +2785,44 @@ test_palette_slip :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		_, made := fs.stat(fs.join(dir, "New folder", context.temp_allocator))
 		testing.expect(t, made, "Enter on the slip made the folder")
+	})
+}
+
+// The header's menu (the toolkit's): the column right-clicked back to its own width and unsorted, the tab's rows by name
+// again; the default columns shown again.
+@(test)
+test_header_menu :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir}, size = {1400, 700})
+		context.allocator = runtime.heap_allocator()
+		tab := current_tab(app)
+		l := &app.columns
+		session.click_at(s, title_point(s, .Size))
+		testing.expect_value(t, tab.folder.sort.key, fs.Sort_Key.Size)
+		l.width[Detail.Size] += 40
+		session.frames(s, 2)
+		session.click(s, fmt.tprintf("hd_%d", int(Detail.Size)), .Right)
+		session.frames(s, 2)
+		item := session.find_text(s, "Reset Size")
+		testing.expect(t, item != nil, "the column's own item")
+		if item == nil { return }
+		session.click_at(s, (item.rect.min + item.rect.max) * 0.5)
+		session.frames(s, 2)
+		testing.expect_value(t, tab.folder.sort.key, fs.Sort_Key.Name)
+		testing.expect_value(t, l.width[Detail.Size], DETAIL_COLUMNS[.Size].width)
+		// a column hidden, shown again by the default columns
+		l.shown[Detail.Type] = false
+		session.frames(s, 2)
+		session.click(s, fmt.tprintf("hd_%d", int(Detail.Modified)), .Right)
+		session.frames(s, 2)
+		def := session.find_text(s, "Default columns")
+		testing.expect(t, def != nil, "the default columns' item")
+		if def == nil { return }
+		session.click_at(s, (def.rect.min + def.rect.max) * 0.5)
+		session.frames(s, 2)
+		testing.expect(t, l.shown[Detail.Type], "Type shown again")
+		testing.expect_value(t, config.string_of(&app.prefs, "view.columns"), DETAIL_COLUMNS_DEFAULT)
 	})
 }

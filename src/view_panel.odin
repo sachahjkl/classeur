@@ -98,17 +98,37 @@ columns_save :: proc(app: ^App) {
 	prefs_save(app)
 }
 
-// The header's menu (a right click on it): each column, ticked when shown (the toolkit's items); it stays open.
+// The header's menu (a right click on it): the toolkit's (the column clicked back to its own width and unsorted, the
+// rows unsorted, each column ticked when shown, the default columns), on the sort of the tab whose header was clicked.
 columns_menu_build :: proc(app: ^App, em: f32) {
 	if app.columns_menu_key == 0 { app.columns_menu_key = ui.key_from_string(0, "classeur_columns_menu") }
 	if ui.ctx_menu(app.columns_menu_key, em * MENU_WIDTH_EM) {
-		if changed, _ := ui.table_column_items(&app.columns); changed { columns_save(app) }
-		ui.menu_separator()
-		if ui.menu_item("The columns as they were###colm_reset").clicked {
-			columns_read(app, DETAIL_COLUMNS_DEFAULT, "")
-			columns_save(app)
-		}
+		t := find_tab(app, app.columns_menu_tab)
+		if t == nil { return }
+		// (the layout is every panel's; its sort, the tab's: shown as the tab sorts, given back to it when changed)
+		l := &app.columns
+		header_sort_show(l, &t.folder)
+		changed, sort_changed := ui.table_menu_items(l)
+		if changed { columns_save(app) }
+		if sort_changed { header_sort_apply(app, l, &t.folder) }
 	}
+}
+
+// The tab's sort on the header's columns (a count's column has none: its sort is by name).
+@(private = "file")
+header_sort_show :: proc(l: ^ui.Table_Layout, f: ^Folder) {
+	l.sort, l.descending = int(Detail.Name), f.sort.descending
+	for k in Detail { if DETAIL_SORT[k] == f.sort.key && !DETAIL_COLUMNS[k].unsorted { l.sort = int(k) } }
+}
+
+// The header's sort given to the tab (no sort: the names' order, as the sort commands give it).
+@(private = "file")
+header_sort_apply :: proc(app: ^App, l: ^ui.Table_Layout, f: ^Folder) {
+	s := f.sort
+	s.key, s.descending = .Name, false
+	if l.sort != ui.TABLE_UNSORTED { s.key, s.descending = DETAIL_SORT[Detail(l.sort)], l.descending }
+	folder_set_sort(f, s)
+	app.default_sort = f.sort
 }
 
 // The filter's width in the footer, in ems.
@@ -371,9 +391,7 @@ header_lead_em :: proc(f: ^Folder) -> f32 {
 header :: proc(app: ^App, t: ^Tab, em: f32) -> ui.Key {
 	f := &t.folder
 	l := &app.columns
-	// (the tab's sort shown on its column; a count's column has none)
-	l.sort, l.descending = int(Detail.Name), f.sort.descending
-	for k in Detail { if DETAIL_SORT[k] == f.sort.key && !DETAIL_COLUMNS[k].unsorted { l.sort = int(k) } }
+	header_sort_show(l, f)
 	Head :: struct { app: ^App, t: ^Tab }
 	h := ui.frame_new(Head)
 	h^ = {app, t}
@@ -399,17 +417,11 @@ header :: proc(app: ^App, t: ^Tab, em: f32) -> ui.Key {
 			column_funnel(h.app, h.t, DETAIL_SORT[d], DETAIL_COLUMNS[d].title, hot, em)
 		},
 	})
-	if ev.sorted {
-		// (the third click leaves no sort: the names' order, as the sort commands give it)
-		s := f.sort
-		s.key, s.descending = .Name, false
-		if l.sort != ui.TABLE_UNSORTED { s.key, s.descending = DETAIL_SORT[Detail(l.sort)], l.descending }
-		folder_set_sort(f, s)
-		app.default_sort = f.sort
-	}
+	if ev.sorted { header_sort_apply(app, l, f) }   // (the third click leaves no sort: the names' order)
 	if ev.resized || ev.moved { columns_save(app) }
 	if ev.menu {
 		if app.columns_menu_key == 0 { app.columns_menu_key = ui.key_from_string(0, "classeur_columns_menu") }
+		app.columns_menu_tab = t.id
 		ui.ctx_menu_open(app.columns_menu_key, ui.mouse_pos())
 	}
 	return ev.view

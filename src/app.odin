@@ -91,6 +91,7 @@ App :: struct {
 	tab_drag:    Tab_Drag,          // a tab dragged (tab_drag.odin)
 	columns:      ui.Table_Layout,  // the details' columns: their order, the ones shown, their widths (view.columns)
 	columns_menu_key: ui.Key,
+	columns_menu_tab: u64,          // the tab whose header's menu is open (its sort is the menu's)
 	zoom_slider_key: ui.Key,        // the zoom's slider over the footer (view_panel.odin)
 	zoom_slider_tab: u64,
 	tab_rects:   [dynamic]Tab_Rect, // the tabs' boxes of this frame
