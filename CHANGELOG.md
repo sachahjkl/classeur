@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-11-11
+
 ### Fixed
 - The rectangle selection in the Grid and Columns views (it was the Details and List views' only): from the empty part,
   between the cards too, it selects the items it touches. Ctrl and a drag from a card deselects as in the list.
@@ -278,3 +280,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.14.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.0
 [0.14.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.1
 [0.14.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.2
+[0.14.3]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.3
