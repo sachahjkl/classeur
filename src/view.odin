@@ -38,6 +38,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app.column_rects, app.column_rects_now = app.column_rects_now, app.column_rects
 	clear(&app.column_rects_now)
 	tab_drag_apply(app)
+	tab_drag_land(app)
 	measures_resort(app)
 	tab_drag_poll(app)
 	// (a band whose tab went, or whose press ended out of its list: over)
@@ -224,7 +225,10 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 		tab_w := em * TAB_EM
 		if room > 0 && n > 0 { tab_w = clamp((room - em * 4.5) / f32(n), em * TAB_MIN_EM, em * TAB_EM) }
 		close := -1
+		// (where a dragged tab lands in this row: a ghost of it there, the tabs after it moved along)
+		ghost_at := tab_ghost_slot(app, index)
 		for t, i in p.tabs {
+			if i == ghost_at { tab_ghost(app, tab_w, em) }
 			on := i == p.active
 			// (square, from the panel's left edge: the shown tab is the top of the toolbar under it, one surface)
 			// (a hidden tab's hover in the same shape: the rounding of the settings; the box's radius is scaled by it)
@@ -272,6 +276,7 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 				tab_menu_open(app)
 			}
 		}
+		if ghost_at == len(p.tabs) { tab_ghost(app, tab_w, em) }
 		ui.spacer(ui.px(em * 0.3))
 		if icon_action(app, fmt.tprintf("newtab%d", index), lucide.PLUS, command_tip("tab_new"), em) {
 			app.focus = index

@@ -6,6 +6,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- A tab dragged shows its ghost where it lands in a row, the tabs after it moved along (nothing then follows the pointer
+  over it); off the rows, the panel or the half a new panel takes is lit as before.
 - Letters typed while the list has the keyboard go to the panel's filter (File Pilot's); Space still opens the inspector.
 - Ctrl and a drag from a row (Explorer's): from a selected row, the rows it passes leave the selection; from another, they
   join it.

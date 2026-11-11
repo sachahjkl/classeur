@@ -32,10 +32,52 @@ Tab_Drag :: struct {
 	size:         [2]f32,           // the tab's size (the ghost's)
 	capture:      bool,             // a picture of the tab was asked of the renderer (the system's drag shows it)
 	panel_now:    int,              // the panel the dragged tab is in (found by its id each frame)
+	land_panel:   int,              // where it would land now (tab_drag_land, before the build): a panel's row ...
+	land_at:      int,              // ... its place there (-1: none, or nowhere it would move)
+	land_split:   Split,            // ... or a new panel beside it
 }
 
 // Where a tab let go makes a new panel: none, a column at the right, a panel below.
 Split :: enum u8 { None, Right, Below }
+
+// Before a build: where the dragged tab would land at the pointer (the rows show its ghost there). A place that moves
+// nothing (its own place, either side of itself) shows none: the dimmed tab is the place.
+tab_drag_land :: proc(app: ^App) {
+	d := &app.tab_drag
+	d.land_at, d.land_split = -1, .None
+	if !d.active || d.capture { return }
+	to, at, split, ok := tab_drop_place(app, ui.mouse_pos())
+	if !ok { return }
+	d.land_panel, d.land_split = to, split
+	if split != .None { return }
+	from := -1
+	if to < len(app.panels) { for q, i in app.panels[to].tabs { if q.id == d.tab { from = i } } }
+	if from >= 0 && (at == from || at == from + 1) { return }
+	d.land_at = at
+}
+
+// The place in panel `index`'s row where the dragged tab's ghost goes (-1: none).
+tab_ghost_slot :: proc(app: ^App, index: int) -> int {
+	d := &app.tab_drag
+	if !d.active || d.land_split != .None || d.land_panel != index { return -1 }
+	return d.land_at
+}
+
+// The dragged tab's ghost in a row: its icon and its title, faint, a line around it.
+tab_ghost :: proc(app: ^App, width, em: f32) {
+	t := find_tab(app, app.tab_drag.tab)
+	if t == nil { return }
+	ui.next({width = ui.px(width), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .X, cross = .Center,
+		bg = draw.hex(surfaces(app).list) * {1, 1, 1, 0.6}, border = ui.color("accent"), radius = em * TAB_RADIUS_EM, transparency = 0.25})
+	b := ui.build_box({.Draw_Background, .Draw_Border}, "###tab_land")
+	if ui.parent(b) {
+		ui.spacer(ui.px(em * 0.7))
+		path_icon(app, t.path, true, em * 1.6)
+		ui.spacer(ui.px(em * 0.4))
+		ui.next({width = ui.fill(), height = ui.pct(1)})
+		ui.label(fmt.tprintf("%s###title", shown_text(tab_title(app, t))))
+	}
+}
 
 // Before a build: the move of a tab released in the last one. A drag whose tab went (closed while dragged) is over.
 tab_drag_apply :: proc(app: ^App) {
@@ -239,32 +281,22 @@ tab_drag_overlay :: proc(app: ^App, em: f32) {
 	if t == nil { return }
 	m := ui.mouse_pos()
 	accent := ui.color("accent")
-	w := max(2, ui.scale() * 2)
 	place :: proc(r: ui.Rect, bg, border: ui.Color, id: string, radius: f32 = 0, axis := ui.Axis.X) -> ^ui.Box {
 		ui.next({width = ui.px(max(r.max.x - r.min.x, 1)), height = ui.px(max(r.max.y - r.min.y, 1)), bg = bg, border = border, radius = radius, axis = axis, cross = .Center})
 		b := ui.build_box({.Floating_X, .Floating_Y, .Draw_Background, .Draw_Border}, id)
 		b.fixed_pos = r.min
 		return b
 	}
-	if to, at, split, ok := tab_drop_place(app, m); ok && to < len(app.panel_rects) {
+	if to, _, split, ok := tab_drop_place(app, m); ok && to < len(app.panel_rects) {
 		pr := app.panel_rects[to]
 		switch split {
 		case .None:
 			row := false
-			x: f32
 			for tr in app.tab_rects_last {
-				if tr.panel != to { continue }
-				if m.y >= tr.rect.min.y && m.y < tr.rect.max.y { row = true }
-				if tr.index == at { x = tr.rect.min.x } else if tr.index == at - 1 { x = tr.rect.max.x }
+				if tr.panel == to && m.y >= tr.rect.min.y && m.y < tr.rect.max.y { row = true }
 			}
-			if row {
-				// (a line between two tabs: where it goes in the row)
-				for tr in app.tab_rects_last {
-					if tr.panel != to { continue }
-					place({{x - w * 0.5, tr.rect.min.y}, {x + w * 0.5, tr.rect.max.y}}, accent, {}, "###tab_drop_line")
-					break
-				}
-			} else {
+			// (in the row: the ghost there, built with the row; on the panel: the panel lit, the ghost at its row's end)
+			if !row {
 				place(pr, accent * {1, 1, 1, 0.06}, accent, "###tab_drop_panel")
 			}
 		case .Right, .Below:
@@ -280,6 +312,8 @@ tab_drag_overlay :: proc(app: ^App, em: f32) {
 		}
 	}
 	// the ghost: the tab under the pointer, and what its edge does
+	// (a place in a row: its ghost there is the tab, nothing follows the pointer over it)
+	if d.land_at >= 0 && d.land_split == .None { return }
 	// (in the window, its words under it too)
 	hint_w := max(d.size.x, em * 17)
 	at := m - d.grab

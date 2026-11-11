@@ -1700,15 +1700,17 @@ test_tab_drag_feedback :: proc(t: ^testing.T) {
 	from := (first.min + first.max) * 0.5
 	session.press(s, from)
 	session.move(s, from + {12, 0})
-	session.move(s, from + {first.max.x - first.min.x, 0})
+	session.move(s, from + {(first.max.x - first.min.x) * 1.4, 0})
 	session.frames(s, 2)
-	testing.expect(t, session.find(s, "tab_ghost") != nil, "the ghost")
-	testing.expect(t, session.find(s, "tab_drop_line") != nil, "the line in the row")
+	testing.expect(t, session.find(s, "tab_land") != nil, "its ghost where it lands in the row")
+	testing.expect(t, session.find(s, "tab_ghost") == nil, "nothing else over it")
+	when SHOTS { session.save_png(s, "tab_land.png") }
 	// the right quarter of the panel: a new panel at the right
 	pr := app.panel_rects[0]
 	right := [2]f32{pr.max.x - (pr.max.x - pr.min.x) * 0.1, (pr.min.y + pr.max.y) * 0.5}
 	session.move(s, right)
 	session.frames(s, 2)
+	testing.expect(t, session.find(s, "tab_ghost") != nil, "off the rows: the ghost follows the pointer")
 	testing.expect(t, session.find(s, "tab_drop_split") != nil && session.find_text(s, "A new panel at the right") != nil, "the half it takes")
 	when SHOTS { session.save_png(s, "tab_split.png") }
 	session.release(s, right)
