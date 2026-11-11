@@ -15,6 +15,7 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ### Added
 - Each tab's sort is part of the session.
+- `classeurtool test <names>`: those tests of the program alone; the tests' log says each one as it starts.
 
 ## [0.14.4] - 2026-11-11
 
