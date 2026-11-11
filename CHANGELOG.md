@@ -15,6 +15,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   reads at the drop only (the toolkit's drop_types tells it before); files dragged from another program too.
 - The dragged tab's picture and ghost had several blue borders: its picture is read before the ghost shows, the ghost has
   one line, the tab left behind is dimmed.
+- The sidebar's filter as tall as the panels' toolbars: their lines meet.
 - A line under the title bar, the whole width, the shown tab's lines going on from it.
 
 ### Changed

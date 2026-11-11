@@ -99,7 +99,8 @@ go_from :: proc(app: ^App, t: ^Tab, sig: ui.Signal, path: string) {
 
 @(private = "file")
 side_filter :: proc(app: ^App, em: f32) {
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.4))})
+	// (as tall as the panels' toolbars: their lines meet across the window)
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOOLBAR_EM))})
 	if ui.row(.Center, {.Draw_Side_Bottom}, "###side_filter") {
 		ui.spacer(ui.px(em * 0.5))
 		if ui.tags("weak") { glyph(app, lucide.SEARCH, em * 1.6) }
