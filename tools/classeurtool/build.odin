@@ -112,7 +112,8 @@ run_test :: proc(args: []string) -> int {
 	for pkg in TEST_PACKAGES {
 		name, _ := strings.replace_all(pkg, "/", "_", context.temp_allocator)
 		out := fmt.tprintf("-out:build/test_%s%s", name, ODIN_OS == .Windows ? ".exe" : "")
-		extra := pkg == "src" ? []string{out, "-define:ODIN_TEST_THREADS=1"} : []string{out}
+		// (each test said as it starts: a test that hangs is the last one said; the CI's log shows it)
+		extra := pkg == "src" ? []string{out, "-define:ODIN_TEST_THREADS=1", "-define:ODIN_TEST_LOG_STATE_CHANGES=true"} : []string{out}
 		cmd := pkg == "tools/classeurtool" ? []string{"odin", "test", pkg, collection(), "-vet", out} : odin_cmd("test", pkg, extra)
 		if !toolbox.run(cmd, {echo = true}) { return 1 }
 	}
