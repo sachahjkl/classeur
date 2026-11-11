@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-11
+
 ### Added
 - A tab dragged shows its ghost where it lands in a row, the tabs after it moved along (nothing then follows the pointer
   over it); off the rows, the panel or the half a new panel takes is lit as before.
@@ -254,3 +256,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.13.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.13.0
 [0.13.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.13.1
 [0.14.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.0
+[0.14.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.1
