@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-11-11
+
 ### Fixed
 - Files dragged in the window are classeur's own drag (File Pilot's): the folder under the pointer (a row, a tab, a place
   or a bookmark of the sidebar) is lit, a ghost beside the pointer says what a release does, and the release makes the
@@ -267,3 +269,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.13.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.13.1
 [0.14.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.0
 [0.14.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.1
+[0.14.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.2
