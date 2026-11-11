@@ -113,7 +113,7 @@ run_test :: proc(args: []string) -> int {
 	if len(args) > 0 {
 		out := fmt.tprintf("-out:build/test_some%s", ODIN_OS == .Windows ? ".exe" : "")
 		names := fmt.tprintf("-define:ODIN_TEST_NAMES=%s", args[0])
-		return toolbox.run(odin_cmd("test", "src", {out, names, "-define:ODIN_TEST_THREADS=1", "-define:ODIN_TEST_LOG_STATE_CHANGES=true"}), {echo = true}) ? 0 : 1
+		return toolbox.run(odin_cmd("test", "src", {out, names, "-debug", "-define:ODIN_TEST_THREADS=1", "-define:ODIN_TEST_LOG_STATE_CHANGES=true"}), {echo = true}) ? 0 : 1
 	}
 	for pkg in TEST_PACKAGES {
 		name, _ := strings.replace_all(pkg, "/", "_", context.temp_allocator)
