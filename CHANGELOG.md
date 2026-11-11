@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.5] - 2026-11-11
+
 ### Fixed
 - The session (the panels, the tabs, the bookmarks, the recent folders) is written as soon as it changes, not only when
   the window closes: a program killed, a crash or the end of the system's session lost the tabs.
@@ -300,3 +302,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.14.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.2
 [0.14.3]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.3
 [0.14.4]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.4
+[0.14.5]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.5
