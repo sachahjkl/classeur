@@ -281,6 +281,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	pool_start(&app.pool)
 	pool_start(&app.measure_pool, MEASURE_THREADS)
 	pool_start(&app.thumb_pool, THUMB_THREADS)
+	app.palette.recording = -1   // (no command's keys recorded: the recorder is shut)
 	app.side_open = {.Recents = false, .Bookmarks = true, .Storage = true, .Places = true}
 	jobs_start(app)
 	watcher_start(app)

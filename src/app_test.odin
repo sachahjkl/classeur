@@ -1266,12 +1266,12 @@ test_own_keys :: proc(t: ^testing.T) {
 		testing.expect_value(t, app.palette.recording, -1)
 		testing.expect_value(t, binding_text(app.keymap.custom["tab_new"]), "Ctrl+M, T")
 		testing.expect_value(t, ui.field_string(&app.palette.field), "new tab")
-		// an alias: "nt" for it
-		ui.field_set(&app.palette.field, "nt")
+		// an alias: "ntab" for it (the letters of its words: "nt" alone is in "Font size", a whole match first)
+		ui.field_set(&app.palette.field, "ntab")
 		session.frames(s, 1)
 		session.key(s, .Return, {.Alt})
 		session.key(s, .Escape)
-		testing.expect(t, alias_command(app, "nt") != nil && alias_command(app, "nt").id == "tab_new")
+		testing.expect(t, alias_command(app, "ntab") != nil && alias_command(app, "ntab").id == "tab_new")
 		// the sequence opens a tab; Ctrl+T alone no longer does (its own keys gave way)
 		before := len(current_panel(app).tabs)
 		session.key(s, .M, {.Ctrl})
@@ -1528,7 +1528,7 @@ test_palette_groups :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		files := FIXTURE
 		dir := make_fixture(t, files[:])
-		s, _ := start(t, {dir}, size = {1200, 800})
+		s, app := start(t, {dir}, size = {1200, 800})
 		session.key(s, .P, {.Ctrl, .Shift})
 		session.type_text(s, "hidden files")
 		session.key(s, .Return)
@@ -1536,13 +1536,13 @@ test_palette_groups :: proc(t: ^testing.T) {
 		session.key(s, .P, {.Ctrl, .Shift})
 		session.frames(s, 3)
 		testing.expect(t, session.find_text(s, "Recent") != nil && session.find_text(s, "Go") != nil, "the groups' titles")
-		testing.expect(t, session.find(s, "pal_row_hidden") != nil, "the command run last, shown first")
+		testing.expect_value(t, COMMANDS[palette_line_command(app, 0)].id, "hidden")
 		when SHOTS { session.save_png(s, "palette_groups.png") }
-		rows := session.get(s, "pal_list")
+		rows := session.get(s, "palette_list")
 		session.wheel(s, (rows.rect.min + rows.rect.max) * 0.5, {0, 3})
 		session.frames(s, 2)
 		session.frames(s, 20)
-		testing.expect(t, session.get(s, "pal_list").view_off.y > 0, "scrolled")
+		testing.expect(t, session.get(s, "palette_list").view_off.y > 0, "scrolled")
 		session.key(s, .Escape)
 	})
 }
@@ -2554,5 +2554,25 @@ test_keypad_binding :: proc(t: ^testing.T) {
 		testing.expect_value(t, command_keys(app, command_find("zoom_in")), "Ctrl+Num +")
 		saved := config.string_of(&app.prefs, "keys.custom")
 		testing.expectf(t, strings.contains(saved, "zoom_in=Ctrl+Num +"), "kept: %q", saved)
+	})
+}
+
+// A setting found in the palette (by one of its tags): the settings open on it alone.
+@(test)
+test_palette_settings :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir}, size = {1200, 800})
+		session.key(s, .K, {.Ctrl})
+		session.type_text(s, "corners")
+		session.frames(s, 2)
+		testing.expect(t, session.find_text(s, "Rounding") != nil, "the rounding, by its tag")
+		session.key(s, .Return)
+		session.frames(s, 3)
+		testing.expect(t, !app.palette.open && app.options.open, "the settings open")
+		testing.expect(t, strings.contains(ui.field_string(&app.options.page.query), "look.rounding"), "on the rounding")
+		testing.expect(t, session.find_text(s, fmt.tprintf("classeur %s", APP_VERSION)) != nil, "the version at their foot")
+		when SHOTS { session.save_png(s, "palette_settings.png") }
 	})
 }

@@ -12,6 +12,7 @@ import "gt:draw"
 import "gt:host"
 import lucide "gt:lucide"
 import "gt:platform"
+import prefs_page "gt:prefs_page"
 import "gt:ui"
 import "fs"
 
@@ -192,6 +193,11 @@ build_top :: proc(app: ^App, em: f32) {
 			if have && prev >= 0 { ui.spacer(ui.px(app.panel_rects[i].min.x - app.panel_rects[prev].max.x - line)) }
 			tab_region(app, p, i, w, have ? app.panel_rects[i].max.x - app.panel_rects[i].min.x : 0, em)
 			prev = i
+		}
+		// (an update to install, coming, or in place: a button before the window's own; nothing otherwise)
+		if app.updater != nil {
+			ui.next({height = ui.px(ui.dense(em * 1.9))})
+			if prefs_page.update_badge(app.updater, proc(user: rawptr) { updates_restart((^App)(user)) }, app) { ui.spacer(ui.px(em * 0.5)) }
 		}
 		ui.window_buttons()
 	}

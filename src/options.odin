@@ -53,37 +53,46 @@ options_build :: proc(app: ^App) {
 		// where an open dialog's keys are)
 		if !prefs_page.editing(&o.page) && ui.key_press(.Escape) { o.open = false }
 		ui.next({width = ui.fill(), height = ui.fill()})
-		prefs_page.build(&o.page, &app.prefs, {
-			user = app,
-			pages = OPTIONS_PAGES[:],
-			icon_font = app.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
-			foot = "Ctrl+,: these settings",
-			changed = proc(user: rawptr, name: string) {
-				app := (^App)(user)
+		prefs_page.build(&o.page, &app.prefs, options_page(app))
+	}
+}
+
+@(private = "file", rodata)
+OPTIONS_CUSTOM := [?]string{"look.theme"}   // (the themes: cards, drawn by the page's custom)
+
+// The settings page's options: its build's, and the palette's list of the settings (palette.odin).
+options_page :: proc(app: ^App) -> prefs_page.Options {
+	return {
+		version = "classeur " + APP_VERSION,
+		user = app,
+		pages = OPTIONS_PAGES[:],
+		icon_font = app.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
+		foot = "Ctrl+,: these settings",
+		changed = proc(user: rawptr, name: string) {
+			app := (^App)(user)
+			prefs_save(app)
+			settings_apply(app)
+		},
+		// (a slider held: its value shown at once, written when it is let go; only what moves nothing: a text size
+		// shown live moved the slider under the pointer, it comes when let go)
+		preview = proc(user: rawptr, name: string, value: f64) {
+			app := (^App)(user)
+			switch name {
+			case "look.rounding":         ui.set_rounding(&app.main.state, f32(value))
+			case "look.inactive_opacity": app.settings.inactive_opacity = f32(value)
+			}
+			app_frames(app)
+		},
+		updater = app.updater, update_pref = "update.auto",
+		restart = proc(user: rawptr) { updates_restart((^App)(user)) },
+		custom_names = OPTIONS_CUSTOM[:],
+		custom = proc(user: rawptr, name: string, em: f32) {
+			app := (^App)(user)
+			if at := prefs_page.theme_cards(themes(), app.settings.theme, app.theme_shown.light, em); at >= 0 {
+				_ = config.set_from_string(&app.prefs, "look.theme", themes()[at].name, .User)
 				prefs_save(app)
 				settings_apply(app)
-			},
-			// (a slider held: its value shown at once, written when it is let go; only what moves nothing: a text size
-			// shown live moved the slider under the pointer, it comes when let go)
-			preview = proc(user: rawptr, name: string, value: f64) {
-				app := (^App)(user)
-				switch name {
-				case "look.rounding":         ui.set_rounding(&app.main.state, f32(value))
-				case "look.inactive_opacity": app.settings.inactive_opacity = f32(value)
-				}
-				app_frames(app)
-			},
-			updater = app.updater, update_pref = "update.auto",
-			restart = proc(user: rawptr) { updates_restart((^App)(user)) },
-			custom_names = {"look.theme"},
-			custom = proc(user: rawptr, name: string, em: f32) {
-				app := (^App)(user)
-				if at := prefs_page.theme_cards(themes(), app.settings.theme, app.theme_shown.light, em); at >= 0 {
-					_ = config.set_from_string(&app.prefs, "look.theme", themes()[at].name, .User)
-					prefs_save(app)
-					settings_apply(app)
-				}
-			},
-		})
+			}
+		},
 	}
 }
