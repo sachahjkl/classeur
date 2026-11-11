@@ -50,15 +50,27 @@ command_bindings :: proc(app: ^App, c: ^Command, allocator := context.temp_alloc
 
 // "Ctrl+M, T".
 binding_text :: proc(b: Binding, allocator := context.temp_allocator) -> string {
-	if b.chords[1].key == .None { return shortcut_text(b.chords[0], allocator) }
-	return fmt.aprintf("%s, %s", shortcut_text(b.chords[0], context.temp_allocator), shortcut_text(b.chords[1], context.temp_allocator), allocator = allocator)
+	if b.chords[1].key == .None { return ui.chord_text(b.chords[0], allocator) }
+	return fmt.aprintf("%s, %s", ui.chord_text(b.chords[0], context.temp_allocator), ui.chord_text(b.chords[1], context.temp_allocator), allocator = allocator)
 }
 
-// "Ctrl+Shift+P" back to a chord; ok = false for a key it does not know.
+// "Ctrl+Shift+P" back to a chord (the toolkit's names, ui.key_name; the modifiers in any order); ok = false for a key it
+// does not know.
 shortcut_parse :: proc(text: string) -> (s: Shortcut, ok: bool) {
-	parts := strings.split(strings.trim_space(text), "+", context.temp_allocator)
-	if len(parts) == 0 { return }
-	for p in parts[:len(parts) - 1] {
+	t := strings.trim_space(text)
+	// (the key's name at the end, the longest that fits: "Num +" holds a '+', as "Ctrl++" would)
+	best := ""
+	for k in platform.Key {
+		name := ui.key_name(k)
+		if name == "" || !strings.has_suffix(t, name) || len(name) <= len(best) { continue }
+		rest := t[:len(t) - len(name)]
+		if rest != "" && !strings.has_suffix(rest, "+") { continue }
+		best, s.key = name, k
+	}
+	if s.key == .None { return {}, false }
+	rest := strings.trim_suffix(t[:len(t) - len(best)], "+")
+	if rest == "" { return s, true }
+	for p in strings.split(rest, "+", context.temp_allocator) {
 		switch p {
 		case "Ctrl":  s.mods += {.Ctrl}
 		case "Alt":   s.mods += {.Alt}
@@ -66,16 +78,12 @@ shortcut_parse :: proc(text: string) -> (s: Shortcut, ok: bool) {
 		case:         return {}, false
 		}
 	}
-	last := parts[len(parts) - 1]
-	if last == "" && strings.has_suffix(text, "+") { last = "+" }
-	for k in platform.Key {
-		if k != .None && key_name(k) == last { s.key = k; return s, true }
-	}
-	return {}, false
+	return s, true
 }
 
 binding_parse :: proc(text: string) -> (b: Binding, ok: bool) {
-	chords := strings.split(text, ",", context.temp_allocator)
+	// (the chords are joined by ", " as binding_text writes them: a lone ',' is the key, "Ctrl+,")
+	chords := strings.split(strings.trim_space(text), ", ", context.temp_allocator)
 	if len(chords) == 0 || len(chords) > 2 { return }
 	for c, i in chords { b.chords[i] = shortcut_parse(c) or_return }
 	return b, true

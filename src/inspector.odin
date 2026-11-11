@@ -254,7 +254,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 				}
 				ui.spacer(ui.fill())
 			}
-			if ui.tags("weak") { if icon_action(app, "insp_close", lucide.X, command_tip("inspector"), em) { act_inspector(app) } }
+			if ui.tags("weak") { if icon_action(app, "insp_close", lucide.X, command_tip(app, "inspector"), em) { act_inspector(app) } }
 			ui.spacer(ui.px(em * 0.3))
 		}
 		if insp.ready && insp.has_props { inspector_props(app, t, e^, em) }

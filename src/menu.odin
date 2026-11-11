@@ -82,7 +82,7 @@ entry_menu_open :: proc(app: ^App, t: ^Tab, pos: ui.Vec2, from_keyboard := false
 menu_command :: proc(app: ^App, id: string, enabled := true, checked := false) {
 	c := command_find(id)
 	if c == nil { return }
-	if ui.menu_item(c.title, shortcut_text(c.keys[0]), checked = checked, icon = c.icon, enabled = enabled).clicked { c.run(app) }
+	if ui.menu_item(c.title, command_keys(app, c), checked = checked, icon = c.icon, enabled = enabled).clicked { c.run(app) }
 }
 
 entry_menu_build :: proc(app: ^App, em: f32) {

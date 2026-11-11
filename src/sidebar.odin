@@ -55,7 +55,7 @@ sidebar_build :: proc(app: ^App, em: f32) {
 								ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.8)), font_size = em * 0.85})
 								if ui.row(.Center) {
 									ui.spacer(ui.px(em * 2.6))
-									ui.label(fmt.tprintf("%s: bookmark a folder###bm_hint", shortcut_text(command_find("bookmark").keys[0])))
+									ui.label(fmt.tprintf("%s: bookmark a folder###bm_hint", command_keys(app, command_find("bookmark"))))
 								}
 							}
 						}

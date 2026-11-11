@@ -1026,7 +1026,7 @@ test_keys :: proc(t: ^testing.T) {
 			testing.expectf(t, c.keys[0].key != .None, "%s has a key", c.id)
 			for k in c.keys {
 				if k.key == .None { continue }
-				if other, taken := seen[k]; taken { testing.expectf(t, false, "%s and %s share %s", other, c.id, shortcut_text(k)) }
+				if other, taken := seen[k]; taken { testing.expectf(t, false, "%s and %s share %s", other, c.id, ui.chord_text(k)) }
 				seen[k] = c.id
 			}
 		}
@@ -2530,5 +2530,29 @@ test_escape_ends_gestures :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		testing.expect(t, !app.jobs_view.open, "Escape closes it")
 		testing.expect_value(t, tab.folder.count, n)
+	})
+}
+
+// A key of the keypad in a binding of one's own: named, kept in the preferences and read back; the tooltips and the
+// menus show the person's keys.
+@(test)
+test_keypad_binding :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir})
+		context.allocator = runtime.heap_allocator()
+		_ = s
+		for text in ([]string{"Ctrl+Num +", "Ctrl+Shift+Num -", "Alt+Page Down", "Ctrl+,", "Menu", "Ctrl+M, T"}) {
+			b, ok := binding_parse(text)
+			testing.expectf(t, ok, "%q is read", text)
+			testing.expectf(t, binding_text(b) == text, "%q comes back: %q", text, binding_text(b))
+		}
+		b, _ := binding_parse("Ctrl+Num +")
+		keymap_bind(app, "zoom_in", b)
+		testing.expect_value(t, command_tip(app, "zoom_in"), fmt.tprintf("%s (Ctrl+Num +)", command_find("zoom_in").title))
+		testing.expect_value(t, command_keys(app, command_find("zoom_in")), "Ctrl+Num +")
+		saved := config.string_of(&app.prefs, "keys.custom")
+		testing.expectf(t, strings.contains(saved, "zoom_in=Ctrl+Num +"), "kept: %q", saved)
 	})
 }

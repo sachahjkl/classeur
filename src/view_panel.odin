@@ -198,9 +198,9 @@ toolbar :: proc(app: ^App, p: ^Panel, t: ^Tab, index: int, em: f32) {
 	if ui.row(.Center, {.Draw_Side_Bottom, .Draw_Background}, "###toolbar") {
 		ui.spacer(ui.px(em * 0.3))
 		if ui.tags("weak") {
-			if icon_action(app, "back", lucide.ARROW_LEFT, command_tip("back"), em, len(t.back) > 0) { tab_back(app, t) }
-			if icon_action(app, "forward", lucide.ARROW_RIGHT, command_tip("forward"), em, len(t.forward) > 0) { tab_forward(app, t) }
-			if icon_action(app, "up", lucide.ARROW_UP, command_tip("up"), em, fs.parent(t.path) != "") { tab_up(app, t) }
+			if icon_action(app, "back", lucide.ARROW_LEFT, command_tip(app, "back"), em, len(t.back) > 0) { tab_back(app, t) }
+			if icon_action(app, "forward", lucide.ARROW_RIGHT, command_tip(app, "forward"), em, len(t.forward) > 0) { tab_forward(app, t) }
+			if icon_action(app, "up", lucide.ARROW_UP, command_tip(app, "up"), em, fs.parent(t.path) != "") { tab_up(app, t) }
 			if icon_action(app, "history", lucide.CHEVRON_DOWN, "The folders before", em, len(t.back) > 0) {
 				app.focus = index
 				history_menu_open(app, t, ui.parent_box().rect)
@@ -208,7 +208,7 @@ toolbar :: proc(app: ^App, p: ^Panel, t: ^Tab, index: int, em: f32) {
 			vrule(em)
 			if icon_action(app, "lock", lucide.LOCK, t.locked ? "Unlock the tab: folders open in it" : "Lock the tab: folders open in a new tab", em, on = t.locked) { t.locked = !t.locked }
 			marked := slice.contains(app.bookmarks[:], t.path)
-			if icon_action(app, "bookmark", lucide.BOOKMARK, command_tip("bookmark"), em, on = marked) { bookmark_toggle(app, t.path) }
+			if icon_action(app, "bookmark", lucide.BOOKMARK, command_tip(app, "bookmark"), em, on = marked) { bookmark_toggle(app, t.path) }
 			vrule(em)
 		}
 		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0))})
@@ -939,7 +939,7 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 					ui.label(fmt.tprintf("%d%%###jobs_pct", int(t * 100)))
 				}
 				if ui.tags("weak") {
-					if icon_action(app, "jobs", lucide.LAYERS_2, failed > 0 ? fmt.tprintf("The jobs: %d failed (Ctrl+Alt+J)", failed) : command_tip("jobs"), em, on = failed > 0) { act_jobs(app) }
+					if icon_action(app, "jobs", lucide.LAYERS_2, failed > 0 ? fmt.tprintf("The jobs: %d failed (%s)", failed, command_keys(app, command_find("jobs"))) : command_tip(app, "jobs"), em, on = failed > 0) { act_jobs(app) }
 				}
 				if b := ui.box_from_key(ui.key_from_string(ui.parent_box().key, "###jobs")); b != nil { app.jobs_view.anchor = b.rect }
 			}
@@ -1163,7 +1163,7 @@ filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 			if icon_action(app, "types", lucide.FILTER, "The types shown: files, folders, extensions", em, on = folder_types_filtered(&t.folder)) {
 				types_menu_open(app, t)
 			}
-			if icon_action(app, "flat", lucide.FOLDER_TREE, command_tip("flat"), em, on = t.flat) {
+			if icon_action(app, "flat", lucide.FOLDER_TREE, command_tip(app, "flat"), em, on = t.flat) {
 				t.flat = !t.flat
 				tab_load(app, t)
 				t.focus_due = .Filter

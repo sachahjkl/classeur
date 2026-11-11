@@ -4,15 +4,11 @@ package classeur
 // (commands_keys), the command palette lists and runs them (palette.odin), the menus show their keys. A new action is a
 // line here and a procedure in actions.odin.
 
-import "core:strings"
 import lucide "gt:lucide"
-import "gt:platform"
 import "gt:ui"
 
-Shortcut :: struct {
-	key:  platform.Key,
-	mods: platform.Modifiers,
-}
+// A key and its modifiers: the toolkit's (its names, ui.chord_text, ui.key_name).
+Shortcut :: ui.Chord
 
 Command :: struct {
 	id:      string,
@@ -136,29 +132,3 @@ command_find :: proc(id: string) -> ^Command {
 	return nil
 }
 
-// "Ctrl+Shift+P".
-shortcut_text :: proc(s: Shortcut, allocator := context.temp_allocator) -> string {
-	if s.key == .None { return "" }
-	b := strings.builder_make(allocator)
-	if .Ctrl in s.mods { strings.write_string(&b, "Ctrl+") }
-	if .Alt in s.mods { strings.write_string(&b, "Alt+") }
-	if .Shift in s.mods { strings.write_string(&b, "Shift+") }
-	strings.write_string(&b, key_name(s.key))
-	return strings.to_string(b)
-}
-
-// The names of platform.Key, in its order (from None to Equal).
-@(private = "file", rodata)
-KEY_NAMES := [?]string{
-	"", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-	"0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-	"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
-	"Esc", "Enter", "Tab", "Space", "Backspace", "Delete", "Insert",
-	"Left", "Right", "Up", "Down", "Home", "End", "PgUp", "PgDn",
-	",", ".", "/", "-", "=",
-}
-
-key_name :: proc(k: platform.Key) -> string {
-	i := int(k)
-	return i < len(KEY_NAMES) ? KEY_NAMES[i] : "?"
-}

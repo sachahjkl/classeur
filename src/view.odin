@@ -135,12 +135,19 @@ vrule :: proc(em: f32, height: f32 = 1.3) {
 	ui.spacer(ui.px(em * 0.35))
 }
 
-// The tooltip of a command: its title and its first key.
-command_tip :: proc(id: string) -> string {
+// The tooltip of a command: its title and its keys, the person's own when they set some.
+command_tip :: proc(app: ^App, id: string) -> string {
 	c := command_find(id)
 	if c == nil { return id }
-	if c.keys[0].key == .None { return c.title }
-	return fmt.tprintf("%s (%s)", c.title, shortcut_text(c.keys[0]))
+	keys := command_keys(app, c)
+	if keys == "" { return c.title }
+	return fmt.tprintf("%s (%s)", c.title, keys)
+}
+
+// A command's first keys as text ("Ctrl+M, T"), the person's own binding when there is one; "" none.
+command_keys :: proc(app: ^App, c: ^Command) -> string {
+	b := command_bindings(app, c)
+	return len(b) > 0 ? binding_text(b[0]) : ""
 }
 
 ////////////////////////////////
@@ -171,7 +178,7 @@ build_top :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.6))
 			logo_icon(em * 1.8)
 			ui.spacer(ui.fill())
-			if icon_action(app, "sidebar", app.sidebar ? lucide.PANEL_LEFT : lucide.PANEL_RIGHT, command_tip("sidebar"), em) { act_toggle_sidebar(app) }
+			if icon_action(app, "sidebar", app.sidebar ? lucide.PANEL_LEFT : lucide.PANEL_RIGHT, command_tip(app, "sidebar"), em) { act_toggle_sidebar(app) }
 			ui.spacer(ui.px(em * 0.3))
 		}
 		// (a column's top panel has its tabs here; a panel below another has them at its own top: panel_build)
@@ -288,7 +295,7 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 		}
 		if ghost_at == len(p.tabs) { tab_ghost(app, tab_w, em) }
 		ui.spacer(ui.px(em * 0.3))
-		if icon_action(app, fmt.tprintf("newtab%d", index), lucide.PLUS, command_tip("tab_new"), em) {
+		if icon_action(app, fmt.tprintf("newtab%d", index), lucide.PLUS, command_tip(app, "tab_new"), em) {
 			app.focus = index
 			act_tab_new(app)
 		}
