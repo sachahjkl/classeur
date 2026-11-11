@@ -12,6 +12,7 @@ import "core:slice"
 import "core:strings"
 import "core:sync"
 import "core:testing"
+import "core:time"
 import "gt:platform"
 import config "gt:config"
 import "gt:png"
@@ -642,6 +643,16 @@ test_session :: proc(t: ^testing.T) {
 		current_tab(app).locked = true
 		panel_open(app, fs.join(dir, "Projects", context.temp_allocator))
 		bookmark_toggle(app, fs.join(dir, "Photos", context.temp_allocator))
+		folder_sort_by(&app.panels[0].tabs[1].folder, .Size)
+		// written while it runs (a program killed loses nothing): after a frame, on a worker
+		written := false
+		for _ in 0 ..< 400 {
+			app_frame(app)
+			data, err := os.read_entire_file(file, context.temp_allocator)
+			if err == nil && strings.contains(string(data), "Projects") && strings.contains(string(data), fmt.tprintf("tab %d 1 %d 1 ", ZOOM_GRID, int(fs.Sort_Key.Size))) { written = true; break }
+			time.sleep(5 * time.Millisecond)
+		}
+		testing.expect(t, written, "the session written before the window closes")
 		app_close(app)
 	}
 	testing.expect(t, fs.exists(file), "the session is written")
@@ -649,7 +660,9 @@ test_session :: proc(t: ^testing.T) {
 	testing.expect(t, fs.remove(fs.join(dir, "Projects", context.temp_allocator)) == .None)
 	{
 		context.allocator = runtime.heap_allocator()
-		app := app_open({headless = true, session = file})
+		// (a folder given: it opens beside the session's tabs, in the panel with the keyboard)
+		photos := fs.join(dir, "Photos", context.temp_allocator)
+		app := app_open({folders = {photos}, headless = true, session = file})
 		defer app_close(app)
 		// (the reads come: the tab of Projects, gone, goes up)
 		for _ in 0 ..< 400 {
@@ -665,8 +678,12 @@ test_session :: proc(t: ^testing.T) {
 		testing.expect_value(t, t1.path, documents)
 		testing.expect_value(t, t1.zoom, ZOOM_GRID)
 		testing.expect(t, t1.locked)
+		testing.expect(t, t1.folder.sort.key == .Size && t1.folder.sort.descending, "its sort")
 		testing.expect_value(t, app.panels[1].tabs[0].path, dir)
 		testing.expect_value(t, app.focus, 1)
+		testing.expect_value(t, len(app.panels[1].tabs), 2)
+		testing.expect_value(t, app.panels[1].tabs[1].path, fs.join(dir, "Photos", context.temp_allocator))
+		testing.expect_value(t, app.panels[1].active, 1)
 		testing.expect_value(t, len(app.bookmarks), 1)
 	}
 }
@@ -2232,4 +2249,34 @@ test_sort_three_clicks :: proc(t: ^testing.T) {
 	session.click_at(s, (name.rect.min + name.rect.max) * 0.5)
 	session.frames(s, 2)
 	testing.expect(t, tab.folder.sort.key == .Name && !tab.folder.sort.descending, "the names up")
+}
+
+// A narrow window: a tab of another window over the end of the row shows its ghost whole (the row's room shared with it).
+@(test)
+test_tab_ghost_narrow :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {640, 500})
+	context.allocator = runtime.heap_allocator()
+	session.key(s, .T, {.Ctrl})
+	wait_read(s)
+	session.frames(s, 2)
+	photos := fs.join(dir, "Photos", context.temp_allocator)
+	data: platform.Drag_Data
+	append(&data.custom, platform.Drag_Entry{TAB_MIME, tab_mime_data(1, 7, photos)})
+	defer delete(data.custom)
+	last := app.tab_rects_last[len(app.tab_rects_last) - 1].rect
+	at := [2]f32{last.max.x - 3, (last.min.y + last.max.y) * 0.5}
+	platform.drop_inject(app.main.win, .Drop_Enter, at, &data, {.Move})
+	platform.drop_inject(app.main.win, .Drop_Over, at, nil, {.Move})
+	session.frames(s, 3)
+	ghost, row := session.get(s, "tab_land"), session.get(s, "tabs0")
+	testing.expect(t, ghost != nil && row != nil, "its ghost in the row")
+	if ghost != nil && row != nil {
+		testing.expectf(t, ghost.rect.max.x <= row.rect.max.x + 0.5 && ghost.rect.min.x >= row.rect.min.x, "whole in the row: %v in %v", ghost.rect, row.rect)
+	}
+	when SHOTS { session.save_png(s, "tab_ghost_narrow.png") }
+	platform.drop_inject(app.main.win, .Drop_Leave, at, nil, {.Move})
+	session.frames(s, 2)
+	testing.expect(t, session.find(s, "tab_land") == nil, "gone when it leaves")
 }

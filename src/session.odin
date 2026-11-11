@@ -2,13 +2,14 @@ package classeur
 
 // The session: what the window shows comes back at the next start (File Pilot's): its place and size, the sidebar, the
 // panels and their tabs (the folder, the view's zoom, the lock), the panel with the keyboard; and the bookmarks and the
-// recent folders. A text file, a line per thing, written when the window closes and when a bookmark changes:
+// recent folders. A text file, a line per thing, written when the window closes and, on a worker, as soon as any of it
+// but the window's place changes (session_autosave: a program killed, a session of the system ended, loses nothing):
 //
 //   window <left> <top> <width> <height> <maximized 0|1>
 //   sidebar <shown 0|1> <width>
 //   focus <panel>
 //   panel <active tab>
-//   tab <zoom> <locked 0|1> <path>
+//   tab <zoom> <locked 0|1> <sort key> <descending 0|1> <path>
 //   bookmark <path>
 //   recent <path>
 //
@@ -37,9 +38,7 @@ session_save :: proc(app: ^App, later := false) {
 	pl := platform.get_placement(app.main.win)
 	fmt.sbprintf(&b, "window %d %d %d %d %d\n", pl.rect[0], pl.rect[1], pl.rect[2], pl.rect[3], pl.maximized ? 1 : 0)
 	fmt.sbprintf(&b, "sidebar %d %d\n", app.sidebar ? 1 : 0, int(app.sidebar_px))
-	panels_text(app, &b)
-	for p in app.bookmarks { fmt.sbprintf(&b, "bookmark %s\n", p) }
-	for p in app.recents { fmt.sbprintf(&b, "recent %s\n", p) }
+	session_rest(app, &b)
 	if later {
 		Write :: struct { path, text: string }
 		w := new(Write)
@@ -56,12 +55,34 @@ session_save :: proc(app: ^App, later := false) {
 	session_write(path, strings.to_string(b))
 }
 
+// What the session holds but the window's place.
+@(private = "file")
+session_rest :: proc(app: ^App, b: ^strings.Builder) {
+	fmt.sbprintf(b, "sidebar %d %d\n", app.sidebar ? 1 : 0, int(app.sidebar_px))
+	panels_text(app, b)
+	for p in app.bookmarks { fmt.sbprintf(b, "bookmark %s\n", p) }
+	for p in app.recents { fmt.sbprintf(b, "recent %s\n", p) }
+}
+
+// After a frame: the session written again when what it holds changed (the window's place alone waits for the next
+// write: a window moved or resized changes it every frame).
+session_autosave :: proc(app: ^App) {
+	if session_file(app) == "" { return }
+	b := strings.builder_make(context.temp_allocator)
+	session_rest(app, &b)
+	text := strings.to_string(b)
+	if text == app.session_written { return }
+	delete(app.session_written)
+	app.session_written = strings.clone(text)
+	session_save(app, later = true)
+}
+
 // The panels and their tabs as lines (the session's, a layout's).
 panels_text :: proc(app: ^App, b: ^strings.Builder) {
 	fmt.sbprintf(b, "focus %d\n", app.focus)
 	for p in app.panels {
 		fmt.sbprintf(b, "panel %d%s\n", p.active, p.below ? " below" : "")
-		for t in p.tabs { fmt.sbprintf(b, "tab %d %d %s\n", t.zoom, t.locked ? 1 : 0, t.path) }
+		for t in p.tabs { fmt.sbprintf(b, "tab %d %d %d %d %s\n", t.zoom, t.locked ? 1 : 0, int(t.folder.sort.key), t.folder.sort.descending ? 1 : 0, t.path) }
 	}
 }
 
@@ -85,15 +106,20 @@ panels_open :: proc(app: ^App, text: string) -> bool {
 			panel.below = flags == "below" && len(app.panels) > first + 1
 		case "tab":
 			if panel == nil { continue }
-			zoom_text, _, rest2 := strings.partition(rest, " ")
-			lock_text, _, dir := strings.partition(rest2, " ")
+			parts: [4]string
+			dir := rest
+			for i in 0 ..< 4 { parts[i], _, dir = strings.partition(dir, " ") }
 			if dir == "" { continue }
-			zoom, _ := strconv.parse_int(zoom_text)
+			zoom, _ := strconv.parse_int(parts[0])
+			key, _ := strconv.parse_int(parts[2])
 			// (a folder gone since: the read, on a worker, goes up to the nearest one still there)
 			tab_open(app, panel, dir)
 			t := panel.tabs[len(panel.tabs) - 1]
 			t.zoom = clamp(zoom, 0, len(ZOOMS) - 1)
-			t.locked = lock_text == "1"
+			t.locked = parts[1] == "1"
+			if key >= 0 && key <= int(max(fs.Sort_Key)) {
+				t.folder.sort.key, t.folder.sort.descending = fs.Sort_Key(key), parts[3] == "1"
+			}
 		}
 	}
 	// (a panel left with no tab, a version's file cut short: dropped)
@@ -119,7 +145,7 @@ session_write :: proc(path, text: string) {
 
 // Reads the session. `tabs`: the panels and tabs come back too (no folder was given on the command line). true: a
 // panel was opened.
-session_load :: proc(app: ^App, tabs: bool) -> (opened: bool) {
+session_load :: proc(app: ^App) -> (opened: bool) {
 	path := session_file(app)
 	if path == "" { return }
 	data, err := os.read_entire_file(path, context.temp_allocator)
@@ -143,14 +169,14 @@ session_load :: proc(app: ^App, tabs: bool) -> (opened: bool) {
 			app.sidebar = f[0] == "1"
 			if px, ok := strconv.parse_int(f[1]); ok { app.sidebar_px = clamp(f32(px), 140, 600) }
 		case "focus", "panel", "tab":
-			if tabs { fmt.sbprintf(&panel_lines, "%s\n", line) }
+			fmt.sbprintf(&panel_lines, "%s\n", line)
 		case "bookmark":
 			if rest != "" { append(&app.bookmarks, strings.clone(rest)) }
 		case "recent":
 			if rest != "" && len(app.recents) < RECENTS_MAX { append(&app.recents, strings.clone(rest)) }
 		}
 	}
-	opened = tabs && panels_open(app, strings.to_string(panel_lines))
+	opened = panels_open(app, strings.to_string(panel_lines))
 	if has_place && !app.headless { platform.set_placement(app.main.win, place) }
 	return
 }

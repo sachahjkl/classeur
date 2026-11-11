@@ -5,6 +5,17 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The session (the panels, the tabs, the bookmarks, the recent folders) is written as soon as it changes, not only when
+  the window closes: a program killed, a crash or the end of the system's session lost the tabs.
+- Folders given at the start (another program opening one) open beside the session's tabs, which come back too (they
+  alone were shown); a folder that has a tab already shows it.
+- A dragged tab's ghost has a tab's shape, one line of the accent on its top and sides, and fits in the row: the tabs'
+  widths count it and the window's buttons (it ran past the row's end, cut).
+
+### Added
+- Each tab's sort is part of the session.
+
 ## [0.14.4] - 2026-11-11
 
 ### Changed

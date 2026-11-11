@@ -138,7 +138,8 @@ App :: struct {
 	tab_out_home: bool,             // that drag came back and was dropped in this window
 	tab_coming:   bool,             // a tab of another window is dragged over this one (tab_drop) ...
 	tab_coming_at: [2]f32,          // ... the pointer there
-	tab_coming_path: string,        // owned: ... its folder, "" until the system gives it (Linux: at the drop)
+	tab_coming_path: string,
+	session_written: string,        // owned: the session (but the window's place) as last written (session_autosave)        // owned: ... its folder, "" until the system gives it (Linux: at the drop)
 	tab_image:    platform.Drag_Image,   // owned: the dragged tab's picture, read back from the renderer (tab_drag_poll)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
 }
@@ -235,7 +236,7 @@ app_message_open :: proc(data: rawptr, word: u64) {
 	if app == nil { return }
 	p := current_panel(app)
 	token, folders := app_message_read(text)
-	for f in folders { tab_open(app, p, f, p.active + 1) }
+	folders_show(app, folders)
 	if len(folders) == 0 { tab_open(app, p, app.home, p.active + 1) }
 	platform.raise_window_token(app.main.win, token)
 	app_frames(app)
@@ -282,8 +283,11 @@ app_open :: proc(o: Open_Options) -> ^App {
 	jobs_start(app)
 	watcher_start(app)
 	places_load(app)
-	// (folders given: they alone are shown; the bookmarks and recents still come back)
-	if session_load(app, len(o.folders) == 0) { return app }
+	// (the session's tabs come back; folders given open beside them, as the second start's do)
+	if session_load(app) {
+		folders_show(app, o.folders)
+		return app
+	}
 	first := new(Panel)
 	append(&app.panels, first)
 	if len(o.folders) == 0 {
@@ -295,8 +299,26 @@ app_open :: proc(o: Open_Options) -> ^App {
 	return app
 }
 
+// Folders asked for (the command line, a second start): each one's tab in the panel with the keyboard shown, a new one
+// after the shown tab when the panel has none on it.
+folders_show :: proc(app: ^App, folders: []string) {
+	p := current_panel(app)
+	if p == nil { return }
+	next: for f in folders {
+		want := fs.clean(f, context.temp_allocator)
+		for t, i in p.tabs {
+			if t.path == want {
+				p.active = i
+				continue next
+			}
+		}
+		tab_open(app, p, f, p.active + 1)
+	}
+}
+
 app_frame :: proc(app: ^App) {
 	host.host_frame(&app.main)
+	session_autosave(app)
 	drag_run(app)   // (between frames: it blocks until the drop)
 	tab_out_run(app)
 }
@@ -362,6 +384,7 @@ app_free :: proc(app: ^App) {
 	delete(app.vol_from)
 	delete(app.vol_to)
 	delete(app.tab_coming_path)
+	delete(app.session_written)
 	ui.field_destroy(&app.side_filter)
 	delete(app.volume_space)
 	delete(app.panel_rects)

@@ -24,6 +24,8 @@ PANELS_MIN_PX  :: 320
 // A tab's width, at most and at least, in ems.
 TAB_EM     :: 14
 TAB_MIN_EM :: 5
+// What a row of tabs holds after them: the new tab's button and the room around it, in ems.
+TAB_ROW_END_EM :: 2.8
 
 view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app := (^App)(h.user)
@@ -185,11 +187,9 @@ build_top :: proc(app: ^App, em: f32) {
 	}
 }
 
-@(private = "file")
 Tab_Paint :: struct { base, edge, line: ui.Color, radius: f32 }
 
 // The shown tab: its surface, a line at its left, top and right; none at its bottom, where the toolbar goes on.
-@(private = "file")
 tab_paint :: proc(b: ^ui.Box, base, edge, line: ui.Color, radius: f32) {
 	d := ui.frame_new(Tab_Paint)
 	d^ = {base, edge, line, radius}
@@ -220,14 +220,20 @@ tab_radius :: proc(em: f32) -> f32 { return em * TAB_RADIUS_EM * ui.rounding(ui.
 // in the list's colour, with a line of the accent along its top when its panel has the keyboard.
 tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, em: f32) {
 	focused := index == app.focus
+	id := fmt.tprintf("###tabs%d", index)
+	// the tabs' room: the row's as laid out last time, less the new tab's button (the last panel's row ends at the
+	// window's buttons, short of the panel's width); before that, the panel's width less a margin
+	avail := room - em * 4.5
+	if pb := ui.prev_box(id); pb != nil && pb.size.x > 0 { avail = pb.size.x - em * TAB_ROW_END_EM }
 	ui.next({width = width, height = ui.pct(1)})
-	if ui.row(.End, {.Clip}, fmt.tprintf("###tabs%d", index)) {
-		n := len(p.tabs)
-		tab_w := em * TAB_EM
-		if room > 0 && n > 0 { tab_w = clamp((room - em * 4.5) / f32(n), em * TAB_MIN_EM, em * TAB_EM) }
-		close := -1
-		// (where a dragged tab lands in this row: a ghost of it there, the tabs after it moved along)
+	if ui.row(.End, {.Clip}, id) {
+		// (where a dragged tab lands in this row: a ghost of it there, the tabs after it moved along; the row's room
+		// shared with it, or it would run past the row's end, cut)
 		ghost_at := tab_ghost_slot(app, index)
+		n := len(p.tabs) + (ghost_at >= 0 ? 1 : 0)
+		tab_w := em * TAB_EM
+		if room > 0 && n > 0 { tab_w = clamp(avail / f32(n), em * TAB_MIN_EM, em * TAB_EM) }
+		close := -1
 		for t, i in p.tabs {
 			if i == ghost_at { tab_ghost(app, tab_w, em) }
 			on := i == p.active
