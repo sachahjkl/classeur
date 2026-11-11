@@ -2702,3 +2702,40 @@ test_system_title_setting :: proc(t: ^testing.T) {
 		testing.expect(t, app.settings.system_title, "read")
 	})
 }
+
+// A rectangle over a folded group's title takes none of its files (they are not shown).
+@(test)
+test_band_folded_group :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir}, size = {1000, 700})
+		context.allocator = runtime.heap_allocator()
+		tab := current_tab(app)
+		tab_group(app, .Type)
+		session.frames(s, 2)
+		// (the PDFs' group folded: its title row stands for its first file)
+		pdf := ""
+		for i in tab.folder.shown {
+			e := tab.folder.listing.entries[i]
+			if strings.has_suffix(e.name, ".pdf") { _, pdf = group_of(&tab.folder, e); break }
+		}
+		testing.expect(t, pdf != "", "a group of PDFs")
+		folder_fold(&tab.folder, strings.clone(pdf, context.temp_allocator))
+		session.frames(s, 3)
+		lb := band_box(tab)
+		from := lb.rect.max - {20, 20}
+		to := lb.rect.min + {300, 4}
+		session.press(s, from)
+		session.move(s, from + {-10, -10})
+		session.move(s, to)
+		session.frames(s, 2)
+		session.release(s, to)
+		session.frames(s, 2)
+		for i, row in tab.folder.shown {
+			e := tab.folder.listing.entries[i]
+			if strings.has_suffix(e.name, ".pdf") { testing.expectf(t, !folder_row_selected(&tab.folder, row), "%s, in the folded group, not taken", e.name) }
+		}
+		testing.expect(t, tab.folder.count > 0, "the others taken")
+	})
+}

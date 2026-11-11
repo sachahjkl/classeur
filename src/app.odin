@@ -40,6 +40,8 @@ App :: struct {
 	icon_keys:   map[string]string,     // a file's name -> its icon's key (both owned)
 	vol_from, vol_to: string,           // owned: the last pair asked whether on one volume (a drag), and the answer
 	vol_same:    bool,
+	vol_known:   bool,                  // vol_same is the worker's answer (else the guess is used: dnd.odin)
+	drag_first_folder: bool,            // the first of the files dragged is a folder (the ghost's icon)
 	frame:       u64,               // the frames built (what a thumbnail was last used in)
 	default_zoom: int,             // the measures of folders (measure.odin)
 	measures:    map[string]Measure,   // by path (the keys owned)

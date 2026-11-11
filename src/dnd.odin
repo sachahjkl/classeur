@@ -67,12 +67,58 @@ drop_effect :: proc(app: ^App, files: []string, dir: string, allowed: platform.D
 @(private = "file")
 same_volume_cached :: proc(app: ^App, file, dir: string) -> bool {
 	from := fs.parent(file)
-	if app.vol_from == from && app.vol_to == dir { return app.vol_same }
+	if app.vol_from == from && app.vol_to == dir {
+		if app.vol_known { return app.vol_same }
+		return vol_guess(app, from, dir)
+	}
 	delete(app.vol_from)
 	delete(app.vol_to)
 	app.vol_from, app.vol_to = strings.clone(from), strings.clone(dir)
-	app.vol_same = fs.same_volume(from, dir)
-	return app.vol_same
+	app.vol_known = false
+	// (asked on a worker: a share of the network may be slow to answer; meanwhile a guess that reads no disk)
+	Ask :: struct { app: ^App, from, to: string, same: bool }
+	q := new(Ask)
+	q^ = {app = app, from = strings.clone(from), to = strings.clone(dir)}
+	pool_submit(&app.pool, proc(data: rawptr) {
+		q := (^Ask)(data)
+		q.same = fs.same_volume(q.from, q.to)
+		if !ui.post(&q.app.main.state, proc(data: rawptr, word: u64) {
+			q := (^Ask)(data)
+			app := q.app
+			// (the answer of the pair asked last: an older one is for a place the pointer left)
+			if app.vol_from == q.from && app.vol_to == q.to {
+				app.vol_same, app.vol_known = q.same, true
+				app_frames(app)
+			}
+			delete(q.from)
+			delete(q.to)
+			free(q)
+		}, q, 0) {
+			delete(q.from)
+			delete(q.to)
+			free(q)
+		}
+	}, q)
+	return vol_guess(app, from, dir)
+}
+
+// Whether two folders are on one volume, guessed from the volumes and shares known (the longest one each is under):
+// the answer of a worker replaces it.
+@(private = "file")
+vol_guess :: proc(app: ^App, from, dir: string) -> bool {
+	root_of :: proc(app: ^App, path: string) -> string {
+		best := ""
+		for v in app.volumes { if under_or_at(path, v.path) && len(v.path) > len(best) { best = v.path } }
+		for s in app.shares { if under_or_at(path, s.path) && len(s.path) > len(best) { best = s.path } }
+		return best
+	}
+	return root_of(app, from) == root_of(app, dir)
+}
+
+@(private = "file")
+under_or_at :: proc(path, root: string) -> bool {
+	if path == root || fs.is_root(root) && strings.has_prefix(path, root) { return true }
+	return strings.has_prefix(path, root) && len(path) > len(root) && fs.is_separator(path[len(root)])
 }
 
 // The answer to a Drop_* at `pos`: the effect, and for a Drop the job.
@@ -127,7 +173,10 @@ drag_maybe :: proc(app: ^App, t: ^Tab, sig: ui.Signal) {
 	app.drag_started = true
 	for p in app.drag_paths { delete(p) }
 	clear(&app.drag_paths)
-	for e in folder_targets(&t.folder) { append(&app.drag_paths, fs.join(t.path, e.name)) }
+	targets := folder_targets(&t.folder)
+	for e in targets { append(&app.drag_paths, fs.join(t.path, e.name)) }
+	// (the first one's kind, for the ghost's icon: known from the listing, no disk read at each frame)
+	app.drag_first_folder = len(targets) > 0 && targets[0].kind == .Directory
 	app.file_drag = len(app.drag_paths) > 0
 	app_frames(app)
 }
@@ -173,14 +222,13 @@ file_ghost :: proc(app: ^App, m: [2]f32, effect: Maybe(platform.Drop_Effect), di
 	name := len(app.drag_paths) == 1 ? fs.base(first) : fmt.tprintf("%d items", len(app.drag_paths))
 	what := ""
 	if e, ok := effect.?; ok { what = fmt.tprintf("%s to %s", e == .Move ? "Move" : "Copy", fs.base(dir)) }
-	info, _ := fs.stat(first)
 	ui.next({width = ui.children_sum(), height = ui.px(em * 2.2), axis = .X, cross = .Center,
 		bg = draw.hex(surfaces(app).raised), border = draw.hex(surfaces(app).edge), radius = em * 0.3 * corner_k()})
 	b := ui.build_box({.Floating_X, .Floating_Y, .Draw_Background, .Draw_Border}, "###file_ghost")
 	b.fixed_pos = m + {em, em * 1.1}
 	if ui.parent(b) {
 		ui.spacer(ui.px(em * 0.5))
-		path_icon(app, first, info.kind == .Directory, em * 1.6)
+		path_icon(app, first, app.drag_first_folder, em * 1.6)
 		ui.next({width = ui.text_size(em * 0.4), height = ui.pct(1)})
 		ui.label(fmt.tprintf("%s###name", name))
 		if what != "" {

@@ -15,6 +15,9 @@ Band :: struct {
 	base:   [dynamic]bool,   // the selection at the press (Ctrl: the rows are added to it), per entry
 	removing: bool,          // the rows it touches leave the selection (Ctrl and a press on a selected row)
 	keeping:  bool,          // the selection at the press stays (Ctrl); else the rows it touches alone are selected
+	// the rows it could touch at the last frame (the rows outside are as the press left them): a frame visits the rows
+	// of this one and of the last, not the whole folder
+	lo, hi:   int,
 }
 
 // Ctrl and a press on a row: a band from there, its rows taken out of the selection when that row was in it (`base`: the
@@ -23,7 +26,7 @@ band_begin_on_row :: proc(app: ^App, t: ^Tab, removing: bool, base: []bool) {
 	lb := band_box(t)
 	if lb == nil { return }
 	b := &app.band
-	b.active, b.tab, b.removing, b.keeping = true, t.id, removing, true
+	b.active, b.tab, b.removing, b.keeping, b.lo, b.hi = true, t.id, removing, true, 0, 0
 	b.start = ui.mouse_pos() - lb.rect.min + lb.view_off
 	clear(&b.base)
 	append(&b.base, ..base)
@@ -67,7 +70,7 @@ band_update :: proc(app: ^App, t: ^Tab, pressed_row: bool, pressed_empty := fals
 	// (a right click on the empty part: the folder's menu, what makes and pastes)
 	if (sig.right_clicked || right_empty) && !pressed_row { entry_menu_open(app, t, m, on_entry = false) }
 	if (sig.pressed || pressed_empty) && !pressed_row && !b.active {
-		b.active, b.tab, b.start, b.removing, b.keeping = true, t.id, content, false, .Ctrl in sig.mods
+		b.active, b.tab, b.start, b.removing, b.keeping, b.lo, b.hi = true, t.id, content, false, .Ctrl in sig.mods, 0, 0
 		// (the selection at the press, kept for Escape, which gives it back)
 		clear(&b.base)
 		append(&b.base, ..f.selected[:])
@@ -83,7 +86,13 @@ band_update :: proc(app: ^App, t: ^Tab, pressed_row: bool, pressed_empty := fals
 	y0, y1 := min(b.start.y, content.y), max(b.start.y, content.y)
 	x0, x1 := min(b.start.x, content.x), max(b.start.x, content.x)
 	offs := t.vl.offsets[:]
-	for row in 0 ..< len(f.shown) {
+	// the rows the rectangle may touch now (by the offsets' order: a search, not a walk), and those it touched last
+	lo, hi := band_rows(layout, offs, len(f.shown), x0, x1, y0, y1)
+	from, to := min(lo, b.lo), max(hi, b.hi)
+	if b.lo == b.hi { from, to = lo, hi }
+	b.lo, b.hi = lo, hi
+	grouped := f.group != .None && f.filter == ""
+	for row in from ..< to {
 		touched: bool
 		g := layout
 		switch g.kind {
@@ -101,6 +110,11 @@ band_update :: proc(app: ^App, t: ^Tab, pressed_row: bool, pressed_empty := fals
 			c, r := row / g.count, row % g.count
 			ix0, iy0 := f32(c) * g.step, f32(r) * g.row_h
 			touched = ix0 + g.item_w > x0 && ix0 < x1 && iy0 + g.row_h > y0 && iy0 < y1
+		}
+		// (a row of a folded group is not shown: the rectangle does not take it)
+		if touched && grouped {
+			_, key := group_of(f, f.listing.entries[f.shown[row]])
+			if key in f.folded { touched = false }
 		}
 		was := b.keeping && len(b.base) == len(f.selected) && b.base[f.shown[row]]
 		on := b.removing ? was && !touched : was || touched
@@ -133,4 +147,37 @@ band_cancel :: proc(app: ^App) {
 	} else {
 		folder_select_none(f)
 	}
+}
+
+// The rows (their indices among those shown, [lo, hi)) a rectangle from y0 to y1 (and x0 to x1: the grid's and the
+// columns' items) may touch, found in the list's offsets by halves.
+@(private = "file")
+band_rows :: proc(g: Band_Layout, offs: []f32, n: int, x0, x1, y0, y1: f32) -> (lo, hi: int) {
+	// the first line whose bottom is under y0, the first whose top is past y1 (the lines of the virtual list)
+	first_after :: proc(offs: []f32, lines: int, y: f32, top: bool) -> int {
+		a, z := 0, lines
+		for a < z {
+			m := (a + z) / 2
+			v := top ? offs[m] : offs[m + 1]
+			if (top && v < y) || (!top && v <= y) { a = m + 1 } else { z = m }
+		}
+		return a
+	}
+	switch g.kind {
+	case .Rows:
+		lines := min(n, len(offs) - 1)
+		if lines <= 0 { return }
+		return first_after(offs, lines, y0, false), first_after(offs, lines, y1, true)
+	case .Grid:
+		lines := min((n + g.count - 1) / max(g.count, 1), len(offs) - 1)
+		if lines <= 0 { return }
+		a, z := first_after(offs, lines, y0, false), first_after(offs, lines, y1, true)
+		return min(a * g.count, n), min(z * g.count, n)
+	case .Columns:
+		if g.step <= 0 { return 0, n }
+		a := max(int(x0 / g.step), 0)
+		z := int(x1 / g.step) + 1
+		return min(a * g.count, n), min(z * g.count, n)
+	}
+	return 0, n
 }

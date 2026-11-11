@@ -601,7 +601,10 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, names_only: bool, em: f32
 		// toolkit's autoscroll)
 		if sig.box != nil && e.kind == .Directory { sig.box.flags += {.Middle_Click} }
 		if selected && focused { ui.pop_tags() }
-		if !folded { row_paint(sig.box, look, selected, row == f.cursor && (!selected || f.count > 1), row & 1 == 1, head) }
+		// (its neighbours selected too: one pill over them)
+		sel_up := row > 0 && f.selected[f.shown[row - 1]]
+		sel_down := row + 1 < len(f.shown) && f.selected[f.shown[row + 1]]
+		if !folded { row_paint(sig.box, look, selected, row == f.cursor && (!selected || f.count > 1), row & 1 == 1, head, sel_up, sel_down) }
 		check := false
 		if ui.parent(sig.box) {
 			if title != "" {
@@ -714,6 +717,8 @@ Row_Paint :: struct {
 	cursor:   bool,
 	odd:      bool,
 	top:      f32,   // a group's title above the row: its pill starts below it
+	// the rows above and under it selected too: one pill over them all, its border around them only (no line between)
+	joined_up, joined_down: bool,
 }
 
 // The height of a group's title above its first row, in ems.
@@ -737,9 +742,9 @@ row_look :: proc(app: ^App, focused: bool, em: f32) -> ^Row_Look {
 }
 
 // The box `b` (a row, a card) draws its pill and its ring under what it holds.
-row_paint :: proc(b: ^ui.Box, look: ^Row_Look, selected, cursor: bool, odd := false, top: f32 = 0) {
+row_paint :: proc(b: ^ui.Box, look: ^Row_Look, selected, cursor: bool, odd := false, top: f32 = 0, joined_up := false, joined_down := false) {
 	d := ui.frame_new(Row_Paint)
-	d^ = {look, selected, cursor && look.focused, odd, top}
+	d^ = {look, selected, cursor && look.focused, odd, top, selected && joined_up && top == 0, selected && joined_down}
 	b.custom, b.custom_user = row_draw, d
 }
 
@@ -749,12 +754,32 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	l := d.look
 	r := b.rect
 	r.min.y += d.top   // (a group's title above the row: not part of its pill)
-	inner := ui.Rect{{r.min.x + l.inset, r.min.y + 1}, {r.max.x - l.inset, r.max.y - 1}}
+	px := max(1, ui.scale())   // (a line of one device pixel at least, at every scale)
+	inner := ui.Rect{{r.min.x + l.inset, r.min.y + px}, {r.max.x - l.inset, r.max.y - px}}
 	if l.stripes && d.odd { draw.rect(dc, inner, l.stripe, radius = l.radius) }
-	draw.rect(dc, {{inner.min.x, r.max.y - 1}, {inner.max.x, r.max.y}}, l.line)
+	// the line under the row; none where a selection's pill is (its border is the line there: one, not two side by side)
+	if !d.selected && !d.joined_down { draw.rect(dc, {{inner.min.x, r.max.y - px}, {inner.max.x, r.max.y}}, l.line) }
 	if l.card.a > 0 && !d.selected { paint_raised(dc, inner, {base = l.card, edge = l.card_edge, radii = radii_all(l.radius)}) }
-	if d.selected { paint_raised(dc, inner, {base = l.fill, edge = l.edge, radii = radii_all(l.radius)}) }
-	if d.cursor { draw.rect(dc, inner, l.ring, radius = l.radius, border = 1) }
+	if d.selected {
+		// selected rows one under another are one pill: square and open where they meet, its border around them
+		pill := inner
+		if d.joined_up { pill.min.y = r.min.y }
+		if d.joined_down { pill.max.y = r.max.y }
+		radii := radii_all(l.radius)
+		if d.joined_up { radii[0], radii[2] = 0, 0 }
+		if d.joined_down { radii[1], radii[3] = 0, 0 }
+		draw.rect_corners(dc, pill, {l.fill, l.fill, l.fill, l.fill}, radii)
+		if l.edge.a > 0 {
+			// (the border drawn past the sides that meet another row, cut there: their lines are not drawn)
+			ring := pill
+			if d.joined_up { ring.min.y -= 2 * px }
+			if d.joined_down { ring.max.y += 2 * px }
+			draw.push_clip(dc, pill)
+			draw.rect_corners(dc, ring, {l.edge, l.edge, l.edge, l.edge}, radii, px)
+			draw.pop_clip(dc)
+		}
+	}
+	if d.cursor { draw.rect(dc, inner, l.ring, radius = l.radius, border = px) }
 }
 
 // The cells of a row: its box, its icon, its name (or the field that renames it), its date, its type, its counts and its
@@ -952,13 +977,14 @@ cell_rule :: proc() {
 }
 
 @(private = "file")
-Zoom_Draw :: struct { t: f32, fill, track: ui.Color }
+Zoom_Draw :: struct { t: f32, fill, track: ui.Color, round: f32 }   // round: corner_k(), read in the build
 
 @(private = "file")
 zoom_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Zoom_Draw)(user)
 	r := b.rect
-	rad := (r.max.y - r.min.y) * 0.22
+	// (the settings' rounding: square at 0, as every box)
+	rad := min((r.max.y - r.min.y) * 0.22 * d.round, (r.max.y - r.min.y) * 0.5)
 	draw.rect(dc, r, d.track, radius = rad)
 	w := max((r.max.x - r.min.x) * d.t, (r.max.y - r.min.y) * 0.3)
 	draw.rect(dc, {r.min, {r.min.x + w, r.max.y}}, d.fill, radius = rad)
@@ -971,7 +997,7 @@ zoom_pill :: proc(app: ^App, t: ^Tab, em: f32) {
 	z := ZOOMS[clamp(t.zoom, 0, len(ZOOMS) - 1)]
 	d := ui.frame_new(Zoom_Draw)
 	shown := ui.anim(ui.key_from_string(0, fmt.tprintf("classeur_zoom%d", t.id)), f32(z.percent) / 100, 22)
-	d^ = {shown, selection_color(app), ui.color("border")}
+	d^ = {shown, selection_color(app), ui.color("border"), corner_k()}
 	ui.next({width = ui.px(em * 3.4), height = ui.px(em * 1.5)})
 	b := ui.custom("###zoom", zoom_draw, d, {.Clickable})
 	// (the percent over the bar: a box of its own, drawn after the bar)
