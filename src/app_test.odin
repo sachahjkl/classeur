@@ -2027,3 +2027,31 @@ test_type_to_filter :: proc(t: ^testing.T) {
 	testing.expect(t, app.inspector.open, "Space: the inspector")
 	testing.expect_value(t, ui.field_string(&tab.filter), "")
 }
+
+// Our own drag, as Linux gives it: its enter and its moves carry no data (read at the drop): the folder under the
+// pointer, a place of the sidebar, still takes it (its files are the drag's own).
+@(test)
+test_own_drag_without_data :: proc(t: ^testing.T) {
+	files := FIXTURE
+	dir := make_fixture(t, files[:])
+	s, app := start(t, {dir}, size = {1100, 700})
+	context.allocator = runtime.heap_allocator()
+	wait_read(s)
+	session.frames(s, 2)
+	notes := fs.join(dir, "notes.txt", context.temp_allocator)
+	own := []string{notes}
+	app.dragging = own   // (as drag_run has it while the system's drag runs)
+	at: [2]f32
+	for z in app.drop_zones_last { if strings.has_suffix(z.path, fs.SEPARATOR_STRING + "Photos") { at = (z.rect.min + z.rect.max) * 0.5 } }
+	testing.expect(t, at != {}, "Photos takes a drop")
+	empty: platform.Drag_Data
+	platform.drop_inject(app.main.win, .Drop_Enter, at, &empty, {.Copy, .Move})
+	session.frames(s, 1)
+	testing.expectf(t, strings.has_suffix(app.drop_hover, "Photos"), "the target marked: %q", app.drop_hover)
+	// (the drop: the data still empty, as the drag of this very process gives it)
+	platform.drop_inject(app.main.win, .Drop, at, &empty, {.Copy, .Move})
+	session.frames(s, 1)
+	app.dragging = nil
+	wait_jobs(s)
+	testing.expect(t, fs.exists(fs.join(dir, "Photos/notes.txt", context.temp_allocator)), "moved into Photos")
+}

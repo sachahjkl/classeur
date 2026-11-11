@@ -81,7 +81,11 @@ drop_answer :: proc(app: ^App, kind: platform.Event_Kind, pos: [2]f32, mods: pla
 	// (a classeur tab, from this window or another: tab_drag.odin)
 	if e, is_tab := tab_drop(app, data, pos, kind); is_tab { app_frames(app); return e }
 	dir := drop_target(app, pos)
-	effect := drop_effect(app, data.files[:], dir, allowed, mods)
+	// (our own drag: its files are known here; Linux gives a drag's data at its drop only, the enter and the moves came
+	// with none, and the drop was refused everywhere: on a folder, a place of the sidebar, a tab)
+	files := data.files[:]
+	if len(files) == 0 && len(app.dragging) > 0 { files = app.dragging }
+	effect := drop_effect(app, files, dir, allowed, mods)
 	// (Linux reads a drag's data at its drop only: before it, files that the drag offers are judged by its types)
 	if kind != .Drop && len(data.files) == 0 && dir != "" && slice.contains(platform.drop_types(app.main.win), "text/uri-list") {
 		effect = platform.drop_effect_for(allowed, mods, .Copy)
@@ -92,7 +96,7 @@ drop_answer :: proc(app: ^App, kind: platform.Event_Kind, pos: [2]f32, mods: pla
 		delete(app.drop_hover)
 		app.drop_hover = ""
 		if e, ok := effect.?; ok {
-			job_add(app, e == .Move ? .Move : .Copy, data.files[:], dir)
+			job_add(app, e == .Move ? .Move : .Copy, files, dir)
 		}
 	}
 	app_frames(app)
@@ -126,7 +130,10 @@ drag_run :: proc(app: ^App) {
 	data: platform.Drag_Data
 	for p in app.drag_paths { append(&data.files, p) }
 	defer delete(data.files)
+	// (while it runs: its files, which a drop on this window takes when the system gives it no data before the drop)
+	app.dragging = app.drag_paths[:]
 	_, _ = platform.drag_start(app.main.win, data, {.Copy, .Move, .Link})
+	app.dragging = nil
 	for p in app.drag_paths { delete(p) }
 	clear(&app.drag_paths)
 	delete(app.drop_hover)

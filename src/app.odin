@@ -117,6 +117,7 @@ App :: struct {
 	drop_zones_last: [dynamic]Drop_Zone,   // and by the last one (what a drop is tested against)
 	drop_hover:  string,            // owned: the folder a drop would go into now ("": none)
 	drag_paths:  [dynamic]string,   // owned: what the next drag_start carries
+	dragging:    []string,          // the files of the drag that runs now (drag_paths'), nil between drags
 	drag_started: bool,             // the press that is held has started its drag
 	setup:       setup.Dialog,      // the Setup (integration.odin)
 	logo:        render.Texture,    // its logo, made at its first show

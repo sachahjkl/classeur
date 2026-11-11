@@ -12,6 +12,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 - A right click on the empty part of a list opens the folder's menu (New folder, New file, Paste...).
 
 ### Fixed
+- Files dragged out of a list into a folder of classeur (a row, a tab, a place or a bookmark of the sidebar) on Linux:
+  the drop was refused everywhere, the drag's data coming at its drop only; classeur now knows its own drag's files.
 - A tab dragged onto another classeur window docks there on Linux: the window took no drop of a tab, whose data Linux
   reads at the drop only (the toolkit's drop_types tells it before); files dragged from another program too.
 - The dragged tab's picture and ghost had several blue borders: its picture is read before the ghost shows, the ghost has
