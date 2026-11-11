@@ -138,8 +138,8 @@ App :: struct {
 	tab_out_home: bool,             // that drag came back and was dropped in this window
 	tab_coming:   bool,             // a tab of another window is dragged over this one (tab_drop) ...
 	tab_coming_at: [2]f32,          // ... the pointer there
-	tab_coming_path: string,
-	session_written: string,        // owned: the session (but the window's place) as last written (session_autosave)        // owned: ... its folder, "" until the system gives it (Linux: at the drop)
+	tab_coming_path: string,        // owned: ... its folder, "" until the system gives it (Linux: at the drop)
+	session_written: string,        // owned: the session (but the window's place) as last written (session_autosave)
 	tab_image:    platform.Drag_Image,   // owned: the dragged tab's picture, read back from the renderer (tab_drag_poll)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
 }

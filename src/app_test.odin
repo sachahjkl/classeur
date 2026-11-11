@@ -11,6 +11,7 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 import "core:sync"
+import "core:log"
 import "core:testing"
 import "core:time"
 import "gt:platform"
@@ -1700,18 +1701,21 @@ test_zoom_icons_stay :: proc(t: ^testing.T) {
 	s, app := start(t, {dir}, size = {1100, 700})
 	tab := current_tab(app)
 	wait_read(s)
+	log.info("zoom_icons: read")
 	// (a picture of the system's, or Lucide's where the system has none: the CI's machines have no icon theme)
 	shown :: proc(b: ^ui.Box) -> bool { return b.custom != nil || .Draw_Text in b.flags }
 	session.wait_until(s, proc(s: ^session.Session) -> bool {
 		b := session.find(s, "icon")
 		return b != nil && (b.custom != nil || .Draw_Text in b.flags)
 	}, "the first icons")
+	log.info("zoom_icons: the first icons")
 	session.frames(s, 4)
 	blank := 0
 	list := session.get(s, "list")
 	at := session.center(list)
 	for _ in 0 ..< 4 {
 		session.wheel(s, at, {0, -1}, {.Ctrl})   // (up: larger)
+		log.infof("zoom_icons: zoom %d", tab.zoom)
 		for _ in 0 ..< 12 {
 			session.frames(s, 1)
 			for i in 0 ..< 200 {
@@ -1723,6 +1727,7 @@ test_zoom_icons_stay :: proc(t: ^testing.T) {
 	}
 	testing.expect(t, tab.zoom > 0, "zoomed")
 	testing.expect_value(t, blank, 0)
+	log.info("zoom_icons: done, the window closes")
 }
 
 // A tab dragged shows where it goes: its ghost under the pointer, the line between the tabs of a row, the half of the
