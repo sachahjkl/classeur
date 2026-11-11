@@ -62,12 +62,12 @@ options_build :: proc(app: ^App) {
 				prefs_save(app)
 				settings_apply(app)
 			},
-			// (a slider held: its value shown at once, written when it is let go)
+			// (a slider held: its value shown at once, written when it is let go; only what moves nothing: a text size
+			// shown live moved the slider under the pointer, it comes when let go)
 			preview = proc(user: rawptr, name: string, value: f64) {
 				app := (^App)(user)
 				switch name {
 				case "look.rounding":         ui.set_rounding(&app.main.state, f32(value))
-				case "look.font_size":        app.settings.font_size = f32(value)
 				case "look.inactive_opacity": app.settings.inactive_opacity = f32(value)
 				}
 				app_frames(app)
