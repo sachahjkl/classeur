@@ -3,6 +3,27 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.15.0] - 2026-11-11
+
+### Added
+- **The system's title bar, by choice**: a setting puts the window under the system's title bar (Windows, X11, a Wayland compositor that draws them), the tabs under it; off, they are in the title bar as before.
+- **The inspector's picture zooms**: the wheel zooms about the pointer, a drag moves it, a double click shows its pixels and fits it again, a bar at its corner says the zoom. Code is coloured with the theme's colours for code, and a script with no extension gets its language from what it holds (its #! line).
+- **Shares of the network, the trash and file URIs**: smb://, sftp://, ftp://, dav(s)://, nfs:// and afp:// open from the address bar, GoTo, the command line or another program; on Linux a share gvfs has not mounted yet is mounted first (its password asked by the session), on Windows an SMB share is its \\\\host\\share path. trash:/// opens the trash, file:// URIs their path. The shares mounted are listed in the sidebar's new Network section; a share's folder is named by it in its tab and its address.
+- **A click of the wheel scrolls**: on the empty part of a list, the sidebar or the inspector, the view follows the pointer until the next click, as in a browser; on a folder it still opens a tab.
+
+### Changed
+- **Square rows**: a selected row of a list, a table or a menu fills its whole width with square corners, and a table's tinted cell is square too. The Console theme is named Kernel (gui_toolkit 0.191.1).
+- **Selected rows are one block**: rows selected one under another share one fill and one border around them, with no line between them nor under the selection. A rectangle drawn over a folded group takes none of its hidden files, and costs what it touches in a large folder.
+- **Fields empty with a cross, what a search found lit in the theme's colours**: the sidebar's filter, GoTo and the panel's filter have a cross that empties them; GoTo, the address's suggestions and the search of every folder below light the letters found as the palette does. The batch rename's case is three words to choose from.
+- **The details' columns are resized, moved and scrolled**: the line at a column's right edge resizes it (its width kept), its title dragged moves it, a panel narrower than its columns scrolls sideways instead of dropping some; Folders and Files are two columns, each shown or hidden from the header's menu. A date sorts the newest first.
+- **The palette is the toolkit's, with the settings in it**: every setting is found there too (by its words, "corners" for the rounding) and opens alone in the settings; what was typed is lit in the lines; Ctrl+Enter records a command's keys in a small dialog of its own. The settings show classeur's version at their foot, and an update to install shows as a button in the title bar.
+
+### Fixed
+- **Every key has its name**: the keypad's + and - and the Menu key showed "?", and a key of one's own made of them was lost at the next start. The menus and the tooltips show the keys one set, not the default ones.
+- **The session on disk is always the last one**: two writes at once could leave an older one, and dragging the sidebar wrote it at every frame.
+- **Escape ends a gesture**: files or a tab dragged, a rectangle drawn, a section of the sidebar dragged; the rectangle gives back the selection there was, a drag moves nothing. It cleared the selection instead.
+- **The keys of an open dialog stay in it**: Escape or a shortcut pressed in the palette, GoTo or the settings no longer reaches the window behind them.
+
 ## [0.14.5] - 2026-11-11
 
 ### Fixed
@@ -281,6 +302,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.15.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.15.0
 [0.1.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.1.0
 [0.2.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.2.0
 [0.3.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.3.0
