@@ -109,6 +109,12 @@ run_build :: proc(args: []string) -> int {
 run_test :: proc(args: []string) -> int {
 	if !build_text() || !build_launcher() { return 1 }
 	_ = os.make_directory("build")
+	// (names given, `classeur.test_watch,classeur.test_zoom_icons_stay`: those tests of the program alone, in that order)
+	if len(args) > 0 {
+		out := fmt.tprintf("-out:build/test_some%s", ODIN_OS == .Windows ? ".exe" : "")
+		names := fmt.tprintf("-define:ODIN_TEST_NAMES=%s", args[0])
+		return toolbox.run(odin_cmd("test", "src", {out, names, "-define:ODIN_TEST_THREADS=1", "-define:ODIN_TEST_LOG_STATE_CHANGES=true"}), {echo = true}) ? 0 : 1
+	}
 	for pkg in TEST_PACKAGES {
 		name, _ := strings.replace_all(pkg, "/", "_", context.temp_allocator)
 		out := fmt.tprintf("-out:build/test_%s%s", name, ODIN_OS == .Windows ? ".exe" : "")
