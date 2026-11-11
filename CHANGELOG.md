@@ -5,6 +5,8 @@ and the versions follow [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.4] - 2026-11-11
+
 ### Changed
 - A column's title clicked a third time goes back to the order there was (the names going up): its first way, the other
   way, then the names'. The sort commands (Ctrl+Alt+1 to 4) go the same way round.
@@ -285,3 +287,4 @@ and the versions follow [semantic versioning](https://semver.org/).
 [0.14.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.1
 [0.14.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.2
 [0.14.3]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.3
+[0.14.4]: https://github.com/sachahjkl/classeur/releases/tag/v0.14.4
