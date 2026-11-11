@@ -87,10 +87,7 @@ App :: struct {
 	keymap:      Keymap,            // the person's keys and aliases (keymap.odin)
 	jobs_view:   Jobs_View,         // the jobs' window (jobs_view.odin)
 	tab_drag:    Tab_Drag,          // a tab dragged (tab_drag.odin)
-	columns_order: [dynamic]Column, // the details' columns after Name, in their order, the ones shown (view.columns)
-	column_rects: [dynamic]Column_Rect,  // the columns' titles as last laid out (a title dragged is placed by them)
-	column_rects_now: [dynamic]Column_Rect,
-	column_drag:  Maybe(Column),    // a column's title being dragged
+	columns:      ui.Table_Layout,  // the details' columns: their order, the ones shown, their widths (view.columns)
 	columns_menu_key: ui.Key,
 	zoom_slider_key: ui.Key,        // the zoom's slider over the footer (view_panel.odin)
 	zoom_slider_tab: u64,
@@ -271,6 +268,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	h.state.icon_font = app.icons   // (the menus' icons are the commands' Lucide ones; the widgets keep the toolkit's marks)
 	h.after_input = FRAMES_AFTER_INPUT
 	dnd_start(app)
+	ui.table_layout_init(&app.columns, detail_columns())   // (before the preferences: they say its columns)
 	prefs_open(app)
 	h.partial_redraw = true
 	h.params = app_params
@@ -365,9 +363,7 @@ app_free :: proc(app: ^App) {
 	delete(app.exe)
 	tab_image_free(app)
 	delete(app.tab_rects)
-	delete(app.columns_order)
-	delete(app.column_rects)
-	delete(app.column_rects_now)
+	ui.table_layout_destroy(&app.columns)
 	delete(app.tab_rects_last)
 	rename_free(&app.rename)
 	confirm_free(&app.confirm)

@@ -38,8 +38,6 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	dnd_frame(app)
 	app.tab_rects, app.tab_rects_last = app.tab_rects_last, app.tab_rects
 	clear(&app.tab_rects)
-	app.column_rects, app.column_rects_now = app.column_rects_now, app.column_rects
-	clear(&app.column_rects_now)
 	tab_drag_apply(app)
 	tab_drag_land(app)
 	measures_resort(app)

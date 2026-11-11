@@ -128,11 +128,11 @@ test_browse :: proc(t: ^testing.T) {
 		testing.expect_value(t, tab.path, fs.clean(dir, context.temp_allocator))
 
 		// sorted by size, the largest first; by name again
-		session.click(s, "col_Size")
+		session.click_at(s, title_point(s, .Size))
 		testing.expect_value(t, tab.folder.sort.key, fs.Sort_Key.Size)
 		testing.expect(t, tab.folder.sort.descending)
 		testing.expect_value(t, folder_row_entry(&tab.folder, 3).name, "report 10.pdf")
-		session.click(s, "col_Name")
+		session.click_at(s, title_point(s, .Name))
 		testing.expect_value(t, folder_row_entry(&tab.folder, 3).name, "archive.zip")
 
 		// Shift+Down selects a range, Ctrl+A all
@@ -1157,7 +1157,7 @@ test_columns :: proc(t: ^testing.T) {
 		dir := make_fixture(t, files[:])
 		s, app := start(t, {dir}, size = {1400, 700})
 		session.frames(s, 2)
-		testing.expect_value(t, columns_text(app), "Modified Type Counts Size")
+		testing.expect_value(t, columns_text(app), "Modified Type Folders Files Size")
 		// the header's menu: Type off
 		session.click(s, "header", .Right)
 		session.frames(s, 2)
@@ -1166,21 +1166,20 @@ test_columns :: proc(t: ^testing.T) {
 		session.key(s, .Down, repeat = 2)
 		session.key(s, .Return)
 		session.frames(s, 2)
-		testing.expect_value(t, columns_text(app), "Modified Counts Size")
-		testing.expect(t, session.find(s, "col_Type") == nil, "no Type column")
+		testing.expect_value(t, columns_text(app), "Modified Folders Files Size")
+		testing.expect(t, session.find(s, "hd_2") == nil, "no Type column")
 		session.key(s, .Escape)
 		// Size's title dragged before Modified's
 		session.frames(s, 2)
-		size := session.get(s, "col_Size").rect
-		modified := session.get(s, "col_Modified").rect
-		from := (size.min + size.max) * 0.5
+		modified := session.get(s, "hd_1").rect
+		from := title_point(s, .Size)
 		to := [2]f32{modified.min.x + 4, from.y}
 		session.press(s, from)
 		session.move(s, from - {20, 0})
 		session.move(s, to)
 		session.release(s, to)
 		session.frames(s, 2)
-		testing.expect_value(t, columns_text(app), "Size Modified Counts")
+		testing.expect_value(t, columns_text(app), "Size Modified Folders Files")
 		testing.expect_value(t, tab_folder_sort_key(app), fs.Sort_Key.Name)   // (a drag sorts nothing)
 	})
 }
@@ -1188,7 +1187,10 @@ test_columns :: proc(t: ^testing.T) {
 @(private = "file")
 columns_text :: proc(app: ^App) -> string {
 	b := strings.builder_make(context.temp_allocator)
-	for c, i in app.columns_order { fmt.sbprintf(&b, i > 0 ? " %v" : "%v", c) }
+	for k in app.columns.order {
+		if k == 0 || !app.columns.shown[k] { continue }
+		fmt.sbprintf(&b, strings.builder_len(b) > 0 ? " %v" : "%v", Detail(k))
+	}
 	return strings.to_string(b)
 }
 
@@ -1703,7 +1705,7 @@ test_column_filters :: proc(t: ^testing.T) {
 		wait_read(s)
 		session.frames(s, 2)
 		n := len(tab.folder.shown)
-		session.hover(s, "col_Size")
+		session.hover(s, "hd_5")
 		session.frames(s, 2)
 		session.click(s, "filter_Size")
 		session.frames(s, 2)
@@ -1717,7 +1719,7 @@ test_column_filters :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		testing.expect(t, session.find(s, "filter_Size") != nil, "lit while it filters")
 		// today's rows out: none left (the fixture is made now)
-		session.hover(s, "col_Modified")
+		session.hover(s, "hd_1")
 		session.frames(s, 2)
 		session.click(s, "filter_Modified")
 		session.frames(s, 2)
@@ -2403,10 +2405,11 @@ test_sort_three_clicks :: proc(t: ^testing.T) {
 		wait_read(s)
 		session.frames(s, 2)
 		before := slice.clone(shown_names(tab), context.temp_allocator)
-		head := session.get(s, "col_Size")
+		head := session.get(s, "hd_5")
+		_ = head
 		testing.expect(t, head != nil, "the Size column")
 		if head == nil { return }
-		at := (head.rect.min + head.rect.max) * 0.5
+		at := title_point(s, .Size)
 		want := [3]fs.Sort{{key = .Size, descending = true}, {key = .Size, descending = false}, {key = .Name, descending = false}}
 		for w, i in want {
 			session.click_at(s, at)
@@ -2416,11 +2419,11 @@ test_sort_three_clicks :: proc(t: ^testing.T) {
 		testing.expect(t, slice.equal(shown_names(tab), before), "the order there was")
 		testing.expect_value(t, app.default_sort.key, fs.Sort_Key.Name)
 		// the name's: down, then up again
-		name := session.get(s, "col_Name")
-		session.click_at(s, (name.rect.min + name.rect.max) * 0.5)
+		name := title_point(s, .Name)
+		session.click_at(s, name)
 		session.frames(s, 2)
 		testing.expect(t, tab.folder.sort.key == .Name && tab.folder.sort.descending, "the names down")
-		session.click_at(s, (name.rect.min + name.rect.max) * 0.5)
+		session.click_at(s, name)
 		session.frames(s, 2)
 		testing.expect(t, tab.folder.sort.key == .Name && !tab.folder.sort.descending, "the names up")
 	})
@@ -2574,5 +2577,38 @@ test_palette_settings :: proc(t: ^testing.T) {
 		testing.expect(t, strings.contains(ui.field_string(&app.options.page.query), "look.rounding"), "on the rounding")
 		testing.expect(t, session.find_text(s, fmt.tprintf("classeur %s", APP_VERSION)) != nil, "the version at their foot")
 		when SHOTS { session.save_png(s, "palette_settings.png") }
+	})
+}
+
+// A point on the words of a column's title in the details' header (its middle may hold its filter's funnel): a number's
+// words at its right end, the others' at its left (past its rule, the name's past the box that checks every row).
+@(private = "file")
+title_point :: proc(s: ^session.Session, d: Detail) -> [2]f32 {
+	b := session.get(s, fmt.tprintf("hd_%d", int(d)))
+	r := b.rect
+	y := (r.min.y + r.max.y) * 0.5
+	switch {
+	case DETAIL_COLUMNS[d].number: return {r.max.x - 22, y}
+	case d == .Name:               return {r.min.x + 64, y}
+	}
+	return {r.min.x + 22, y}
+}
+
+// The details' cells lie under their titles: each one as wide as its title and at the same place, the name's too.
+@(test)
+test_columns_aligned :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, _ := start(t, {dir}, size = {1600, 700})
+		session.frames(s, 3)
+		for d in Detail {
+			k := int(d)
+			title := session.get(s, fmt.tprintf("hd_%d", k))
+			cell := d == .Name ? session.find(s, "name_cell") : session.find(s, fmt.tprintf("c%d", k))
+			testing.expectf(t, title != nil && cell != nil, "%v: a title and a cell", d)
+			if title == nil || cell == nil { continue }
+			testing.expectf(t, abs(cell.rect.min.x - title.rect.min.x) < 1 && abs(cell.rect.max.x - title.rect.max.x) < 1, "%v: the cell %v under its title %v", d, cell.rect, title.rect)
+		}
 	})
 }

@@ -7,7 +7,6 @@ package classeur
 import "core:fmt"
 import "core:math"
 import "core:sync"
-import "gt:platform"
 import config "gt:config"
 import "core:strings"
 import "core:slice"
@@ -48,85 +47,70 @@ ROW_INSET_EM :: 0.5
 NAME_MIN_EM   :: 14
 ROW_FIXED_EM  :: 7
 
-// The columns after the name: as many as the panel's width holds, the size first, then the type, the counts, the date
-// (File Pilot drops them in the same order when a panel narrows).
-Column :: enum u8 { Size, Type, Counts, Modified }
-Columns :: bit_set[Column]
+// The details' columns: the toolkit's table header (ui.Table_Layout, ui.table_header) over rows classeur builds. A
+// column's rule resizes it, its title dragged moves it, a right click on the header shows or hides them; a panel narrower
+// than its columns scrolls sideways. Their order, the ones shown and their widths are preferences (view.columns,
+// view.column_widths), the same in every panel; each tab keeps its own sort.
+Detail :: enum u8 { Name, Modified, Type, Folders, Files, Size }
 
-// The columns shown in `room`: the person's (columns_order), as many as fit, the ones of Column's order first (Size is
-// the last to go).
-details_columns :: proc(app: ^App, room, em: f32) -> (cols: Columns) {
-	left := room / max(em, 1) - NAME_MIN_EM - ROW_FIXED_EM
-	chosen: Columns
-	for c in app.columns_order { chosen += {c} }
-	for c in Column {
-		if c not_in chosen { continue }
-		if left < COLUMN_WIDTH_EM[c] { break }
-		left -= COLUMN_WIDTH_EM[c]
-		cols += {c}
-	}
-	return
+@(rodata)
+DETAIL_COLUMNS := [Detail]ui.Table_Column{
+	.Name     = {title = "Name", width = 0},
+	.Modified = {title = "Modified", width = COL_MODIFIED_EM, descending_first = true},
+	.Type     = {title = "Type", width = COL_TYPE_EM},
+	.Folders  = {title = "Folders", width = COL_COUNT_EM, number = true, unsorted = true},
+	.Files    = {title = "Files", width = COL_COUNT_EM, number = true, unsorted = true},
+	.Size     = {title = "Size", width = COL_SIZE_EM, number = true},
+}
+// (the table's columns: a slice of the table of Detail)
+detail_columns :: proc() -> []ui.Table_Column { return slice.enumerated_array(&DETAIL_COLUMNS) }
+
+@(rodata)
+DETAIL_KEYS := [Detail]string{.Name = "name", .Modified = "modified", .Type = "type", .Folders = "folders", .Files = "files", .Size = "size"}
+// The sort of each column (the counts have none).
+@(rodata)
+DETAIL_SORT := [Detail]fs.Sort_Key{.Name = .Name, .Modified = .Modified, .Type = .Type, .Folders = .Name, .Files = .Name, .Size = .Size}
+DETAIL_COLUMNS_DEFAULT :: "modified,type,folders,files,size"
+
+// view.columns ("modified,type,folders,files,size": the columns shown after the name, in their order) and
+// view.column_widths ("size=8.0": the widths not their own).
+columns_read :: proc(app: ^App, shown, widths: string) {
+	l := &app.columns
+	keys := DETAIL_KEYS
+	ui.table_layout_reset(l)
+	names := strings.split(shown, ",", context.temp_allocator)
+	for k in 1 ..< len(Detail) { l.shown[k] = slice.contains(names, keys[Detail(k)]) }
+	ui.table_order_apply(l, slice.enumerated_array(&keys), shown)
+	ui.table_widths_apply(l, slice.enumerated_array(&keys), widths)
 }
 
-COLUMN_WIDTH_EM := [Column]f32{.Size = COL_SIZE_EM, .Type = COL_TYPE_EM, .Counts = 2 * COL_COUNT_EM, .Modified = COL_MODIFIED_EM}
-COLUMN_NAMES := [Column]string{.Size = "size", .Type = "type", .Counts = "counts", .Modified = "modified"}
-COLUMN_TITLES := [Column]string{.Size = "Size", .Type = "Type", .Counts = "Folders and files", .Modified = "Modified"}
-
-Column_Rect :: struct { column: Column, rect: ui.Rect }
-
-// view.columns ("modified,type,counts,size"): the columns shown, in their order.
-columns_read :: proc(app: ^App, text: string) {
-	clear(&app.columns_order)
-	for word in strings.split(text, ",", context.temp_allocator) {
-		w := strings.trim_space(word)
-		for c in Column {
-			if COLUMN_NAMES[c] == w && !slice.contains(app.columns_order[:], c) { append(&app.columns_order, c) }
-		}
-	}
-}
-
-@(private = "file")
 columns_save :: proc(app: ^App) {
+	l := &app.columns
+	keys := DETAIL_KEYS
 	b := strings.builder_make(context.temp_allocator)
-	for c, i in app.columns_order {
-		if i > 0 { strings.write_byte(&b, ',') }
-		strings.write_string(&b, COLUMN_NAMES[c])
+	for k in l.order {
+		if k == 0 || !l.shown[k] { continue }
+		if strings.builder_len(b) > 0 { strings.write_byte(&b, ',') }
+		strings.write_string(&b, keys[Detail(k)])
 	}
 	config.set_string(&app.prefs, config.ref_of(&app.prefs, "view.columns"), strings.to_string(b))
+	config.set_string(&app.prefs, config.ref_of(&app.prefs, "view.column_widths"), ui.table_widths_text(l, slice.enumerated_array(&keys)))
 	prefs_save(app)
 }
 
-// A column shown or hidden (hidden: it leaves the order; shown again: at the end).
-column_toggle :: proc(app: ^App, c: Column) {
-	if i, found := slice.linear_search(app.columns_order[:], c); found {
-		ordered_remove(&app.columns_order, i)
-	} else {
-		append(&app.columns_order, c)
-	}
-	columns_save(app)
-}
-
-// The column `c` to the place `at` among the ones shown.
-column_move :: proc(app: ^App, c: Column, at: int) {
-	i, found := slice.linear_search(app.columns_order[:], c)
-	if !found { return }
-	ordered_remove(&app.columns_order, i)
-	inject_at(&app.columns_order, clamp(at > i ? at - 1 : at, 0, len(app.columns_order)), c)
-	columns_save(app)
-}
-
-// The header's menu (a right click on it): each column, ticked when shown; it stays open while columns are ticked.
+// The header's menu (a right click on it): each column, ticked when shown (the toolkit's items); it stays open.
 columns_menu_build :: proc(app: ^App, em: f32) {
 	if app.columns_menu_key == 0 { app.columns_menu_key = ui.key_from_string(0, "classeur_columns_menu") }
 	if ui.ctx_menu(app.columns_menu_key, em * MENU_WIDTH_EM) {
-		for c in ([]Column{.Modified, .Type, .Counts, .Size}) {
-			on := slice.contains(app.columns_order[:], c)
-			if ui.menu_item(fmt.tprintf("%s###colm_%s", COLUMN_TITLES[c], COLUMN_NAMES[c]), checked = on, keep_open = true).clicked { column_toggle(app, c) }
-		}
+		if changed, _ := ui.table_column_items(&app.columns); changed { columns_save(app) }
 		ui.menu_separator()
-		if ui.menu_item("The columns as they were###colm_reset").clicked { columns_read(app, "modified,type,counts,size"); columns_save(app) }
+		if ui.menu_item("The columns as they were###colm_reset").clicked {
+			columns_read(app, DETAIL_COLUMNS_DEFAULT, "")
+			columns_save(app)
+		}
 	}
 }
+
 // The filter's width in the footer, in ems.
 FILTER_EM :: 18
 
@@ -156,7 +140,6 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 			if ui.row(.Start, {.Draw_Background}, "###below_tabs") { tab_region(app, p, index, ui.fill(), room, em) }
 		}
 		if app.inspector.open && focused { room -= ui.pane_extent(&app.inspector.pane, .X, inspector_pane_options(app)) * ui.scale() }
-		wide := details_columns(app, room, em)
 		toolbar(app, p, t, index, em)
 		// the list, and beside it the inspector in the panel that has the keyboard
 		ui.next({width = ui.fill(), height = ui.fill()})
@@ -167,12 +150,13 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 				dim := focused || len(app.panels) == 1 ? 0 : 1 - app.settings.inactive_opacity
 				switch tab_mode(t) {
 				case .Details:
-					header(app, t, wide, em)
-					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
-					folder_list(app, t, focused, wide, false, em)
+					head := header(app, t, em)
+					// (the rows as wide as the columns at least: past the panel's edge they scroll sideways, the titles too)
+					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim, flags = {.View_Scroll_X, .Allow_Overflow_X}})
+					folder_list(app, t, focused, false, em, head)
 				case .List:
 					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
-					folder_list(app, t, focused, {}, true, em)
+					folder_list(app, t, focused, true, em)
 				case .Columns:
 					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
 					columns_list(app, t, focused, em)
@@ -372,83 +356,70 @@ list_move :: proc(t: ^Tab, by: int) {
 ////////////////////////////////
 // The columns
 
+// The room before the first title, as a row's before its name: its edge, the tree's chevron, the icon (the box that
+// checks every row stands over the icons), in ems.
 @(private = "file")
-header :: proc(app: ^App, t: ^Tab, wide: Columns, em: f32) {
-	f := &t.folder
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * HEADER_EM)), bg = draw.hex(surfaces(app).head)})
-	if ui.row(.Center, {.Draw_Background, .Draw_Side_Bottom, .Hot_Within}, "###header") {
-		// (a right click anywhere on it, its titles too: the columns' menu)
-		if ui.mouse_pressed(.Right) && ui.hot_within(ui.parent_box().key) {
-			if app.columns_menu_key == 0 { app.columns_menu_key = ui.key_from_string(0, "classeur_columns_menu") }
-			ui.ctx_menu_open(app.columns_menu_key, ui.mouse_pos())
-		}
-		ui.spacer(ui.px(em * (ROW_INSET_EM + ROW_LEAD_EM)))
-		// the box of every row, over the icons' column (File Pilot's): all, some or none of them selected
-		if f.tree && f.filter == "" { ui.spacer(ui.px(em * TREE_CHEVRON_EM)) }
-		all := len(f.shown) > 0 && f.count == len(f.shown)
-		if check_box(app, "check_all", all, f.count > 0 && !all, em * ICON_CELL_EM) {
-			if f.count > 0 { folder_select_none(f) } else { folder_select_all(f) }
-		}
-		ui.spacer(ui.px(em * 0.5))
-		if ui.tags("weak") {
-			column_head(app, t, .Name, "Name", ui.fill(), .Left, em, nil)
-			for c in app.columns_order {
-				if c not_in wide { continue }
-				switch c {
-				case .Modified: column_head(app, t, .Modified, "Modified", ui.px(em * COL_MODIFIED_EM), .Left, em, c)
-				case .Type:     column_head(app, t, .Type, "Type", ui.px(em * COL_TYPE_EM), .Left, em, c)
-				case .Size:     column_head(app, t, .Size, "Size", ui.px(em * COL_SIZE_EM), .Right, em, c)
-				case .Counts:
-					ui.next({width = ui.px(em * 2 * COL_COUNT_EM), height = ui.pct(1)})
-					if ui.row(.Center, {.Clickable}, "###col_counts") {
-						box := ui.parent_box()
-						plain_head("Folders", em * COL_COUNT_EM, em)
-						plain_head("Files", em * COL_COUNT_EM, em)
-						column_drag_signal(app, c, ui.signal(box))
-					}
-				}
-			}
-		}
-		ui.spacer(ui.px(em * (ROW_INSET_EM + 0.5)))
-	}
+header_lead_em :: proc(f: ^Folder) -> f32 {
+	lead: f32 = ROW_INSET_EM + ROW_LEAD_EM + ICON_CELL_EM + 0.5
+	if f.tree && f.filter == "" { lead += TREE_CHEVRON_EM }
+	return lead
 }
 
-// A column's title, a line before it; the sort's arrow at its right end. A click sorts by it.
+// The details' header: the toolkit's titles over the tab's columns, the tab's sort on them. Returns the box the titles
+// scroll in sideways (the rows' list follows it: folder_list).
 @(private = "file")
-column_head :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, width: ui.Size, align: ui.Text_Align, em: f32, column: Maybe(Column)) {
-	s := t.folder.sort
-	on := s.key == key
-	ui.next({width = width, height = ui.pct(1), radius = em * 0.2})
-	sig: ui.Signal
-	if ui.row(.Center, {.Clickable, .Draw_Hot_Effects}, fmt.tprintf("###col_%s", title)) {
-		sig = ui.signal(ui.parent_box())
-		if key != .Name { vrule(em, 1.2) } else { ui.spacer(ui.px(em * 0.4)) }
-		// (a right-aligned title keeps its edge over its values: its funnel goes before it)
-		if align == .Right { column_funnel(app, t, key, title, em) }
-		if align == .Right { ui.spacer(ui.fill()) }
-		ui.next({width = ui.text_size(), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###t", title))
-		if align == .Left { ui.spacer(ui.fill()) }
-		if on { glyph(app, s.descending ? lucide.ARROW_DOWN : lucide.ARROW_UP, em * 1.4) } else { ui.spacer(ui.px(em * 0.4)) }
-		if align != .Right { column_funnel(app, t, key, title, em) }
+header :: proc(app: ^App, t: ^Tab, em: f32) -> ui.Key {
+	f := &t.folder
+	l := &app.columns
+	// (the tab's sort shown on its column; a count's column has none)
+	l.sort, l.descending = int(Detail.Name), f.sort.descending
+	for k in Detail { if DETAIL_SORT[k] == f.sort.key && !DETAIL_COLUMNS[k].unsorted { l.sort = int(k) } }
+	Head :: struct { app: ^App, t: ^Tab }
+	h := ui.frame_new(Head)
+	h^ = {app, t}
+	ui.next({width = ui.fill(), bg = draw.hex(surfaces(app).head)})
+	ev := ui.table_header("###header", l, header_lead_em(f), {
+		user = h,
+		// the box of every row, over the icons' column (File Pilot's): all, some or none of them selected
+		lead = proc(user: rawptr, em: f32) {
+			h := (^Head)(user)
+			f := &h.t.folder
+			ui.spacer(ui.px(em * (ROW_INSET_EM + ROW_LEAD_EM)))
+			if f.tree && f.filter == "" { ui.spacer(ui.px(em * TREE_CHEVRON_EM)) }
+			all := len(f.shown) > 0 && f.count == len(f.shown)
+			if check_box(h.app, "check_all", all, f.count > 0 && !all, em * ICON_CELL_EM) {
+				if f.count > 0 { folder_select_none(f) } else { folder_select_all(f) }
+			}
+		},
+		// a column's filter: its funnel, while the pointer is on its title or while it filters
+		title = proc(user: rawptr, k: int, hot: bool, em: f32) {
+			h := (^Head)(user)
+			d := Detail(k)
+			if DETAIL_COLUMNS[d].unsorted { return }
+			column_funnel(h.app, h.t, DETAIL_SORT[d], DETAIL_COLUMNS[d].title, hot, em)
+		},
+	})
+	if ev.sorted {
+		// (the third click leaves no sort: the names' order, as the sort commands give it)
+		s := f.sort
+		s.key, s.descending = .Name, false
+		if l.sort != ui.TABLE_UNSORTED { s.key, s.descending = DETAIL_SORT[Detail(l.sort)], l.descending }
+		folder_set_sort(f, s)
+		app.default_sort = f.sort
 	}
-	moved := false
-	if c, ok := column.?; ok { moved = column_drag_signal(app, c, sig) }
-	if sig.clicked && !moved {
-		folder_sort_by(&t.folder, key)
-		app.default_sort = t.folder.sort
+	if ev.resized || ev.moved { columns_save(app) }
+	if ev.menu {
+		if app.columns_menu_key == 0 { app.columns_menu_key = ui.key_from_string(0, "classeur_columns_menu") }
+		ui.ctx_menu_open(app.columns_menu_key, ui.mouse_pos())
 	}
-	// (the click after the second goes back to the names' order: folder_sort_by)
-	back := on && key != .Name && s.descending != sort_first_down(key)
-	tip := !on ? fmt.tprintf("Sort by %s", title) : back ? (s.descending ? "Sorted down: a click goes back to the order by name" : "Sorted up: a click goes back to the order by name") : (s.descending ? "Sorted down: a click sorts up" : "Sorted up: a click sorts down")
-	hover_tip(sig, tip)
+	return ev.view
 }
 
 // The column's filter (File Pilot's and Explorer's): its funnel, over the column or lit while it filters.
 @(private = "file")
-column_funnel :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, em: f32) {
+column_funnel :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, hot: bool, em: f32) {
 	active := column_filtered(&t.folder, key)
-	if active || ui.hot_within(ui.parent_box().key) {
+	if active || hot {
 		if !active { ui.push_tags("weak") }
 		if icon_action(app, fmt.tprintf("filter_%s", title), lucide.FILTER, fmt.tprintf("Filter by %s", title), em * 0.8, on = active) {
 			column_filter_open(app, t, key)
@@ -496,15 +467,6 @@ column_filter_open :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key) {
 	}
 }
 
-@(private = "file")
-plain_head :: proc(title: string, width, em: f32) {
-	ui.next({width = ui.px(width), height = ui.pct(1)})
-	if ui.row(.Center, {}, fmt.tprintf("###col_%s", title)) {
-		vrule(em, 1.2)
-		ui.next({width = ui.fill(), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###t", title))
-	}
-}
 
 @(private = "file")
 Check_Draw :: struct { on, some: bool, line, fill, mark: ui.Color, round: f32 }
@@ -591,15 +553,26 @@ empty_state :: proc(app: ^App, t: ^Tab, em: f32) -> bool {
 }
 
 @(private = "file")
-folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only: bool, em: f32) {
+// The rows of the details (`head`: the header's titles, which scroll sideways with them: a panel narrower than the
+// columns scrolls), or of the names alone (`names_only`).
+folder_list :: proc(app: ^App, t: ^Tab, focused: bool, names_only: bool, em: f32, head: ui.Key = 0) {
 	f := &t.folder
 	if empty_state(app, t, em) { return }
 	// the cursor and the list's active row are the same row
 	t.vl.sel = f.cursor
 	labels := make([]string, len(f.shown), context.temp_allocator)
 	for i, row in f.shown { labels[row] = f.listing.entries[i].name }
+	// (the details: each row as wide as their columns at least)
+	least: f32 = 0
+	if !names_only { least = ui.table_min_width(&app.columns) }
 	rows, ok := ui.vlist("###list", &t.vl, f.ids[:], labels)
 	if !ok { return }
+	// (the layout is the panels' together; each tab keeps its own sideways scroll)
+	defer if !names_only {
+		app.columns.scroll_x = t.scroll_x
+		ui.table_scroll_sync(&app.columns, head, &t.vl)
+		t.scroll_x = app.columns.scroll_x
+	}
 	if t.focus_due == .List && t.vl.key != 0 {
 		ui.set_focus(t.vl.key)
 		t.focus_due = .None
@@ -621,7 +594,7 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 		head := title != "" ? ui.dense(em * GROUP_HEAD_EM) : 0
 		folded := title != "" && title in f.folded
 		// (the list's own fill of the cursor's row is clear: the row draws its pill itself; a folded group: its title alone)
-		ui.next({height = ui.px(folded ? head : ui.dense(em * ROW_EM) + head), radius = 0, bg = ui.Color{}})
+		ui.next({width = least > 0 ? ui.fill_least(least) : ui.fill(), height = ui.px(folded ? head : ui.dense(em * ROW_EM) + head), radius = 0, bg = ui.Color{}})
 		if selected && focused { ui.push_tags("selected") }
 		sig := ui.list_row(&t.vl, row, e.name)
 		// (the wheel's click on a folder's row is the row's: it opens in a tab; on a file, on the empty part it scrolls, the
@@ -654,11 +627,11 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, wide: Columns, names_only
 					}
 					if !folded {
 						ui.next({width = ui.fill(), height = ui.fill()})
-						if ui.row(.Center, {}, "###cells") { check = entry_row(app, t, e, row, selected, wide, names_only, em) }
+						if ui.row(.Center, {}, "###cells") { check = entry_row(app, t, e, row, selected, names_only, em) }
 					}
 				}
 			} else {
-				check = entry_row(app, t, e, row, selected, wide, names_only, em)
+				check = entry_row(app, t, e, row, selected, names_only, em)
 			}
 		}
 		if row == t.vl.sel { t.cursor_rect = sig.box.rect }
@@ -787,48 +760,48 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 // The cells of a row: its box, its icon, its name (or the field that renames it), its date, its type, its counts and its
 // size. `names_only`: the icon and the name. True: its box was clicked.
 @(private = "file")
-entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, wide: Columns, names_only: bool, em: f32) -> (check: bool) {
-	ui.spacer(ui.px(em * (ROW_INSET_EM + ROW_LEAD_EM)))
-	folder := e.kind == .Directory
-	tree_lead(app, t, e, em)
-	check = icon_check(app, t, e^, row, selected, em)
-	ui.spacer(ui.px(em * 0.5))
-	entry_name(app, t, e, selected, em)
+entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, names_only: bool, em: f32) -> (check: bool) {
+	l := &app.columns
+	// the name's cell: the row's edge, the tree's chevron, the icon (its box too), the name; the name's column wide
+	ui.next({width = names_only ? ui.fill() : ui.table_width(l, int(Detail.Name)), height = ui.pct(1)})
+	if ui.row(.Center, {}, "###name_cell") {
+		ui.spacer(ui.px(em * (ROW_INSET_EM + ROW_LEAD_EM)))
+		tree_lead(app, t, e, em)
+		check = icon_check(app, t, e^, row, selected, em)
+		ui.spacer(ui.px(em * 0.5))
+		entry_name(app, t, e, selected, em)
+	}
 	if names_only {
 		ui.spacer(ui.px(em * ROW_INSET_EM))
 		return
 	}
+	folder := e.kind == .Directory
 	m: Measure
 	measured := false
 	if folder { m, measured = measure_of(app, t, e^) }
+	count := proc(n: i64, measured: bool) -> string {
+		if !measured || n == 0 { return "--" }
+		return count_text(n)
+	}
 	if !selected { ui.push_tags("weak") }
-	if ui.style({font_size = em * 0.92}) {
-		for c in app.columns_order {
-			if c not_in wide { continue }
-			switch c {
-			case .Modified:
-				ui.next({width = ui.px(em * COL_MODIFIED_EM), height = ui.pct(1)})
-				ui.label(fmt.tprintf("%s###m", date_text(app, e.mtime)))
-			case .Type:
-				ui.next({width = ui.px(em * COL_TYPE_EM), height = ui.pct(1)})
-				ui.label(fmt.tprintf("%s###k", type_text(e^)))
-			case .Counts:
-				count := proc(n: i64, measured: bool) -> string {
-					if !measured || n == 0 { return "--" }
-					return count_text(n)
-				}
-				ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1)})
-				ui.label(fmt.tprintf("%s###fo", folder ? count(m.folders, measured) : "--"))
-				ui.next({width = ui.px(em * COL_COUNT_EM), height = ui.pct(1)})
-				ui.label(fmt.tprintf("%s###fi", folder ? count(m.files, measured) : "--"))
+	// (at the titles' size: the toolkit's columns are in ems of it, a smaller text made them narrower than their titles)
+	{
+		// (each cell under its title: the toolkit's cells, their order and widths; a number at the right)
+		for k in l.order {
+			if k == int(Detail.Name) || !l.shown[k] { continue }
+			switch Detail(k) {
+			case .Name:
+			case .Modified: ui.table_cell(l, k, date_text(app, e.mtime))
+			case .Type:     ui.table_cell(l, k, type_text(e^))
+			case .Folders:  ui.table_cell(l, k, folder ? count(m.folders, measured) : "--")
+			case .Files:    ui.table_cell(l, k, folder ? count(m.files, measured) : "--")
 			case .Size:
 				size := "--"
 				if e.size >= 0 { size = size_text(e.size) } else if measured && m.bytes > 0 { size = size_text(m.bytes) }
-				ui.next({width = ui.px(em * COL_SIZE_EM), height = ui.pct(1), text_align = .Right})
-				cell := ui.build_box({.Draw_Text}, fmt.tprintf("%s###s", size))
+				ui.table_cell(l, k, size)
 				// (File Pilot's: a thin bar under the size, its share of the largest row's)
 				bytes := e.size >= 0 ? e.size : (measured ? m.bytes : 0)
-				if bytes > 0 && t.folder.size_max > 0 {
+				if cell := ui.parent_box().last; cell != nil && bytes > 0 && t.folder.size_max > 0 {
 					d := ui.frame_new(Size_Bar)
 					d^ = {f32(f64(bytes) / f64(t.folder.size_max)), ui.color("accent") * {1, 1, 1, 0.55}, em}
 					cell.custom, cell.custom_user = size_bar_draw, d
@@ -837,7 +810,7 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, wi
 		}
 	}
 	if !selected { ui.pop_tags() }
-	ui.spacer(ui.px(em * (ROW_INSET_EM + 0.5)))
+	ui.table_row_end()
 	return
 }
 
@@ -1230,34 +1203,6 @@ entry_tip :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, sig: ui.Signal) {
 	hover_tip(sig, name, facts, where_)
 }
 
-// A column's title: its box noted (where a title dragged goes is read from them), a drag past the system's distance
-// moves it, placed where it is let go. True: it was moved (no sort).
-column_drag_signal :: proc(app: ^App, c: Column, sig: ui.Signal) -> bool {
-	append(&app.column_rects_now, Column_Rect{c, sig.box.rect})
-	th := platform.drag_threshold(app.main.win)
-	if sig.dragging && (abs(sig.drag_delta.x) >= th.x || abs(sig.drag_delta.y) >= th.y) { app.column_drag = c }
-	if dragged, ok := app.column_drag.?; ok && dragged == c {
-		if sig.dragging { drop_mark(sig.box) }
-		if sig.released {
-			app.column_drag = nil
-			x := ui.mouse_pos().x
-			// (the titles of this header in the last frame, in the order shown: the other panels' headers are elsewhere)
-			mine := make([dynamic]Column_Rect, context.temp_allocator)
-			for cr in app.column_rects { if abs(cr.rect.min.y - sig.box.rect.min.y) < 1 { append(&mine, cr) } }
-			at := 0
-			for cr, i in mine { if x > (cr.rect.min.x + cr.rect.max.x) * 0.5 { at = i + 1 } }
-			if at < len(mine) {
-				target := mine[at].column
-				j, _ := slice.linear_search(app.columns_order[:], target)
-				column_move(app, c, j)
-			} else {
-				column_move(app, c, len(app.columns_order))
-			}
-			return true
-		}
-	}
-	return false
-}
 
 // The tree's lead of a row or a line, before its icon: a step in per level, a chevron that opens or closes a folder in
 // place. Nothing outside the tree, or while filtering.

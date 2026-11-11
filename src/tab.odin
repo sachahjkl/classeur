@@ -25,6 +25,7 @@ Tab :: struct {
 	vl:          ui.Virtual_List,
 	filter:      ui.Text_Field,
 	filter_open: bool,
+	scroll_x:    f32,      // the details' sideways scroll (the columns' layout is the panels' together)
 	address:      ui.Text_Field,     // the path typed in place of the crumbs (Ctrl+L)
 	address_open: bool,
 	address_sel:  int,               // the suggestion chosen under the path field
