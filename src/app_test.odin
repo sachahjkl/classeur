@@ -2739,3 +2739,31 @@ test_band_folded_group :: proc(t: ^testing.T) {
 		testing.expect(t, tab.folder.count > 0, "the others taken")
 	})
 }
+
+// A window resized: the tabs' regions lie on their panels in the very frame of the new size (worked out as the body
+// lays it out, not from the last frame's boxes).
+@(test)
+test_tabs_follow_a_resize :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir}, size = {1200, 700})
+		context.allocator = runtime.heap_allocator()
+		panel_open(app, dir)
+		wait_read(s)
+		session.frames(s, 3)
+		for w in ([]int{1000, 1350, 900}) {
+			session.resize(s, {w, 700})
+			session.frames(s, 1)
+			for i in 0 ..< len(app.panels) {
+				region := session.get(s, fmt.tprintf("tabs%d", i))
+				pb := session.get(s, fmt.tprintf("panel%d", i))
+				if pb == nil { continue }
+				p := pb.rect
+				testing.expectf(t, region != nil, "width %d, panel %d: its tabs", w, i)
+				if region == nil { continue }
+				testing.expectf(t, abs(region.rect.min.x - (p.min.x - max(1, ui.scale()))) < 1, "width %d, panel %d: its tabs from its left line (%v, panel %v)", w, i, region.rect, p)
+			}
+		}
+	})
+}

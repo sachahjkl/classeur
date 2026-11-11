@@ -142,6 +142,8 @@ App :: struct {
 	session_writer: Session_Writer,
 	mounting:     [dynamic]string,  // owned: the shares being mounted on a worker (locations.odin)
 	shares:       []fs.Share,       // the shares of the network mounted now (the sidebar's Network section)  // the session's writes on a worker, one at a time (session_save)
+	session_seen:    string,        // owned: the session's text at its last change (session_autosave waits for it to settle)
+	session_changed_ms: f64,        // when it changed
 	session_written: string,        // owned: the session (but the window's place) as last written (session_autosave)
 	tab_image:    platform.Drag_Image,   // owned: the dragged tab's picture, read back from the renderer (tab_drag_poll)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
@@ -388,6 +390,7 @@ app_free :: proc(app: ^App) {
 	delete(app.vol_to)
 	delete(app.tab_coming_path)
 	delete(app.session_written)
+	delete(app.session_seen)
 	session_writer_free(&app.session_writer)
 	for u in app.mounting { delete(u) }
 	delete(app.mounting)

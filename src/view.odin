@@ -61,6 +61,8 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = draw.hex(surfaces(app).list)})
 	page := ui.build_box({.Draw_Background}, "###page")
 	if ui.parent(page) {
+		// (the sidebar's width held in the window's room first: the title bar's parts are worked out from it)
+		app.sidebar_px = clamp(app.sidebar_px, SIDEBAR_MIN_PX, max(min(SIDEBAR_MAX_PX, app.room - PANELS_MIN_PX), SIDEBAR_MIN_PX))
 		build_top(app, em)
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.row() { build_body(app, em) }
@@ -166,12 +168,16 @@ build_top :: proc(app: ^App, em: f32) {
 			w := max(1, ui.scale())
 			draw.rect(dc, {{b.rect.min.x, b.rect.max.y - w}, b.rect.max}, (^ui.Color)(user)^)
 		}, edge
-		// each part as wide as what is under it (the boxes of the last frame: the first has no width yet)
-		// (each region starts on the column of the line at the left of its panel: the shown tab's left line is that
-		// line going up, not a second one beside it)
-		have := len(app.panel_rects) == len(app.panels) && app.panel_rects[0].max.x > 0
+		// each part as wide as what is under it, worked out as the body lays it out in this very frame (the sidebar, its
+		// line, the columns sharing the rest, a line between two): a window resized moves the tabs with their panels,
+		// not a frame after them. (each region starts on the column of the line at the left of its panel: the shown
+		// tab's left line is that line going up, not a second one beside it)
 		line := max(1, ui.scale())
-		head := have ? app.panel_rects[0].min.x - line : app.sidebar ? app.sidebar_px * ui.scale() : em * 5
+		cols := 0
+		for p in app.panels { if !p.below { cols += 1 } }
+		side := app.sidebar ? app.sidebar_px * ui.scale() + line : 0
+		col_w := (app.window_px.x - side - f32(max(cols - 1, 0)) * line) / f32(max(cols, 1))
+		head := app.sidebar ? app.sidebar_px * ui.scale() : 0
 		ui.next({width = ui.px(head), height = ui.pct(1)})
 		if ui.row(.Center, {}, "###head") {
 			ui.spacer(ui.px(em * 0.6))
@@ -181,16 +187,13 @@ build_top :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.3))
 		}
 		// (a column's top panel has its tabs here; a panel below another has them at its own top: panel_build)
-		prev := -1
 		for p, i in app.panels {
 			if p.below { continue }
 			last := true
 			for q in app.panels[i + 1:] { if !q.below { last = false; break } }
-			w: ui.Size = ui.fill()
-			if have && !last { w = ui.px(app.panel_rects[i].max.x - app.panel_rects[i].min.x + line) }
-			if have && prev >= 0 { ui.spacer(ui.px(app.panel_rects[i].min.x - app.panel_rects[prev].max.x - line)) }
-			tab_region(app, p, i, w, have ? app.panel_rects[i].max.x - app.panel_rects[i].min.x : 0, em)
-			prev = i
+			// (the last region ends at the window's buttons: what is left of the bar)
+			w: ui.Size = last ? ui.fill() : ui.px(col_w + line)
+			tab_region(app, p, i, w, col_w, em)
 		}
 		// (an update to install, coming, or in place: a button before the window's own; nothing otherwise)
 		if app.updater != nil {
@@ -314,7 +317,6 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 build_body :: proc(app: ^App, em: f32) {
 	scale := ui.scale()
 	if app.sidebar {
-		app.sidebar_px = clamp(app.sidebar_px, SIDEBAR_MIN_PX, max(min(SIDEBAR_MAX_PX, app.room - PANELS_MIN_PX), SIDEBAR_MIN_PX))
 		ui.next({width = ui.px(app.sidebar_px * scale), height = ui.fill()})
 		sidebar_build(app, em)
 		ui.splitter("###side_split", .X, &app.sidebar_px, SIDEBAR_MIN_PX, SIDEBAR_MAX_PX, {default_size = 240, total = app.room, min_other = PANELS_MIN_PX, flush = true})

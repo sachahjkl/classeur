@@ -100,15 +100,31 @@ session_rest :: proc(app: ^App, b: ^strings.Builder) {
 	for p in app.recents { fmt.sbprintf(b, "recent %s\n", p) }
 }
 
-// After a frame: the session written again when what it holds changed (the window's place alone waits for the next
-// write: a window moved or resized changes it every frame). Not while a press is held: a splitter dragged changes the
-// sidebar's width every frame; the release writes it once.
+// After a frame: the session written again when what it holds changed and stayed so SESSION_SETTLE_MS (the window's
+// place alone waits for the next write: a window moved or resized changes it every frame). Not while a press is held:
+// a splitter dragged changes the sidebar's width every frame; once let go and settled it is written once.
+SESSION_SETTLE_MS :: 400
+
 session_autosave :: proc(app: ^App) {
 	if session_file(app) == "" || ui.active_key() != 0 { return }
 	b := strings.builder_make(context.temp_allocator)
 	session_rest(app, &b)
 	text := strings.to_string(b)
-	if text == app.session_written { return }
+	if text == app.session_written {
+		app.session_changed_ms = 0
+		return
+	}
+	// (changed: written once it has not changed for a while; the loop is woken then, the window may be idle)
+	now := ui.now_ms()
+	if text != app.session_seen {
+		delete(app.session_seen)
+		app.session_seen = strings.clone(text)
+		app.session_changed_ms = now
+	}
+	if left := SESSION_SETTLE_MS - (now - app.session_changed_ms); left > 0 {
+		ui.wake_within(&app.main.state, int(left) + 1)   // (the loop sleeps: woken when it is due)
+		return
+	}
 	delete(app.session_written)
 	app.session_written = strings.clone(text)
 	session_save(app, later = true)
