@@ -3,6 +3,11 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.15.1] - 2026-11-11
+
+### Changed
+- **The palette forgives a slip**: a word typed with a letter missing, one too many, one for another or two swapped still finds its command or setting ("new foldr" finds New folder), after every exact match. The palette's field has the darker background of a field, and its edge runs all along it (gui_toolkit 0.194.0).
+
 ## [0.15.0] - 2026-11-11
 
 ### Added
@@ -302,6 +307,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.15.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.15.1
 [0.15.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.15.0
 [0.1.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.1.0
 [0.2.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.2.0
