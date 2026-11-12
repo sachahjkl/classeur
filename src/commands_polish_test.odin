@@ -33,6 +33,14 @@ test_command_icons_distinct :: proc(t: ^testing.T) {
 			{"tab_close", "tab_close_left", "tab_close_right", "jobs_cancel"},
 			// (one stop and the other way round: F6, Ctrl+Shift+F6)
 			{"panel_next", "panel_previous"},
+			// a window of its own, for a tab or on the home folder: the same start
+			{"tab_window", "app_new_window"},
+			// the themes in one order and the other
+			{"app_theme_next", "app_theme_previous"},
+			// the text's size, up, down and back (the subset has one sign of text)
+			{"app_text_bigger", "app_text_smaller", "app_text_reset"},
+			// a folder read again, or every tab's
+			{"refresh", "app_reload_all"},
 		}
 		family :: proc(families: [][]string, id: string) -> int {
 			for f, i in families { for x in f { if x == id { return i } } }

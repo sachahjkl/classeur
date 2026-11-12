@@ -39,6 +39,7 @@ COMMAND_GROUPS := [?]string{"Go", "Tabs and panels", "Files", "Selection", "View
 command_group :: proc(id: string) -> int {
 	has :: strings.has_prefix
 	switch {
+	case has(id, "app_"): return 6
 	case id == "open" || id == "up" || id == "back" || id == "forward" || id == "home" || id == "goto" || id == "goto_popup" || id == "open_folder" || id == "refresh": return 0
 	case has(id, "tab") || has(id, "panel") || id == "open_new_tab" || id == "open_other_panel" || has(id, "layout") || id == "lock": return 1
 	case has(id, "select"): return 3
@@ -85,6 +86,8 @@ palette_list :: proc(app: ^App) -> (l: Palette_List) {
 	for g in 0 ..< len(COMMAND_GROUPS) {
 		for &c, i in COMMANDS {
 			if command_group(c.id) != g || (!tabs && tab_pick_command(c.id)) { continue }
+			// (the toolkit's palette has no line that cannot run: one that would do nothing now is not offered)
+			if c.enabled != nil && !c.enabled(app) { continue }
 			tags := make([dynamic]string, context.temp_allocator)
 			append(&tags, ..c.tags)
 			for alias, id in app.keymap.aliases { if id == c.id { append(&tags, alias) } }

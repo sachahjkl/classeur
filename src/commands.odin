@@ -18,6 +18,7 @@ Command :: struct {
 	keys:    [2]Shortcut,
 	in_text: bool,   // its keys work while a text field has the keyboard (they have Ctrl or Alt, or are function keys)
 	run:     proc(app: ^App),
+	enabled: proc(app: ^App) -> bool,   // nil: always; else, when it says false, its keys do nothing and the palette hides it
 }
 
 @(rodata)
@@ -122,6 +123,33 @@ COMMANDS := [?]Command{
 	{id = "tab_7", title = "Tab 7", icon = lucide.HASH, keys = {{.N7, {.Alt}}, {}}, in_text = true, run = proc(app: ^App) { tab_pick(app, 6) }},
 	{id = "tab_8", title = "Tab 8", icon = lucide.HASH, keys = {{.N8, {.Alt}}, {}}, in_text = true, run = proc(app: ^App) { tab_pick(app, 7) }},
 	{id = "tab_last", title = "Last tab", icon = lucide.HASH, keys = {{.N9, {.Alt}}, {}}, in_text = true, run = proc(app: ^App) { tab_pick(app, -1) }},
+
+	// The program itself (program_actions.odin): the palette's Program group
+	{id = "app_quit", title = "Quit", icon = lucide.POWER, tags = {"exit", "close", "leave"}, keys = {{.Q, {.Ctrl}}, {}}, in_text = true, run = act_app_quit},
+	{id = "app_restart", title = "Restart classeur", icon = lucide.ZAP, tags = {"relaunch", "reload", "reboot", "start again"}, keys = {{.Q, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_app_restart, enabled = can_restart},
+	{id = "app_new_window", title = "New window", icon = lucide.APP_WINDOW, tags = {"another window", "open"}, keys = {{.N, {.Ctrl}}, {}}, in_text = true, run = act_app_new_window},
+	{id = "app_minimize", title = "Minimize window", icon = lucide.ARROW_DOWN, tags = {"hide", "iconify", "taskbar"}, keys = {{.F9, {.Alt}}, {}}, in_text = true, run = act_app_minimize},
+	{id = "app_maximize", title = "Maximize window", icon = lucide.MONITOR, tags = {"restore", "whole screen", "zoom window"}, keys = {{.F10, {.Alt}}, {}}, in_text = true, run = act_app_maximize},
+	{id = "app_full_screen", title = "Full screen", icon = lucide.FILM, tags = {"fullscreen", "kiosk", "whole screen"}, keys = {{.F11, {}}, {}}, in_text = true, run = act_app_full_screen},
+	{id = "app_update_check", title = "Check for updates", icon = lucide.DOWNLOAD, tags = {"upgrade", "new version", "release"}, keys = {{.U, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_app_update_check, enabled = has_updater},
+	{id = "app_update_install", title = "Install the update", icon = lucide.HARD_DRIVE_DOWNLOAD, tags = {"upgrade", "download", "new version"}, keys = {{.U, {.Ctrl, .Shift, .Alt}}, {}}, in_text = true, run = act_app_update_install, enabled = update_available},
+	{id = "app_update_restart", title = "Restart to update", icon = lucide.FILE_DOWN, tags = {"relaunch", "upgrade", "new version"}, keys = {{.Q, {.Ctrl, .Shift, .Alt}}, {}}, in_text = true, run = act_app_restart, enabled = update_installed},
+	{id = "app_about", title = "About classeur", icon = lucide.LIGHTBULB, tags = {"version", "credits", "info"}, keys = {{.F1, {.Shift}}, {}}, in_text = true, run = act_app_about},
+	{id = "app_website", title = "Open the website", icon = lucide.GLOBE, tags = {"site", "home page", "web"}, keys = {{.F1, {.Ctrl}}, {}}, in_text = true, run = act_app_website},
+	{id = "app_report", title = "Report a problem", icon = lucide.BUG, tags = {"bug", "issue", "feedback", "help"}, keys = {{.F1, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_app_report},
+	{id = "app_changelog", title = "Release notes", icon = lucide.SCROLL_TEXT, tags = {"changelog", "what is new", "changes", "releases"}, keys = {{.F2, {.Shift}}, {}}, in_text = true, run = act_app_changelog},
+	{id = "app_settings_folder", title = "Open settings folder", icon = lucide.WRENCH, tags = {"configuration", "config", "preferences file", "session"}, keys = {{.Comma, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_app_settings_folder},
+	{id = "app_version_copy", title = "Copy the version", icon = lucide.CODE, tags = {"about", "number", "clipboard"}, keys = {{.V, {.Ctrl, .Shift, .Alt}}, {}}, in_text = true, run = act_app_version_copy},
+	{id = "app_theme_next", title = "Next theme", icon = lucide.PALETTE, tags = {"color", "colour", "dark", "light", "look"}, keys = {{.Period, {.Ctrl, .Shift, .Alt}}, {}}, in_text = true, run = act_app_theme_next},
+	{id = "app_theme_previous", title = "Previous theme", icon = lucide.PALETTE, tags = {"color", "colour", "dark", "light", "look"}, keys = {{.Comma, {.Ctrl, .Shift, .Alt}}, {}}, in_text = true, run = act_app_theme_previous},
+	{id = "app_density", title = "Compact rows", icon = lucide.MENU, tags = {"density", "comfortable", "spacing"}, keys = {{.D, {.Ctrl, .Shift, .Alt}}, {}}, in_text = true, run = act_app_density},
+	{id = "app_animations", title = "Animations", icon = lucide.PLAY, tags = {"motion", "transitions", "on or off"}, keys = {{.A, {.Ctrl, .Shift, .Alt}}, {}}, in_text = true, run = act_app_animations},
+	{id = "app_text_bigger", title = "Larger text", icon = lucide.TYPE, tags = {"font size", "bigger", "interface", "scale"}, keys = {{.Equal, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_app_text_bigger},
+	{id = "app_text_smaller", title = "Smaller text", icon = lucide.TYPE, tags = {"font size", "interface", "scale"}, keys = {{.Minus, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_app_text_smaller},
+	{id = "app_text_reset", title = "Default text size", icon = lucide.TYPE, tags = {"font size", "reset", "interface", "scale"}, keys = {{.N0, {.Ctrl}}, {}}, in_text = true, run = act_app_text_reset},
+	{id = "app_reload_all", title = "Reload all folders", icon = lucide.REFRESH_CW, tags = {"refresh every tab", "read again"}, keys = {{.F5, {.Ctrl}}, {}}, in_text = true, run = act_app_reload_all},
+	{id = "app_layout_reset", title = "Reset the layout", icon = lucide.PANEL_BOTTOM, tags = {"one panel", "close all tabs", "start over"}, keys = {{.L, {.Ctrl, .Shift, .Alt}}, {}}, in_text = true, run = act_app_layout_reset},
+	{id = "app_thumbs_clear", title = "Clear thumbnails", icon = lucide.IMAGE, tags = {"pictures", "cache", "previews"}, keys = {{.I, {.Ctrl, .Shift, .Alt}}, {}}, in_text = true, run = act_app_thumbs_clear},
 }
 
 // The keys of the commands, before the interface sees them. `typing`: a text field has the keyboard, and only the
@@ -131,6 +159,7 @@ commands_keys :: proc(app: ^App, typing: bool) {
 	if app.keymap.pending.key != .None && ui.now_ms() > app.keymap.pending_until { app.keymap.pending = {} }
 	for &c in COMMANDS {
 		if typing && !c.in_text { continue }
+		if c.enabled != nil && !c.enabled(app) { continue }
 		if bindings_pressed(app, &c) { c.run(app) }
 	}
 }
