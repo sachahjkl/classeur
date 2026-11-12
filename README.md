@@ -2,10 +2,10 @@
 
 <h1 align="center">classeur</h1>
 
-<p align="center"><b>A fast file manager for Linux and Windows.</b></p>
+<p align="center"><b>A fast file manager you drive from the keyboard.</b></p>
 
 classeur shows your folders in tabs and panels, and does everything from the keyboard: a command palette, a filter as
-you type, the path typed or clicked. It is one native program, written in [Odin](https://odin-lang.org) on
+you type, the path typed or clicked. It runs on Linux and Windows as one native program, written in [Odin](https://odin-lang.org) on
 [gui_toolkit](https://github.com/sachahjkl/gui_toolkit), and its model is [File Pilot](https://filepilot.tech).
 
 ![classeur's window](docs/screenshots/main.png)

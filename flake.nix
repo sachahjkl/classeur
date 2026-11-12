@@ -1,5 +1,5 @@
 {
-  description = "classeur: a file manager, built with gui_toolkit";
+  description = "classeur: a fast file manager you drive from the keyboard";
 
   inputs = {
     self.submodules = true;
@@ -134,7 +134,7 @@
       '';
 
       meta = {
-        description = "A fast file manager for Linux and Windows";
+        description = "A fast file manager you drive from the keyboard";
         homepage = "https://classeur.froment.software/";
         license = lib.licenses.mit;
         platforms = [system];
