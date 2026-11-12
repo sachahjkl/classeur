@@ -7,6 +7,7 @@ import "core:strings"
 import "core:time"
 import "core:time/datetime"
 import "core:time/timezone"
+import "gt:ui"
 import "fs"
 
 // "512 B", "12.4 KB", "3.1 MB", "1.2 GB" (powers of 1024, as the systems' file managers count).
@@ -57,11 +58,25 @@ date_text :: proc(app: ^App, ns: i64, allocator := context.temp_allocator) -> st
 		// (today read once a frame, not for each row shown)
 		if app.today_frame != app.frame || app.today.year == 0 {
 			app.today_frame = app.frame
-			if now, nok := local_datetime(app.tz, time.now()._nsec); nok { app.today = now.date }
+			if now, nok := local_datetime(app.tz, time.now()._nsec); nok {
+				app.today = now.date
+				// (an idle window draws no frame: woken just past midnight, its "Today" becomes "Yesterday")
+				ui.wake_within(&app.main.state, int(ms_to_midnight(now.time)) + MIDNIGHT_MARGIN_MS)
+			}
 		}
 		today = app.today
 	}
 	return date_format_text(dt, today, app.settings.date_format, allocator)
+}
+
+// How long past midnight the window wakes (the clock read then is surely on the new day).
+MIDNIGHT_MARGIN_MS :: 50
+
+// The milliseconds from a local time of day to the next local midnight (a day of 24 hours: a change of the clock
+// between them is not counted).
+ms_to_midnight :: proc(at: datetime.Time) -> i64 {
+	past := (i64(at.hour) * 3600 + i64(at.minute) * 60 + i64(at.second)) * 1000 + i64(at.nano) / 1_000_000
+	return max(24 * 3600 * 1000 - past, 1)
 }
 
 // `dt` in `format`; `today` is what Relative counts from.

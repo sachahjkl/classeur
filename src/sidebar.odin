@@ -195,10 +195,12 @@ side_bookmarks :: proc(app: ^App, t: ^Tab, query, here: string, em: f32) {
 		if !keeps(query, fs.base(p)) { continue }
 		sig := side_folder(app, fmt.tprintf("###bookmark%d", i), p, fs.base(p), "", here, side_next(app, p), em)
 		append(&rects, sig.box.rect)
-		// (the release of a drag is no click)
+		// (the release of a drag is no click, nor that of a drag Escape cancelled)
 		moved := app.bm_dragging && app.bm_drag == i
-		if query == "" && !moved && sig.dragging && abs(sig.drag_delta.y) > em * 0.5 { app.bm_drag, app.bm_dragging, moved = i, true, true }
-		if moved { app.bm_held = sig.dragging } else { go_from(app, t, sig, p, .Bookmark) }
+		cancelled := app.bm_cancelled && app.bm_drag == i
+		if cancelled && !sig.dragging { app.bm_cancelled = false }
+		if query == "" && !moved && !cancelled && !app.gesture_cancelled && sig.dragging && abs(sig.drag_delta.y) > em * 0.5 { app.bm_drag, app.bm_dragging, moved = i, true, true }
+		if moved { app.bm_held = sig.dragging } else if !cancelled { go_from(app, t, sig, p, .Bookmark) }
 	}
 	app.bm_line = {}
 	if !app.bm_dragging { return }

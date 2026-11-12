@@ -465,10 +465,10 @@ list_keys :: proc(app: ^App) {
 	}
 }
 
-// A gesture that Escape ends is running: files or a tab dragged, a rectangle drawn, a section of the sidebar dragged,
-// the jobs' view open.
+// A gesture that Escape ends is running: files or a tab dragged, a rectangle drawn, a section of the sidebar or a
+// bookmark dragged, the jobs' view open.
 gesture_running :: proc(app: ^App) -> bool {
-	return app.file_drag || app.tab_drag.active || app.band.active || app.side_dragging || app.jobs_view.open
+	return app.file_drag || app.tab_drag.active || app.band.active || app.side_dragging || app.bm_dragging || app.jobs_view.open
 }
 
 // Escape ends the gesture running, before anything built takes it (a focused list takes Escape for itself): the files'
@@ -489,6 +489,10 @@ gesture_escape :: proc(app: ^App) {
 		app.gesture_cancelled = true
 	case app.side_dragging:
 		app.side_dragging, app.side_held, app.side_cancelled = false, false, true
+	case app.bm_dragging:
+		// (the bookmarks keep their order)
+		app.bm_dragging, app.bm_held, app.bm_cancelled, app.bm_line = false, false, true, {}
+		app.gesture_cancelled = true
 	case app.jobs_view.open:
 		app.jobs_view.open = false
 	}

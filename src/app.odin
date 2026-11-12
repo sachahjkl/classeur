@@ -82,6 +82,7 @@ App :: struct {
 	bm_drag:       int,                 // the bookmark dragged ...
 	bm_dragging:   bool,                // ... while it is
 	bm_held:       bool,                // ... and its button is still down (let go: it lands)
+	bm_cancelled:  bool,                // Escape cancelled it, its button still down (its release opens nothing)
 	bm_line:       ui.Rect,             // where it lands, as shown ({}: none)
 	no_dialog:     bool,                // this build: no dialog takes the keys (typing goes to the filter)                // a heading was clicked or dragged: the section the commands move is known
 	shortcuts_open: bool,               // the sheet of the keys (F1)

@@ -60,10 +60,15 @@ options_build :: proc(app: ^App) {
 @(private = "file", rodata)
 OPTIONS_CUSTOM := [?]string{"look.theme"}   // (the themes: cards, drawn by the page's custom)
 
+// The build of the README's pictures (classeurtool shots). They are made before a release sets its version: a version
+// shown in them would be the last release's.
+@(private = "file")
+SHOTS_BUILD :: #config(CLASSEUR_SHOTS, false)
+
 // The settings page's options: its build's, and the palette's list of the settings (palette.odin).
 options_page :: proc(app: ^App) -> prefs_page.Options {
 	return {
-		version = "classeur " + APP_VERSION,
+		version = SHOTS_BUILD ? "" : "classeur " + APP_VERSION,
 		user = app,
 		pages = OPTIONS_PAGES[:],
 		icon_font = app.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
