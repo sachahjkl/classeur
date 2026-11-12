@@ -50,14 +50,57 @@ icon_key :: proc(app: ^App, path: string, folder: bool, px: int) -> string {
 	name := fs.base(path)
 	key, known := app.icon_keys[name]
 	if !known {
+		// (the toolkit's key may read the system's type database: asked on a worker, "" until it answers)
 		if len(app.icon_keys) > ICON_KEYS_KEPT { icon_keys_free(app) }
-		key = desktop.file_icon_key(path, false, context.temp_allocator)
-		// (a file with an icon of its own, a program's on Windows: its key is its path, not to be kept by its name)
-		if strings.has_prefix(key, "file:") { return fmt.tprintf("%s@%d", key, px) }
-		key = strings.clone(key)
-		app.icon_keys[strings.clone(name)] = key
+		app.icon_keys[strings.clone(name)] = ""
+		job := new(Icon_Key_Job)
+		job^ = {app = app, name = strings.clone(name), path = strings.clone(path)}
+		pool_submit(&app.thumb_pool, icon_key_run, job, urgent = true)
+		return ""
 	}
+	if key == "" { return "" }
+	// (a file with an icon of its own, a program's on Windows: its key is its path, not kept by its name)
+	if key == ICON_OWN { return fmt.tprintf("file:%s@%d", strings.to_lower(path, context.temp_allocator), px) }
 	return fmt.tprintf("%s@%d", key, px)
+}
+
+// What icon_keys holds for a name whose files have icons of their own (the key is then made from each one's path).
+@(private = "file")
+ICON_OWN :: "file:"
+
+@(private = "file")
+Icon_Key_Job :: struct {
+	app:  ^App,
+	name: string,   // owned
+	path: string,   // owned
+	key:  string,   // owned: the toolkit's answer
+}
+
+@(private = "file")
+icon_key_run :: proc(data: rawptr) {
+	job := (^Icon_Key_Job)(data)
+	job.key = desktop.file_icon_key(job.path, false)
+	if !ui.post(&job.app.main.state, icon_key_done, job) { icon_key_job_free(job) }
+}
+
+@(private = "file")
+icon_key_job_free :: proc(job: ^Icon_Key_Job) {
+	delete(job.name)
+	delete(job.path)
+	delete(job.key)
+	free(job)
+}
+
+@(private = "file")
+icon_key_done :: proc(data: rawptr, word: u64) {
+	job := (^Icon_Key_Job)(data)
+	defer icon_key_job_free(job)
+	app := job.app
+	// (still asked: the keys may have been let go meanwhile)
+	if k, ok := app.icon_keys[job.name]; ok && k == "" {
+		app.icon_keys[job.name] = strings.has_prefix(job.key, ICON_OWN) ? strings.clone(ICON_OWN) : strings.clone(job.key)
+		app_frames(app)
+	}
 }
 
 ICON_KEYS_KEPT :: 20000
@@ -81,6 +124,7 @@ icon_size_for :: proc(px: int) -> int {
 sys_icon :: proc(app: ^App, path: string, folder: bool, px: int) -> (ic: ^Sys_Icon, ready: bool, failed: bool) {
 	made := icon_size_for(px)
 	key := icon_key(app, path, folder, made)
+	if key == "" { return nil, false, false }   // (its key asked: no picture for a frame or two)
 	if c, ok := &app.icons_cache[key]; ok {
 		c.used = app.frame
 		if c.state == .Ready { return c, true, false }

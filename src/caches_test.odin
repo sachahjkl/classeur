@@ -110,3 +110,23 @@ test_pool_grows :: proc(t: ^testing.T) {
 	sync.sema_post(&held.release, 2)
 	pool_stop(&p)
 }
+
+// A file's icon key is asked on a worker (the toolkit's may read the system's type database): at first none, then the
+// worker's answer, kept by the name.
+@(test)
+test_icon_key_on_a_worker :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir})
+		context.allocator = runtime.heap_allocator()
+		name := "a never seen name.qzx"
+		ic, ready, failed := sys_icon(app, fs.join(dir, name, context.temp_allocator), false, 16)
+		testing.expect(t, ic == nil && !ready && !failed, "no picture while its key is asked")
+		testing.expect(t, name in app.icon_keys && app.icon_keys[name] == "", "asked")
+		session.wait_until(s, proc(s: ^session.Session) -> bool {
+			k, ok := (^App)(s.user).icon_keys["a never seen name.qzx"]
+			return ok && k != ""
+		}, "the worker's key")
+	})
+}
