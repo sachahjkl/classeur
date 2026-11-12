@@ -82,12 +82,15 @@ changed_free :: proc(c: ^Changed) {
 	free(c)
 }
 
-// On the interface's thread: the tabs on that folder read it again.
+// On the interface's thread: the tabs on that folder read it again (a tab reading it: once its read comes, load_done).
 @(private = "file")
 folder_changed :: proc(data: rawptr, word: u64) {
 	c := (^Changed)(data)
 	defer changed_free(c)
 	for p in c.app.panels {
-		for t in p.tabs { if t.path == c.path && !t.loading { tab_load(c.app, t) } }
+		for t in p.tabs {
+			if t.path != c.path { continue }
+			if t.loading { t.reload_due = true } else { tab_load(c.app, t) }
+		}
 	}
 }

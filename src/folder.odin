@@ -110,8 +110,9 @@ folder_set_sort :: proc(f: ^Folder, s: fs.Sort) {
 	if name != "" { folder_cursor_to_name(f, name) }
 }
 
-// Entries added (a walk's batch): their names kept in the listing, sorted with the others; the cursor and the selection
-// stay on their entries.
+// Entries added (a walk's batch): their names kept in the listing, sorted with the others, the rows of those kept put
+// among the rows shown; the cursor and the selection stay on their entries. A batch costs its own sort and a merge:
+// the entries already there are not filtered again (a search of a large tree gets hundreds of batches).
 folder_add_entries :: proc(f: ^Folder, batch: ^fs.Listing) {
 	n := len(f.listing.entries)
 	lowered := len(f.lowered) == n   // (the filter's lower-case names: extended, not made again)
@@ -123,17 +124,17 @@ folder_add_entries :: proc(f: ^Folder, batch: ^fs.Listing) {
 		if lowered { append(&f.lowered, strings.to_lower(x.name)) }
 	}
 	if len(f.listing.entries) == n { return }
-	name := ""
-	if e := folder_cursor_entry(f); e != nil { name = strings.clone(e.name, context.temp_allocator) }
+	f.name_index_n = -1   // (the names' index is made again when asked)
+	// the new ones sorted alone
+	added := make([]u32, len(f.listing.entries) - n, context.temp_allocator)
+	for &a, k in added { a = u32(n + k) }
+	fs.sort_order(f.listing.entries[:], added, f.sort)
 	if f.tree {
 		for i in n ..< len(f.listing.entries) { append(&f.order, u32(i)) }
 		fs.sort_order(f.listing.entries[:], f.order[:], f.sort)
 		tree_order(f)
 	} else {
-		// the new ones sorted alone, then merged with the order (the order of all is not sorted again)
-		added := make([]u32, len(f.listing.entries) - n, context.temp_allocator)
-		for &a, k in added { a = u32(n + k) }
-		fs.sort_order(f.listing.entries[:], added, f.sort)
+		// then merged with the order (the order of all is not sorted again); equal: the old one first
 		old := slice.clone(f.order[:], context.temp_allocator)
 		clear(&f.order)
 		i, j := 0, 0
@@ -145,9 +146,97 @@ folder_add_entries :: proc(f: ^Folder, batch: ^fs.Listing) {
 			}
 		}
 	}
-	f.name_index_n = -1   // (the names' index is made again when asked)
-	folder_refilter(f)
-	if name != "" { folder_cursor_to_name(f, name) }
+	// (the tree's order, a folded group's title row, the names not in lower case yet: the rows made again)
+	if f.tree || len(f.folded) > 0 || (f.filter != "" && !lowered) {
+		name := ""
+		if e := folder_cursor_entry(f); e != nil { name = strings.clone(e.name, context.temp_allocator) }
+		folder_refilter(f)
+		if name != "" { folder_cursor_to_name(f, name) }
+		return
+	}
+	folder_merge_shown(f, added)
+}
+
+// Where a row goes among the rows shown (folder_refilter's order): the filter's score, else its group, then the sort's.
+@(private = "file")
+Shown_Key :: struct {
+	i:     u32,
+	score: int,      // the filter's (none: 0)
+	rank:  int,      // the group's (not grouped, or a filter: 0, "")
+	group: string,
+}
+
+@(private = "file")
+shown_key :: proc(f: ^Folder, i: u32) -> Shown_Key {
+	k := Shown_Key{i = i}
+	e := f.listing.entries[i]
+	if f.filter != "" {
+		k.score, _, _ = ui.fuzzy_score(f.filter, fs.base(e.name))
+	} else if f.group != .None {
+		k.rank, k.group = group_of(f, e)
+	}
+	return k
+}
+
+// Whether a new row `a` comes before the row `b` already shown. Equal: `b` first (the order's merge puts the old first).
+@(private = "file")
+shown_before :: proc(f: ^Folder, a, b: Shown_Key) -> bool {
+	if a.score != b.score { return a.score > b.score }
+	if a.rank != b.rank { return a.rank < b.rank }
+	if a.group != b.group { return a.group < b.group }
+	return fs.entry_less(f.listing.entries[a.i], f.listing.entries[b.i], f.sort)
+}
+
+// The rows of `added` (sorted) that the filters keep, put where folder_refilter would put them: each found by a search
+// among the rows shown, the rows after it moved once. The cursor and the anchor stay on their rows.
+@(private = "file")
+folder_merge_shown :: proc(f: ^Folder, added: []u32) {
+	entries := f.listing.entries[:]
+	kept := make([dynamic]Shown_Key, 0, len(added), context.temp_allocator)
+	for i in added { if folder_keeps(f, i) { append(&kept, shown_key(f, i)) } }
+	if len(kept) == 0 { return }
+	// (stable: equal keys keep the sort's order)
+	slice.stable_sort_by(kept[:], proc(a, b: Shown_Key) -> bool {
+		if a.score != b.score { return a.score > b.score }
+		if a.rank != b.rank { return a.rank < b.rank }
+		return a.group < b.group
+	})
+	// where each goes: before the first row shown it comes before (sorted, each search starts at the last one's place)
+	old_n := len(f.shown)
+	at := make([]int, len(kept), context.temp_allocator)
+	lo := 0
+	for k, j in kept {
+		hi := old_n
+		for lo < hi {
+			mid := (lo + hi) / 2
+			if shown_before(f, k, shown_key(f, f.shown[mid])) { hi = mid } else { lo = mid + 1 }
+		}
+		at[j] = lo
+	}
+	// from the end: each old row moved once, by the number of new rows before it
+	resize(&f.shown, old_n + len(kept))
+	resize(&f.ids, old_n + len(kept))
+	src, dst := old_n - 1, len(f.shown) - 1
+	for j := len(kept) - 1; j >= 0; j -= 1 {
+		for src >= at[j] {
+			f.shown[dst], f.ids[dst] = f.shown[src], f.ids[src]
+			src -= 1
+			dst -= 1
+		}
+		i := kept[j].i
+		f.shown[dst] = i
+		f.ids[dst] = hash.fnv64a(transmute([]u8)entries[i].name)
+		f.size_max = max(f.size_max, entries[i].size)
+		dst -= 1
+	}
+	moved :: proc(row: int, places: []int) -> int {
+		if row < 0 { return row }
+		before := 0
+		for p in places { if p <= row { before += 1 } }
+		return row + before
+	}
+	f.cursor = moved(f.cursor, at)
+	f.anchor = moved(f.anchor, at)
 }
 
 // The entry of a name in the listing (-1: none), by an index of the names made at the first ask after the listing changed.
@@ -318,15 +407,9 @@ folder_refilter :: proc(f: ^Folder) {
 	// order of the sort between equals
 	scores := make([dynamic]int, context.temp_allocator)
 	for i in f.order {
+		if !folder_keeps(f, i) { continue }
 		e := entries[i]
-		if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { continue }
-		folder := e.kind == .Directory
-		if (f.kinds == .Files && folder) || (f.kinds == .Folders && !folder) { continue }
-		if !folder && len(f.types_off) > 0 && type_key(e) in f.types_off { continue }
-		if f.dates_off != {} { if r, _ := group_rank(f, e, .Date, f.filter_now); r in f.dates_off { continue } }
-		if f.sizes_off != {} { if r, _ := group_rank(f, e, .Size, 0); r in f.sizes_off { continue } }
 		if f.filter != "" {
-			if !fuzzy_holds(f.lowered[i], f.filter) { continue }
 			score, _, _ := ui.fuzzy_score(f.filter, fs.base(e.name))
 			append(&scores, score)
 		}
@@ -368,6 +451,19 @@ folder_refilter :: proc(f: ^Folder) {
 	}
 	f.cursor = min(f.cursor, len(f.shown) - 1)
 	f.anchor = min(f.anchor, len(f.shown) - 1)
+}
+
+// Whether entry `i` is a row: the hidden setting, the types' popup, the columns' filters and the filter keep it (the
+// filter's lower-case names made).
+folder_keeps :: proc(f: ^Folder, i: u32) -> bool {
+	e := f.listing.entries[i]
+	if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { return false }
+	folder := e.kind == .Directory
+	if (f.kinds == .Files && folder) || (f.kinds == .Folders && !folder) { return false }
+	if !folder && len(f.types_off) > 0 && type_key(e) in f.types_off { return false }
+	if f.dates_off != {} { if r, _ := group_rank(f, e, .Date, f.filter_now); r in f.dates_off { return false } }
+	if f.sizes_off != {} { if r, _ := group_rank(f, e, .Size, 0); r in f.sizes_off { return false } }
+	return f.filter == "" || fuzzy_holds(f.lowered[i], f.filter)
 }
 
 folder_cursor_entry :: proc(f: ^Folder) -> ^fs.Entry {

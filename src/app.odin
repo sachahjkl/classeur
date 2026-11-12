@@ -6,6 +6,7 @@ package classeur
 import "core:fmt"
 import "core:strings"
 import "core:sync"
+import "core:time"
 import "core:time/datetime"
 import "core:time/timezone"
 import config "gt:config"
@@ -49,7 +50,7 @@ App :: struct {
 	shown_frame: u64,               // atomic: the last frame built, for the workers (a thumbnail not wanted since is not read)
 	default_zoom: int,             // the measures of folders (measure.odin)
 	measures:    map[string]Measure,   // by path (the keys owned)
-	measure_gen: u64,               // atomic: a measure asked in an older generation is dropped
+	measure_asks: map[u64]^Measure_Ask,   // by tab: what each asked on its folder (measure.odin)
 	recents:     [dynamic]string,   // owned: the folders visited, the last first (the sidebar)
 	bookmarks:   [dynamic]string,   // owned
 	undo:        [dynamic]Undo_Step,   // what was done to files, the last at the end (undo.odin)
@@ -350,14 +351,31 @@ app_frame :: proc(app: ^App) {
 	tab_out_run(app)
 }
 
+// How long closing waits for the workers' tasks (a walk, a measure stop at their next folder; a read of one folder
+// does not stop).
+QUIT_WAIT_MS :: 500
+
 app_close :: proc(app: ^App) {
 	watcher_stop(app)
 	jobs_stop(app)
-	pool_stop(&app.pool, proc(data: rawptr) {})   // (a read left waiting: its memory goes with the process)
+	// the walks and the measures running end at their next folder; no tab points to its walk any more (its job is
+	// freed by its worker once the posts are refused)
+	for p in app.panels {
+		for t in p.tabs {
+			if t.walk != nil { sync.atomic_store(&t.walk.cancel, true) }
+			t.walk = nil
+		}
+	}
+	measures_cancel(app)
+	// (from now a worker's result is refused, the worker frees it; a worker never waits for room in the queue)
+	ui.post_close(&app.main.state)
+	// A read of a share that hangs never ends, and a thread cannot be joined with a time limit: the workers get until
+	// QUIT_WAIT_MS, then one still in its task is left to the process's end. It still reads the App: then it is not freed.
+	until := time.tick_add(time.tick_now(), QUIT_WAIT_MS * time.Millisecond)
+	reads_ended := pool_stop(&app.pool, proc(data: rawptr) {}, until)   // (a read left waiting: its memory goes with the process)
 	session_save(app)   // (after the workers: a bookmark's write on one of them never comes after this one)
-	sync.atomic_add(&app.measure_gen, 1)          // (the measures running end at their next folder)
-	pool_stop(&app.measure_pool, proc(data: rawptr) {})
-	pool_stop(&app.thumb_pool, proc(data: rawptr) {})
+	measures_ended := pool_stop(&app.measure_pool, proc(data: rawptr) {}, until)
+	thumbs_ended := pool_stop(&app.thumb_pool, proc(data: rawptr) {}, until)
 	thumbs_free(app)
 	icons_free(app)
 	type_names_free(app)
@@ -367,6 +385,7 @@ app_close :: proc(app: ^App) {
 	devtools.stop(app.devtools)
 	if global_app == app { global_app = nil }
 	host.host_close(&app.main)
+	if !reads_ended || !measures_ended || !thumbs_ended { return }
 	app_free(app)
 	free(app)
 }

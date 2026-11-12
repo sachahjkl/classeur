@@ -41,7 +41,8 @@ Tab :: struct {
 	tree:         bool,              // the tree view: folders opened in place (tree_open), their entries under them
 	group:        Group_By,          // the rows grouped (the tab's; the folder follows it at each read)
 	tree_open:    [dynamic]string,   // owned: the folders opened in the tree, by their path from the tab's folder
-	walk:         ^Load_Job,         // the flat read the tab waits for (its progress), nil: none
+	walk:         ^Load_Job,         // the flat read the tab waits for (its progress), nil: none; freed on this thread alone
+	reload_due:   bool,              // its folder changed while it was read: read again when the read comes
 	zoom:         int,               // an index of ZOOMS: the view and the size of its items
 	grid_cols:    int,               // (the columns view: the names in a column)
 	cols_key:     ui.Key,            // the columns view's box (the keyboard there)
@@ -251,6 +252,7 @@ Load_Job :: struct {
 tab_load :: proc(app: ^App, t: ^Tab) {
 	t.serial += 1
 	t.loading = true
+	t.reload_due = false   // (this read starts after the change: it sees it)
 	if t.walk != nil { sync.atomic_store(&t.walk.cancel, true) }   // (a long walk the tab no longer waits for)
 	job := new(Load_Job)
 	job^ = {app = app, tab = t.id, serial = t.serial, path = strings.clone(t.path), flat = t.flat}
@@ -289,6 +291,7 @@ load_run :: proc(data: rawptr) {
 	}
 	job.ms = time.duration_milliseconds(time.tick_since(start))
 	job.space, job.has_space = fs.space(job.path)
+	// (refused once the app closes, which let go of every walk first: no tab points to the job freed here)
 	if !ui.post(&job.app.main.state, load_done, job) { load_free(job) }
 }
 
@@ -404,6 +407,8 @@ load_done :: proc(data: rawptr, word: u64) {
 		if tab_select_apply(t) { ui.list_select(&t.vl, t.folder.cursor / tab_row_items(t)) }
 		tab_select_forget(t)
 	}
+	// (a change came while it was read: what was read may not have it)
+	if t.reload_due { tab_load(job.app, t) }
 	app_frames(job.app)
 }
 

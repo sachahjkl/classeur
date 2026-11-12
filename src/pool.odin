@@ -56,13 +56,30 @@ pool_submit :: proc(p: ^Pool, run: proc(data: rawptr), data: rawptr, urgent := f
 	sync.cond_signal(&p.watch_cond)
 }
 
-// Ends the workers once the tasks that run have ended; the tasks that wait are dropped (`drop` gets their data).
-pool_stop :: proc(p: ^Pool, drop: proc(data: rawptr) = nil) {
+// Ends the workers once the tasks that run have ended; the tasks that wait are dropped (`drop` gets their data). With
+// `until`, a worker still in its task then is left to end alone (a read of a share that hangs: the process's end ends
+// it): false, and the pool's memory stays, the worker reads it till it leaves.
+pool_stop :: proc(p: ^Pool, drop: proc(data: rawptr) = nil, until: Maybe(time.Tick) = nil) -> bool {
 	sync.mutex_lock(&p.mutex)
 	p.quit = true
 	sync.mutex_unlock(&p.mutex)
 	sync.cond_broadcast(&p.cond)
 	sync.cond_broadcast(&p.watch_cond)
+	if end, limited := until.?; limited {
+		// (no join with a time limit: the threads' ends looked at until then)
+		for !pool_ended(p) && time.tick_diff(time.tick_now(), end) > 0 { time.sleep(2 * time.Millisecond) }
+		if !pool_ended(p) {
+			if drop != nil {
+				sync.mutex_lock(&p.mutex)
+				for task in p.urgent { drop(task.data) }
+				for task in p.tasks { drop(task.data) }
+				clear(&p.urgent)
+				clear(&p.tasks)
+				sync.mutex_unlock(&p.mutex)
+			}
+			return false
+		}
+	}
 	// (the watcher first: it adds to the threads)
 	if p.watch != nil {
 		thread.join(p.watch)
@@ -81,6 +98,14 @@ pool_stop :: proc(p: ^Pool, drop: proc(data: rawptr) = nil) {
 	delete(p.urgent)
 	delete(p.threads)
 	p^ = {}
+	return true
+}
+
+@(private = "file")
+pool_ended :: proc(p: ^Pool) -> bool {
+	if p.watch != nil && !thread.is_done(p.watch) { return false }
+	for t in p.threads { if t != nil && !thread.is_done(t) { return false } }
+	return true
 }
 
 @(private = "file")
