@@ -1286,15 +1286,15 @@ filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 		if focused && app.no_dialog && !ui.key_pressed_peek(.Space) && !ui.ctx_menu_any_open() && ui.type_to_field(key) {
 			t.filter_open = true
 		}
+		// Space in the empty filter: the inspector's key, as in the list; taken before the field is built, so it never
+		// shows a space (no name starts with one)
+		if focused && app.no_dialog && ui.focus_key() == key && ui.field_string(&t.filter) == "" && ui.typed_take(' ') {
+			act_inspector(app)
+		}
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		res: ui.Edit_Result
 		if ui.tags("bare") { res = ui.line_edit("###filter", &t.filter, "Filter...", clearable = !t.flat) }
 		note_text_field(app, key)
-		// Space in an empty filter: a space no name starts with; the inspector's key, as in the list
-		if res.changed && ui.field_string(&t.filter) == " " {
-			ui.field_clear(&t.filter)
-			act_inspector(app)
-		}
 		if t.focus_due == .Filter {
 			ui.set_focus(key)
 			t.focus_due = .None
