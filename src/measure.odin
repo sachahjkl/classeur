@@ -225,12 +225,23 @@ measures_trim :: proc(app: ^App) {
 }
 
 // A listing come: the sizes of its folders measured already, in their entries (measure_done's, for a new read).
-measures_apply :: proc(app: ^App, l: ^fs.Listing) {
+// True when it changed one. (Nothing measured: no pass; each folder's path made in one buffer, not one allocation each.)
+measures_apply :: proc(app: ^App, l: ^fs.Listing) -> (changed: bool) {
+	if len(app.measures) == 0 { return }
+	key := make([dynamic]u8, context.temp_allocator)
+	append(&key, fs.join(l.path, "x", context.temp_allocator))
+	parent := len(key) - 1   // (fs.join's own separator kept: the folder's path, then the name)
 	for &e in l.entries {
 		if e.kind != .Directory { continue }
-		m, ok := app.measures[fs.join(l.path, e.name, context.temp_allocator)]
-		if ok && m.done && m.mtime == e.mtime { e.size = m.bytes }
+		resize(&key, parent)
+		append(&key, e.name)
+		m, ok := app.measures[string(key[:])]
+		if ok && m.done && m.mtime == e.mtime && e.size != m.bytes {
+			e.size = m.bytes
+			changed = true
+		}
 	}
+	return
 }
 
 MEASURES_RESORT_MS :: 250

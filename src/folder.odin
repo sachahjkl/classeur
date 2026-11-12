@@ -8,6 +8,7 @@ package classeur
 // `cursor` is the active row (in `shown`), `anchor` the row a Shift range starts from.
 
 import "core:hash"
+import "core:mem/virtual"
 import "core:slice"
 import "core:strings"
 import "core:time/timezone"
@@ -38,13 +39,25 @@ Folder :: struct {
 	today:       i64,
 	order:       [dynamic]u32,      // every entry, sorted
 	shown:       [dynamic]u32,      // the rows: `order` without what the filter and the hidden setting leave out
+	row_of:      [dynamic]i32,      // per entry: its row in `shown`, -1: not shown
 	size_max:    i64,               // the largest size among the rows (the Size column's bars are its share)
 	name_index:  map[string]int,    // each entry's index by its name (folder_find_name), its keys the listing's
 	name_index_n: int,              // the entries it was made for (another count, or -1: made again)
 	ids:         [dynamic]u64,      // a stable identity per row (the hash of its name): the virtual list's
-	lowered:     [dynamic]string,   // each entry's name in lower case (made at the first filter), in `lowered_arena`
+	ids_version: u64,               // raised at each change of `ids` (the virtual list then compares nothing)
+	// per entry, made with the listing (on the worker that read it: folder_prepare) so that a filter typed costs no
+	// allocation and no time zone per entry
+	entry_ids:   [dynamic]u64,      // the hash of its name
+	lowered:     [dynamic]string,   // its name in lower case, in `lower_arena` (its type: entry_type)
+	lower_arena: virtual.Arena,
+	days:        [dynamic]i32,      // its local day (day_number in `days_tz`): the date groups and filter
+	days_tz:     ^datetime.TZ_Region,
+	// counted when the rows change, read by the footer (a frame does no pass over the entries)
+	folders, files:  int,           // of all (the hidden ones only while they are shown)
+	folders_shown, files_shown: int,
 	selected:    [dynamic]bool,     // per entry
 	count:       int,               // entries selected
+	sel_bytes:   i64,               // the bytes of the files selected (folders count none)
 	cursor:      int,               // the active row, -1: none
 	anchor:      int,               // where a Shift range starts
 }
@@ -60,44 +73,156 @@ folder_destroy :: proc(f: ^Folder) {
 	delete(f.order)
 	delete(f.shown)
 	delete(f.ids)
-	for s in f.lowered { delete(s) }
+	delete(f.row_of)
+	delete(f.entry_ids)
 	delete(f.lowered)
+	virtual.arena_destroy(&f.lower_arena)
+	delete(f.days)
 	delete(f.selected)
 	f^ = {}
 }
 
 // Takes a new listing (the old one is freed). The names that were selected stay selected, the cursor stays on its
-// name when it is still there: a refresh keeps the person's place.
+// name when it is still there: a refresh keeps the person's place. (A read of a folder does this in two halves: the
+// listing prepared on the worker that read it, then taken here.)
 folder_set_listing :: proc(f: ^Folder, l: ^fs.Listing) {
-	keep := make(map[string]struct{}, 16, context.temp_allocator)
-	for sel, i in f.selected { if sel && i < len(f.listing.entries) { keep[strings.clone(f.listing.entries[i].name, context.temp_allocator)] = {} } }
+	p: Folder
+	folder_view_copy(&p, f)
+	folder_prepare(&p, l)
+	folder_take(f, &p)
+}
+
+// The view's settings of `f` (its sort, filter, groups...) copied into `to`, its own: what a worker prepares a
+// listing with (the person may change them while it reads: folder_take sees it).
+folder_view_copy :: proc(to, f: ^Folder) {
+	to.flat, to.tree = f.flat, f.tree
+	to.group, to.group_now, to.group_tz = f.group, f.group_now, f.group_tz
+	for k in f.folded { to.folded[strings.clone(k)] = true }
+	to.sort, to.show_hidden = f.sort, f.show_hidden
+	to.filter = strings.clone(f.filter)
+	to.kinds = f.kinds
+	for k in f.types_off { to.types_off[strings.clone(k)] = true }
+	to.dates_off, to.sizes_off, to.filter_now = f.dates_off, f.sizes_off, f.filter_now
+}
+
+// Whether two folders' settings show the same rows of the same listing.
+@(private = "file")
+folder_view_same :: proc(a, b: ^Folder) -> bool {
+	if a.flat != b.flat || a.tree != b.tree || a.group != b.group || a.group_now != b.group_now || a.group_tz != b.group_tz { return false }
+	if a.sort != b.sort || a.show_hidden != b.show_hidden || a.filter != b.filter || a.kinds != b.kinds { return false }
+	if a.dates_off != b.dates_off || a.sizes_off != b.sizes_off || a.filter_now != b.filter_now { return false }
+	if len(a.folded) != len(b.folded) || len(a.types_off) != len(b.types_off) { return false }
+	for k in a.folded { if k not_in b.folded { return false } }
+	for k in a.types_off { if k not_in b.types_off { return false } }
+	return true
+}
+
+// On the worker that read it (or here): a listing made ready to show with the settings of `p` (folder_view_copy's):
+// what is kept per entry, the names' index, the order, the rows. All that is in proportion to the entries is done here.
+folder_prepare :: proc(p: ^Folder, l: ^fs.Listing) {
+	p.listing = l^
+	l^ = {}
+	p.loaded = true
+	p.days_tz = p.group_tz
+	folder_derive(p)
+	n := len(p.listing.entries)
+	clear(&p.name_index)
+	reserve(&p.name_index, n)
+	for e, i in p.listing.entries { p.name_index[e.name] = i }
+	p.name_index_n = n
+	resize(&p.order, n)
+	for i in 0 ..< n { p.order[i] = u32(i) }
+	fs.sort_order(p.listing.entries[:], p.order[:], p.sort)
+	if p.tree { tree_order(p) }
+	resize(&p.selected, n)
+	p.cursor, p.anchor = -1, -1
+	folder_refilter(p)
+}
+
+// The listing `p` prepared, in place of the folder's (the old one freed; `p` is emptied). Its rows are taken when they
+// were made with the folder's settings, else made again (a sort or a filter changed during the read). The names that
+// were selected stay selected and the cursor stays on its name, by the names' index.
+folder_take :: proc(f, p: ^Folder) {
+	keep := make([dynamic]string, context.temp_allocator)
+	if f.count > 0 {
+		for sel, i in f.selected {
+			if !sel || i >= len(f.listing.entries) { continue }
+			append(&keep, strings.clone(f.listing.entries[i].name, context.temp_allocator))
+			if len(keep) == f.count { break }
+		}
+	}
 	cursor_name := ""
 	if e := folder_cursor_entry(f); e != nil { cursor_name = strings.clone(e.name, context.temp_allocator) }
+	same := folder_view_same(f, p)
 
-	fs.listing_destroy(&f.listing)
-	f.listing = l^
-	l^ = {}
-	f.name_index_n = -1
+	// (swapped: `p` takes the old ones, and frees them with its settings' copies)
+	f.listing, p.listing = p.listing, f.listing
+	f.order, p.order = p.order, f.order
+	f.shown, p.shown = p.shown, f.shown
+	f.row_of, p.row_of = p.row_of, f.row_of
+	f.ids, p.ids = p.ids, f.ids
+	f.entry_ids, p.entry_ids = p.entry_ids, f.entry_ids
+	f.lowered, p.lowered = p.lowered, f.lowered
+	f.lower_arena, p.lower_arena = p.lower_arena, f.lower_arena
+	f.days, p.days = p.days, f.days
+	f.days_tz = p.days_tz
+	f.name_index, p.name_index = p.name_index, f.name_index
+	f.name_index_n = p.name_index_n
+	f.selected, p.selected = p.selected, f.selected
+	f.size_max = p.size_max
+	f.folders, f.files, f.folders_shown, f.files_shown = p.folders, p.files, p.folders_shown, p.files_shown
+	f.count, f.sel_bytes = 0, 0
 	f.loaded = true
-	for s in f.lowered { delete(s) }
-	clear(&f.lowered)
-	n := len(f.listing.entries)
-	resize(&f.order, n)
-	for i in 0 ..< n { f.order[i] = u32(i) }
-	resize(&f.selected, n)
-	f.count = 0
-	for e, i in f.listing.entries {
-		f.selected[i] = e.name in keep
-		if f.selected[i] { f.count += 1 }
-	}
-	fs.sort_order(f.listing.entries[:], f.order[:], f.sort)
-	if f.tree { tree_order(f) }
+	f.ids_version += 1
+	folder_destroy(p)
+
 	f.cursor = -1
-	folder_refilter(f)
+	if !same {
+		for &o, i in f.order { o = u32(i) }
+		fs.sort_order(f.listing.entries[:], f.order[:], f.sort)
+		if f.tree { tree_order(f) }
+		folder_refilter(f)
+	}
+	for name in keep {
+		i := folder_find_name(f, name)
+		if i < 0 || f.row_of[i] < 0 || f.selected[i] { continue }
+		f.selected[i] = true
+		f.count += 1
+		f.sel_bytes += file_bytes(f.listing.entries[i])
+	}
 	if cursor_name != "" { folder_cursor_to_name(f, cursor_name) }
 	if f.cursor < 0 && len(f.shown) > 0 { f.cursor = 0 }
 	f.anchor = f.cursor
 }
+
+// What is kept per entry, made for the entries that have none yet (a new listing; a walk's batch added).
+@(private = "file")
+folder_derive :: proc(f: ^Folder) {
+	entries := f.listing.entries[:]
+	from := len(f.entry_ids)
+	if from == len(entries) { return }
+	if from > len(entries) || len(f.lowered) != from || len(f.days) != from {
+		// (another listing under them: all made again)
+		clear(&f.entry_ids)
+		clear(&f.lowered)
+		clear(&f.days)
+		virtual.arena_free_all(&f.lower_arena)
+		from = 0
+	}
+	reserve(&f.entry_ids, len(entries))
+	reserve(&f.lowered, len(entries))
+	reserve(&f.days, len(entries))
+	lower := virtual.arena_allocator(&f.lower_arena)
+	for e in entries[from:] {
+		append(&f.entry_ids, hash.fnv64a(transmute([]u8)e.name))
+		append(&f.lowered, strings.to_lower(e.name, lower))
+		append(&f.days, i32(day_number(e.mtime, f.days_tz)))
+	}
+}
+
+// The bytes a selected entry adds to the selection's size: a file's (a folder's measured size in its entry is not one).
+@(private = "file")
+file_bytes :: proc(e: fs.Entry) -> i64 { return e.size > 0 && e.kind != .Directory ? e.size : 0 }
 
 folder_set_sort :: proc(f: ^Folder, s: fs.Sort) {
 	if f.sort == s { return }
@@ -115,13 +240,11 @@ folder_set_sort :: proc(f: ^Folder, s: fs.Sort) {
 // the entries already there are not filtered again (a search of a large tree gets hundreds of batches).
 folder_add_entries :: proc(f: ^Folder, batch: ^fs.Listing) {
 	n := len(f.listing.entries)
-	lowered := len(f.lowered) == n   // (the filter's lower-case names: extended, not made again)
 	for e in batch.entries {
 		x := e
 		x.name = fs.keep_name(&f.listing, e.name)
 		append(&f.listing.entries, x)
 		append(&f.selected, false)
-		if lowered { append(&f.lowered, strings.to_lower(x.name)) }
 	}
 	if len(f.listing.entries) == n { return }
 	f.name_index_n = -1   // (the names' index is made again when asked)
@@ -146,8 +269,10 @@ folder_add_entries :: proc(f: ^Folder, batch: ^fs.Listing) {
 			}
 		}
 	}
-	// (the tree's order, a folded group's title row, the names not in lower case yet: the rows made again)
-	if f.tree || len(f.folded) > 0 || (f.filter != "" && !lowered) {
+	// (the new entries' lower-case names, types and days, for the filter: folder_derive extends them)
+	folder_derive(f)
+	// (the tree's order, a folded group's title row: the rows made again)
+	if f.tree || len(f.folded) > 0 {
 		name := ""
 		if e := folder_cursor_entry(f); e != nil { name = strings.clone(e.name, context.temp_allocator) }
 		folder_refilter(f)
@@ -305,6 +430,12 @@ type_key :: proc(e: fs.Entry) -> string {
 	return strings.to_lower(fs.extension(fs.base(e.name)), context.temp_allocator)
 }
 
+// type_key of entry `i`, a slice of its lower-case name (no allocation).
+entry_type :: proc(f: ^Folder, i: int) -> string {
+	if i < len(f.lowered) { return fs.extension(fs.base(f.lowered[i])) }
+	return type_key(f.listing.entries[i])
+}
+
 folder_set_kinds :: proc(f: ^Folder, k: Kind_Filter) {
 	if f.kinds == k { return }
 	f.kinds = k
@@ -329,9 +460,9 @@ folder_all_types :: proc(f: ^Folder, on: bool) {
 	for k in f.types_off { delete(k) }
 	clear(&f.types_off)
 	if !on {
-		for e in f.listing.entries {
+		for e, i in f.listing.entries {
 			if e.kind == .Directory { continue }
-			k := type_key(e)
+			k := entry_type(f, i)
 			if k not_in f.types_off { f.types_off[strings.clone(k)] = true }
 		}
 	}
@@ -343,10 +474,10 @@ Type_Count :: struct { ext: string, count: int }
 // The types of the files of the listing (the hidden ones as shown), the most common first.
 folder_types :: proc(f: ^Folder, allocator := context.temp_allocator) -> []Type_Count {
 	counts := make(map[string]int, allocator = context.temp_allocator)
-	for e in f.listing.entries {
+	for e, i in f.listing.entries {
 		if e.kind == .Directory { continue }
 		if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { continue }
-		counts[type_key(e)] += 1
+		counts[entry_type(f, i)] += 1
 	}
 	out := make([dynamic]Type_Count, allocator)
 	for k, n in counts { append(&out, Type_Count{k, n}) }
@@ -392,16 +523,12 @@ folder_set_show_hidden :: proc(f: ^Folder, show: bool) {
 
 // The rows again from `order`: the letters of the filter must be in the name in their order (fuzzy, File Pilot's: "rp10"
 // keeps "report 10.pdf"; a space is no letter). A row that leaves the view leaves the
-// selection too (what is selected is what the person sees).
+// selection too (what is selected is what the person sees). What the frames read of the rows (their ids, the counts,
+// the selection's size) is counted here, when they change.
 folder_refilter :: proc(f: ^Folder) {
+	folder_derive(f)
 	entries := f.listing.entries[:]
-	if f.filter != "" && len(f.lowered) != len(entries) {
-		for s in f.lowered { delete(s) }
-		clear(&f.lowered)
-		for e in entries { append(&f.lowered, strings.to_lower(e.name)) }
-	}
 	clear(&f.shown)
-	clear(&f.ids)
 	f.size_max = 0
 	// with a filter, the rows best matched first (letters side by side, at the start of a word: ui.fuzzy_score); the
 	// order of the sort between equals
@@ -414,22 +541,19 @@ folder_refilter :: proc(f: ^Folder) {
 			append(&scores, score)
 		}
 		append(&f.shown, i)
-		append(&f.ids, hash.fnv64a(transmute([]u8)e.name))
 		f.size_max = max(f.size_max, e.size)
 	}
 	if f.group != .None && f.filter == "" {
 		// (grouped: by the group's rank, stable: the sort's order in each group)
 		Grouped :: struct { i: u32, rank: int, key: string }
 		g := make([]Grouped, len(f.shown), context.temp_allocator)
-		for i, k in f.shown { rank, key := group_of(f, entries[i]); g[k] = {i, rank, key} }
+		for i, k in f.shown { rank, key := entry_rank(f, i, f.group, f.group_now); g[k] = {i, rank, key} }
 		slice.stable_sort_by(g, proc(a, b: Grouped) -> bool { return a.rank != b.rank ? a.rank < b.rank : a.key < b.key })
 		// (a folded group keeps its first row: its title is drawn on it)
 		clear(&f.shown)
-		clear(&f.ids)
 		for x, k in g {
 			if k > 0 && g[k - 1].key == x.key && x.key in f.folded { continue }
 			append(&f.shown, x.i)
-			append(&f.ids, hash.fnv64a(transmute([]u8)entries[x.i].name))
 		}
 	}
 	if f.filter != "" {
@@ -437,17 +561,32 @@ folder_refilter :: proc(f: ^Folder) {
 		ranked := make([]Ranked, len(f.shown), context.temp_allocator)
 		for i, k in f.shown { ranked[k] = {i, scores[k]} }
 		slice.stable_sort_by(ranked, proc(a, b: Ranked) -> bool { return a.score > b.score })
-		for r, k in ranked {
-			f.shown[k] = r.i
-			f.ids[k] = hash.fnv64a(transmute([]u8)entries[r.i].name)
-		}
+		for r, k in ranked { f.shown[k] = r.i }
 	}
-	visible := make([]bool, len(entries), context.temp_allocator)
-	for i in f.shown { visible[i] = true }
-	f.count = 0
+	resize(&f.ids, len(f.shown))
+	resize(&f.row_of, len(entries))
+	for &r in f.row_of { r = -1 }
+	f.folders_shown, f.files_shown = 0, 0
+	for i, row in f.shown {
+		f.ids[row] = f.entry_ids[i]
+		f.row_of[i] = i32(row)
+		if entries[i].kind == .Directory { f.folders_shown += 1 } else { f.files_shown += 1 }
+	}
+	f.ids_version += 1
+	// (of all: the hidden ones only while they are shown, their absence is no filter)
+	f.folders, f.files = 0, 0
+	for e in entries {
+		if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { continue }
+		if e.kind == .Directory { f.folders += 1 } else { f.files += 1 }
+	}
+	resize(&f.selected, len(entries))
+	f.count, f.sel_bytes = 0, 0
 	for &sel, i in f.selected {
-		if sel && !visible[i] { sel = false }
-		if sel { f.count += 1 }
+		if sel && f.row_of[i] < 0 { sel = false }
+		if sel {
+			f.count += 1
+			f.sel_bytes += file_bytes(entries[i])
+		}
 	}
 	f.cursor = min(f.cursor, len(f.shown) - 1)
 	f.anchor = min(f.anchor, len(f.shown) - 1)
@@ -460,9 +599,9 @@ folder_keeps :: proc(f: ^Folder, i: u32) -> bool {
 	if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { return false }
 	folder := e.kind == .Directory
 	if (f.kinds == .Files && folder) || (f.kinds == .Folders && !folder) { return false }
-	if !folder && len(f.types_off) > 0 && type_key(e) in f.types_off { return false }
-	if f.dates_off != {} { if r, _ := group_rank(f, e, .Date, f.filter_now); r in f.dates_off { return false } }
-	if f.sizes_off != {} { if r, _ := group_rank(f, e, .Size, 0); r in f.sizes_off { return false } }
+	if !folder && len(f.types_off) > 0 && entry_type(f, int(i)) in f.types_off { return false }
+	if f.dates_off != {} { if r, _ := entry_rank(f, i, .Date, f.filter_now); r in f.dates_off { return false } }
+	if f.sizes_off != {} { if r, _ := entry_rank(f, i, .Size, 0); r in f.sizes_off { return false } }
 	return f.filter == "" || fuzzy_holds(f.lowered[i], f.filter)
 }
 
@@ -477,14 +616,11 @@ folder_row_entry :: proc(f: ^Folder, row: int) -> ^fs.Entry {
 }
 
 folder_cursor_to_name :: proc(f: ^Folder, name: string) -> bool {
-	for i, row in f.shown {
-		if f.listing.entries[i].name == name {
-			f.cursor = row
-			f.anchor = row
-			return true
-		}
-	}
-	return false
+	i := folder_find_name(f, name)
+	if i < 0 || i >= len(f.row_of) || f.row_of[i] < 0 { return false }
+	f.cursor = int(f.row_of[i])
+	f.anchor = f.cursor
+	return true
 }
 
 folder_row_selected :: proc(f: ^Folder, row: int) -> bool {
@@ -493,12 +629,15 @@ folder_row_selected :: proc(f: ^Folder, row: int) -> bool {
 
 folder_select_none :: proc(f: ^Folder) {
 	for &s in f.selected { s = false }
-	f.count = 0
+	f.count, f.sel_bytes = 0, 0
 }
 
 folder_select_all :: proc(f: ^Folder) {
 	folder_select_none(f)
-	for i in f.shown { f.selected[i] = true }
+	for i in f.shown {
+		f.selected[i] = true
+		f.sel_bytes += file_bytes(f.listing.entries[i])
+	}
 	f.count = len(f.shown)
 }
 
@@ -508,6 +647,7 @@ folder_set_row :: proc(f: ^Folder, row: int, on: bool) {
 	if f.selected[i] == on { return }
 	f.selected[i] = on
 	f.count += on ? 1 : -1
+	f.sel_bytes += on ? file_bytes(f.listing.entries[i]) : -file_bytes(f.listing.entries[i])
 }
 
 // What a click or a move does to the selection: the row alone; with Ctrl the row toggled; with Shift the range from the
@@ -545,16 +685,9 @@ folder_targets :: proc(f: ^Folder, allocator := context.temp_allocator) -> []^fs
 	return out[:]
 }
 
-// The total size of the selected files (folders count none), and how many there are.
-folder_selection_size :: proc(f: ^Folder) -> (bytes: i64, files: int) {
-	for i in f.shown {
-		if !f.selected[i] { continue }
-		e := f.listing.entries[i]
-		if e.size > 0 && e.kind != .Directory { bytes += e.size }   // (a folder's measured size in its entry: not a file's)
-		files += 1
-	}
-	return
-}
+// The total size of the selected files (folders count none), and how many entries are selected: counted as the
+// selection changes, not here.
+folder_selection_size :: proc(f: ^Folder) -> (bytes: i64, files: int) { return f.sel_bytes, f.count }
 
 // Whether the letters of `needle` are in `hay` in that order (both in lower case; spaces in the needle ignored).
 fuzzy_holds :: proc(hay, needle: string) -> bool {
@@ -621,6 +754,23 @@ group_of :: proc(f: ^Folder, e: fs.Entry) -> (rank: int, key: string) { return g
 
 // An entry's group `by` dates (days from `now`) or sizes, or types: what the groups and the columns' filters share.
 group_rank :: proc(f: ^Folder, e: fs.Entry, by: Group_By, now: i64) -> (rank: int, key: string) {
+	return rank_of(f, e, by == .Date ? day_number(e.mtime, f.group_tz) : 0, by, now)
+}
+
+// group_rank of entry `i`, its day the one kept with the listing (no time zone per entry).
+@(private = "file")
+entry_rank :: proc(f: ^Folder, i: u32, by: Group_By, now: i64) -> (rank: int, key: string) {
+	e := f.listing.entries[i]
+	day: i64
+	if by == .Date {
+		day = f.days_tz == f.group_tz && int(i) < len(f.days) ? i64(f.days[i]) : day_number(e.mtime, f.group_tz)
+	}
+	return rank_of(f, e, day, by, now)
+}
+
+// The group of an entry whose local day (by dates) is `day`.
+@(private = "file")
+rank_of :: proc(f: ^Folder, e: fs.Entry, day: i64, by: Group_By, now: i64) -> (rank: int, key: string) {
 	switch by {
 	case .None:
 	case .Type:
@@ -637,7 +787,6 @@ group_rank :: proc(f: ^Folder, e: fs.Entry, by: Group_By, now: i64) -> (rank: in
 		}
 		return 5, "Huge (1 GB and more)"
 	case .Date:
-		day := day_number(e.mtime, f.group_tz)
 		if f.today_of != now || now == 0 { f.today_of, f.today = now, day_number(now, f.group_tz) }
 		today := f.today
 		switch {

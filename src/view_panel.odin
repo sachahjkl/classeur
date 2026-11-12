@@ -624,13 +624,12 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, names_only: bool, em: f32
 	if empty_state(app, t, em) { return }
 	// the cursor and the list's active row are the same row
 	t.vl.sel = f.cursor
-	labels := make([]string, len(f.shown), context.temp_allocator)
-	for i, row in f.shown { labels[row] = f.listing.entries[i].name }
 	// (the details: each row as wide as their columns at least)
 	least: f32 = 0
 	if !names_only { least = ui.table_min_width(&app.columns) }
 	t.vl.list.no_typeahead = true   // (the letters typed go to the filter, File Pilot's: filter_field)
-	rows, ok := ui.vlist("###list", &t.vl, f.ids[:], labels)
+	// (no labels: no type-ahead to read them; the ids' version: a frame that changed nothing does no pass over the rows)
+	rows, ok := ui.vlist("###list", &t.vl, f.ids[:], ids_version = f.ids_version)
 	if !ok { return }
 	// (the layout is the panels' together; each tab keeps its own sideways scroll)
 	defer if !names_only {
@@ -1047,13 +1046,8 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 		ui.next({width = ui.children_sum(), height = ui.pct(1)})
 		if ui.row(.Center, {}, "###stats") {
 			if ui.style({font_size = em * 0.92}) {
-				// (of all: the hidden ones only while they are shown, their absence is no filter)
-				folders, files, folders_shown, files_shown: int
-				for e in f.listing.entries {
-					if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { continue }
-					if e.kind == .Directory { folders += 1 } else { files += 1 }
-				}
-				for i in f.shown { if f.listing.entries[i].kind == .Directory { folders_shown += 1 } else { files_shown += 1 } }
+				// (counted when the rows change: folder_refilter)
+				folders, files, folders_shown, files_shown := f.folders, f.files, f.folders_shown, f.files_shown
 				if t.walk != nil { stat(app, "walk", lucide.LOADER, fmt.tprintf("%s…", count_text(i64(tab_walked(t)))), "Entries read so far", em) }
 				if f.count > 0 {
 					bytes, _ := folder_selection_size(f)

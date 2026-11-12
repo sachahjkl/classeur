@@ -122,6 +122,7 @@ tab_new :: proc(app: ^App, path: string) -> ^Tab {
 	t.id = app.next_tab_id
 	t.folder.sort = app.default_sort
 	t.folder.show_hidden = app.show_hidden
+	t.folder.group_tz = app.tz   // (the days kept with each listing are in it: folder_prepare)
 	t.folder.cursor = -1
 	t.zoom = app.default_zoom
 	t.path = fs.clean(path)
@@ -250,6 +251,7 @@ Load_Job :: struct {
 	count:   int,    // atomic: the entries read so far (a flat read's progress)
 	cancel:  bool,   // atomic: the tab no longer waits for it
 	listing: fs.Listing,
+	view:    Folder,   // the tab's settings when it asked (folder_view_copy), then the listing prepared with them
 	ms:      f64,
 	space:   fs.Space,
 	has_space: bool,
@@ -264,6 +266,10 @@ tab_load :: proc(app: ^App, t: ^Tab) {
 	if t.walk != nil { sync.atomic_store(&t.walk.cancel, true) }   // (a long walk the tab no longer waits for)
 	job := new(Load_Job)
 	job^ = {app = app, tab = t.id, serial = t.serial, path = strings.clone(t.path), flat = t.flat}
+	// (the worker sorts and filters the listing as the tab will show it: load_done sets the same flat, tree and groups)
+	folder_view_copy(&job.view, &t.folder)
+	job.view.flat, job.view.tree = t.flat, t.tree && !t.flat
+	if t.folder.group != t.group { job.view.group, job.view.group_now, job.view.group_tz = t.group, time.now()._nsec, app.tz }
 	if t.tree && !t.flat {
 		job.tree = make([]string, len(t.tree_open))
 		for p, i in t.tree_open { job.tree[i] = strings.clone(p) }
@@ -298,6 +304,7 @@ load_run :: proc(data: rawptr) {
 		}
 	}
 	job.ms = time.duration_milliseconds(time.tick_since(start))
+	folder_prepare(&job.view, &job.listing)
 	job.space, job.has_space = fs.space(job.path)
 	if root, uri, ok := fs.share_root(job.path); ok {
 		job.share_root, job.share_uri, job.share_label = root, uri, fs.share_label(uri)
@@ -353,6 +360,7 @@ load_batch :: proc(data: rawptr, word: u64) {
 load_free :: proc(data: rawptr) {
 	job := (^Load_Job)(data)
 	fs.listing_destroy(&job.listing)
+	folder_destroy(&job.view)
 	delete(job.path)
 	delete(job.share_root)
 	delete(job.share_uri)
@@ -370,12 +378,13 @@ load_done :: proc(data: rawptr, word: u64) {
 	t := find_tab(job.app, job.tab)
 	if t != nil && t.walk == job { t.walk = nil }
 	if t == nil || t.serial != job.serial { return }
+	l := &job.view.listing   // (prepared on the worker: folder_prepare)
 	// a path that is not a folder (asked on the worker, never on this thread): a file's path is its folder with the file
 	// at the cursor; a folder that is gone (a session's tab, a folder removed) is the nearest folder above it still there
-	if !job.flat && (job.listing.error == .Not_A_Folder || job.listing.error == .Not_Found) {
+	if !job.flat && (l.error == .Not_A_Folder || l.error == .Not_Found) {
 		up := fs.parent(t.path)
 		if up != "" && up != t.path {
-			if job.listing.error == .Not_A_Folder {
+			if l.error == .Not_A_Folder {
 				delete(t.reveal_name)
 				t.reveal_name = strings.clone(fs.base(t.path))
 			}
@@ -393,17 +402,25 @@ load_done :: proc(data: rawptr, word: u64) {
 	delete(t.share_root); delete(t.share_uri); delete(t.share_label)
 	t.share_root, t.share_uri, t.share_label = job.share_root, job.share_uri, job.share_label
 	job.share_root, job.share_uri, job.share_label = "", "", ""
-	same_place := t.folder.loaded && t.folder.listing.path == job.listing.path && t.folder.flat == job.flat
+	same_place := t.folder.loaded && t.folder.listing.path == l.path && t.folder.flat == job.flat
 	t.folder.flat = job.flat
 	t.folder.tree = t.tree && !job.flat
 	if !same_place {
 		folder_select_none(&t.folder)
 		t.folder.cursor = -1
-		if job.listing.error == .None && !job.flat { recent_add(job.app, job.listing.path) }
+		if l.error == .None && !job.flat { recent_add(job.app, l.path) }
 	}
-	if t.folder.group != t.group { t.folder.group, t.folder.group_now, t.folder.group_tz = t.group, time.now()._nsec, job.app.tz }
-	measures_apply(job.app, &job.listing)
-	folder_set_listing(&t.folder, &job.listing)
+	if t.folder.group != t.group { t.folder.group, t.folder.group_now, t.folder.group_tz = t.group, job.view.group_now, job.view.group_tz }
+	// (the rows sorted and filtered on the worker are taken as they are: here only the selection and the cursor, by name)
+	folder_take(&t.folder, &job.view)
+	// the folders measured already: their sizes in their entries (sorted by size, the order again)
+	if measures_apply(job.app, &t.folder.listing) {
+		if t.folder.sort.key == .Size {
+			folder_resort(&t.folder)
+		} else {
+			for i in t.folder.shown { t.folder.size_max = max(t.folder.size_max, t.folder.listing.entries[i].size) }
+		}
+	}
 	// (a name being typed in this tab: its row may have moved, and its field with it; the keyboard goes back to it)
 	if r := &job.app.rename; r.active && r.tab == t.id { r.focus_due = true }
 	// the row asked for (made, renamed, the folder we came up from) has the cursor and the selection
@@ -432,14 +449,17 @@ load_done :: proc(data: rawptr, word: u64) {
 // The rows of `select_names` selected alone, the cursor on the first of them found. False: none is here.
 tab_select_apply :: proc(t: ^Tab) -> bool {
 	f := &t.folder
-	first, first_at := -1, len(t.select_names)
-	for i, row in f.shown {
-		at := -1
-		for name, k in t.select_names { if f.listing.entries[i].name == name { at = k; break } }
-		if at < 0 { continue }
-		if first < 0 { folder_select_none(f) }
+	first := -1
+	// (each name by the names' index: a paste of thousands is not thousands of passes over the rows)
+	for name in t.select_names {
+		i := folder_find_name(f, name)
+		if i < 0 || i >= len(f.row_of) || f.row_of[i] < 0 { continue }
+		row := int(f.row_of[i])
+		if first < 0 {
+			folder_select_none(f)
+			first = row
+		}
 		folder_set_row(f, row, true)
-		if at < first_at { first, first_at = row, at }
 	}
 	if first < 0 { return false }
 	f.cursor, f.anchor = first, first
