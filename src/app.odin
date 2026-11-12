@@ -544,9 +544,10 @@ app_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Event {
 			platform.drop_set_effect(h.win, drop_answer(app, e.kind, e.pos, e.mods, e.drop_allowed))
 			if e.kind == .Drop || e.kind == .Drop_Leave { platform.drop_data_release(h.win) }
 			continue
-		case .Clipboard_Data:   // (a paste's files, the batch rename's names: asked, they come here)
+		case .Clipboard_Data:
+			// (a paste's files, the batch rename's names: asked, they come here. The event goes on to the interface: a
+			// field's paste is its own request, each side takes only the ids it asked)
 			clipboard_answer(app, e.clipboard)
-			continue
 		}
 		if e.kind == .Scroll && .Ctrl in e.mods {
 			for r, i in app.panel_rects {
