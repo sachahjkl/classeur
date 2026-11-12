@@ -198,6 +198,9 @@ gvfs_uri :: proc(g: Gvfs_Name, allocator := context.temp_allocator) -> string {
 	switch g.type {
 	case "smb-share":
 		u.scheme, u.host, u.path = "smb", g.fields["server"], strings.concatenate({"/", g.fields["share"]}, allocator)
+	case "smb-server":
+		// (a server's root, smb://host/: its shares, what a device found on the network opens)
+		u.scheme, u.host, u.path = "smb", g.fields["server"], "/"
 	case "sftp", "ftp", "ftps":
 		u.scheme, u.path = g.type, "/"
 	case "dav":
@@ -231,6 +234,8 @@ gvfs_holds :: proc(g: Gvfs_Name, u: Uri) -> (rest: string, ok: bool) {
 	}
 	switch u.scheme {
 	case "smb":
+		// (a server's mount holds its root alone: a share's own mount holds what is in it)
+		if g.type == "smb-server" && same(g.fields["server"], u.host) && strings.trim(u.path, "/") == "" { return "", true }
 		if g.type != "smb-share" || !same(g.fields["server"], u.host) { return }
 		parts := strings.split_n(strings.trim_prefix(u.path, "/"), "/", 2, context.temp_allocator)
 		if len(parts) == 0 || !same(parts[0], g.fields["share"]) { return }

@@ -1,7 +1,8 @@
 package classeur
 
 // The sidebar, File Pilot's: a filter at the top, then sections that open and close: the recent folders, the
-// bookmarks, the storage (each volume with a bar of how full it is), the places. A click goes there in the tab that has
+// bookmarks, the storage (each volume with a bar of how full it is), the network (the shares mounted, the devices
+// found: network.odin), the places. A click goes there in the tab that has
 // the keyboard; a middle click opens a new tab; a right click, the row's menu. A bookmark dragged up or down moves.
 
 import "core:fmt"
@@ -98,13 +99,17 @@ sidebar_build :: proc(app: ^App, em: f32) {
 					}
 				case .Network:
 				// (the shares of the network mounted now: gvfs's and the kernel's on Linux, the network's drives on Windows;
-				// none: no section)
-				if len(app.shares) > 0 && section(app, .Network, em) {
+				// then the devices found on the network. Shown or opened again: a new search)
+				open := section(app, .Network, em)
+				if open && !app.devices_seen_open && !app.devices_searching { network_find(app) }
+				app.devices_seen_open = open
+				if open {
 						for sh, i in app.shares {
 							if !keeps(query, sh.label) { continue }
 							sig := side_row(app, fmt.tprintf("###share%d", i), sh.path, sh.label, sh.path == here, side_next(app, sh.path), em)
 							go_from(app, t, sig, sh.path)
 						}
+						side_devices(app, t, query, em)
 					}
 				case .Places:
 				if section(app, .Places, em) {
@@ -398,6 +403,7 @@ side_menu_open :: proc(app: ^App, s: Side_Section) {
 
 side_menu_build :: proc(app: ^App, em: f32) {
 	side_row_menu_build(app)
+	side_device_menu_build(app)
 	if app.side_menu_key == 0 { return }
 	if ui.ctx_menu(app.side_menu_key) {
 		s := app.side_menu_of
@@ -411,6 +417,7 @@ side_menu_build :: proc(app: ^App, em: f32) {
 		if ui.menu_item("Move to the bottom", enabled = at < last).clicked { side_move(app, s, last) }
 		ui.menu_separator()
 		if ui.menu_item(app.side_open[s] ? "Close the section" : "Open the section", icon = app.side_open[s] ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN).clicked { app.side_open[s] = !app.side_open[s] }
+		if s == .Network { menu_command(app, "network_find") }
 	}
 }
 
@@ -523,13 +530,80 @@ side_step :: proc(app: ^App, by: int) {
 	s := app.side_menu_of
 	for x, i in app.side_order {
 		if x != s { continue }
-		// (past the sections not shown, Network with no share: the move is one the person sees)
-		to := i + by
-		for to >= 0 && to < len(app.side_order) && !side_shown(app, app.side_order[to]) { to += by }
-		side_move(app, s, to)
+		side_move(app, s, i + by)
 		return
 	}
 }
 
-// Whether a section shows in the sidebar (Network: when a share is mounted).
-side_shown :: proc(app: ^App, s: Side_Section) -> bool { return s != .Network || len(app.shares) > 0 }
+@(private = "file", rodata)
+DEVICE_ICONS := [fs.Device_Kind]string{.File_Server = lucide.SERVER, .Computer = lucide.MONITOR, .Web = lucide.GLOBE}
+
+// The devices found on the network: a click opens the first of their services in the tab, a right click lists them
+// all. Under them a weak line while a search runs, or when it found none.
+@(private = "file")
+side_devices :: proc(app: ^App, t: ^Tab, query: string, em: f32) {
+	for d, i in app.devices {
+		if len(d.services) == 0 || !keeps(query, d.name) { continue }
+		uri := d.services[0].uri
+		sig := side_device(app, i, d, side_next(app, uri), em)
+		if sig.clicked && t != nil { tab_go(app, t, uri) }
+		if sig.middle_clicked { tab_open(app, current_panel(app), uri, current_panel(app).active + 1) }
+		if sig.right_clicked { side_device_menu_open(app, d) }
+	}
+	note := ""
+	if app.devices_searching {
+		note = "Searching…"
+	} else if len(app.devices) == 0 {
+		note = "No device found"
+	}
+	if note == "" || query != "" { return }
+	if ui.tags("weak") {
+		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.8)), font_size = em * 0.85})
+		if ui.row(.Center) {
+			ui.spacer(ui.px(em * 2.6))
+			ui.label(fmt.tprintf("%s###net_note", note))
+		}
+	}
+}
+
+// A device: the icon of its kind, its name; its host and its first service's URI in its tip.
+@(private = "file")
+side_device :: proc(app: ^App, i: int, d: fs.Network_Device, cursor: bool, em: f32) -> (sig: ui.Signal) {
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.2)), radius = 0})
+	if ui.row(.Center, {.Clickable, .Draw_Hot_Effects, .Hot_Within, .Middle_Click}, fmt.tprintf("###device%d", i)) {
+		sig = ui.signal(ui.parent_box())
+		if cursor { side_cursor_mark(app, ui.parent_box(), em) }
+		ui.spacer(ui.px(em * 2.4))
+		glyph(app, DEVICE_ICONS[fs.device_kind(d)], em * 1.7)
+		ui.spacer(ui.px(em * 0.5))
+		ui.next({width = ui.fill(), height = ui.pct(1)})
+		ui.label(fmt.tprintf("%s###n", shown_text(d.name)))
+	}
+	// (the tip's text made only while it shows)
+	if ui.hovered_for(sig, 0.5) { hover_tip(sig, fs.device_where(d), d.services[0].uri) }
+	return
+}
+
+// A device's menu: each of its services opened (the URIs kept: the list may be found again while it is open).
+@(private = "file")
+side_device_menu_open :: proc(app: ^App, d: fs.Network_Device) {
+	if app.side_device_key == 0 { app.side_device_key = ui.key_from_string(0, "classeur_side_device_menu") }
+	for u in app.side_device_uris { delete(u) }
+	clear(&app.side_device_uris)
+	for s in d.services { append(&app.side_device_uris, strings.clone(s.uri)) }
+	ui.ctx_menu_open(app.side_device_key, ui.mouse_pos())
+}
+
+@(private = "file")
+side_device_menu_build :: proc(app: ^App) {
+	if app.side_device_key == 0 { return }
+	if ui.ctx_menu(app.side_device_key) {
+		for u, i in app.side_device_uris {
+			if ui.menu_item(fmt.tprintf("Open %s###dev_open%d", shown_text(u), i), icon = lucide.FOLDER_OPEN).clicked {
+				if t := current_tab(app); t != nil { tab_go(app, t, u) }
+			}
+		}
+		ui.menu_separator()
+		menu_command(app, "network_find")
+	}
+}

@@ -176,6 +176,12 @@ App :: struct {
 	setup_writer:   File_Writer,
 	mounting:     [dynamic]string,  // owned: the shares being found or mounted on a worker (locations.odin)
 	shares:       []fs.Share,       // the shares of the network mounted now (the sidebar's Network section)
+	devices:      []fs.Network_Device,   // the devices of the network that share files, as last found (network.odin)
+	devices_asked: u64,             // the last search asked (an older answer is dropped)
+	devices_searching: bool,        // a search runs
+	devices_seen_open: bool,        // the Network section was open at the last build (opened again: a new search)
+	side_device_key: ui.Key,        // a device's menu: each of its services (sidebar.odin)
+	side_device_uris: [dynamic]string,   // owned: their URIs
 	session_seen:    string,        // owned: the session's text at its last change (session_autosave waits for it to settle)
 	session_changed_ms: f64,        // when it changed
 	session_written: string,        // owned: the session (but the window's place) as last written (session_autosave)
@@ -423,6 +429,7 @@ app_free :: proc(app: ^App) {
 	delete(app.closed_tabs)
 	places_free(app)
 	delete(app.places)
+	devices_free(app)
 	palette_free(&app.palette)
 	entry_menu_free(&app.menu)
 	goto_free(&app.goto)

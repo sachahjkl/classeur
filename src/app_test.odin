@@ -1785,9 +1785,9 @@ test_side_order :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		testing.expect_value(t, app.side_order[0], Side_Section.Places)
 		testing.expect_value(t, config.string_of(&app.prefs, "side.order"), "places,recents,bookmarks,storage,network")
-		// a drag: Places, now first, let go under Storage's heading (the last)
+		// a drag: Places, now first, let go under Network's heading (the last)
 		from := session.center(session.get(s, "sec_Places"))
-		to := session.center(session.get(s, "sec_Storage")) + {0, 30}
+		to := session.center(session.get(s, "sec_Network")) + {0, 30}
 		session.press(s, from)
 		session.move(s, from + {0, 12})
 		session.move(s, to)
@@ -1797,14 +1797,13 @@ test_side_order :: proc(t: ^testing.T) {
 		session.release(s, to)
 		session.frames(s, 2)
 		testing.expect_value(t, app.side_order[len(Side_Section) - 1], Side_Section.Places)
-		// its keys: the section last touched (Places, dragged) a place up, over Storage (Network, with no share, is not
-		// shown: the move skips it)
+		// its keys: the section last touched (Places, dragged) a place up, over Network (shown with no share too)
 		session.key(s, .Up, {.Ctrl, .Alt, .Shift})
 		session.frames(s, 1)
 		at := map[Side_Section]int{}
 		defer delete(at)
 		for x, i in app.side_order { at[x] = i }
-		testing.expectf(t, at[.Places] + 1 == at[.Storage], "Places just over Storage: %v", app.side_order)
+		testing.expectf(t, at[.Places] + 1 == at[.Network], "Places just over Network: %v", app.side_order)
 	})
 }
 

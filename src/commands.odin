@@ -77,6 +77,7 @@ COMMANDS := [?]Command{
 	{id = "terminal_in", title = "Open terminal in folder", icon = lucide.TERMINAL, tags = {"at the cursor"}, keys = {{.F4, {.Shift}}, {}}, run = act_terminal_in},
 	{id = "side_up", title = "Move section up", icon = lucide.CHEVRON_UP, tags = {"sidebar"}, keys = {{.Up, {.Ctrl, .Alt, .Shift}}, {}}, run = act_side_up},
 	{id = "side_down", title = "Move section down", icon = lucide.CHEVRON_DOWN, tags = {"sidebar"}, keys = {{.Down, {.Ctrl, .Alt, .Shift}}, {}}, run = act_side_down},
+	{id = "network_find", title = "Find network devices", icon = lucide.NETWORK, tags = {"network devices nas smb share discover scan"}, keys = {{.F5, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_network_find},
 	{id = "tab_window", title = "Move tab to window", icon = lucide.APP_WINDOW, tags = {"of its own"}, keys = {{.N, {.Ctrl, .Shift, .Alt}}, {}}, in_text = true, run = act_tab_window},
 	{id = "tab_close_others", title = "Close other tabs", icon = lucide.PIN, keys = {{.W, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_tab_close_others},
 	{id = "tab_close_left", title = "Close tabs to left", icon = lucide.X, keys = {{.Page_Up, {.Ctrl, .Alt}}, {}}, in_text = true, run = act_tab_close_left},

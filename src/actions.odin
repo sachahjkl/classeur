@@ -952,6 +952,13 @@ act_open_folder :: proc(app: ^App) {
 	t.reveal_name = strings.clone(fs.base(full))
 }
 
+// The network searched again for its devices; the sidebar's Network section opens to show them.
+act_network_find :: proc(app: ^App) {
+	app.side_open[.Network] = true
+	app.devices_seen_open = true   // (the section opened here: no second search at its build)
+	network_find(app)
+}
+
 // The tab `i` of the current panel (-1: the last).
 tab_pick :: proc(app: ^App, i: int) {
 	p := current_panel(app)
