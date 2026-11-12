@@ -26,16 +26,40 @@ SECTION_ICONS := [Side_Section]string{.Recents = lucide.HISTORY, .Bookmarks = lu
 // How full a volume is: its bar under its name.
 VOLUME_FULL_AT  :: 0.9
 
+// The sidebar with the keyboard (F6): a cursor over its rows, the headings left out.
+Side_Keys :: struct {
+	box:    ui.Key,     // the sidebar's box: the toolkit's focus while it has the keyboard
+	cursor: int,        // the cursor's row, among the rows shown
+	rows:   int,        // the rows shown at the last build: the cursor stops at the last
+	moved:  bool,       // the cursor moved: its row comes into view
+	seen:   int,        // (while built: the rows so far)
+	path:   string,     // (while built: the cursor's place, the frame's)
+	row:    ^ui.Box,    // (while built: the cursor's row)
+}
+
 sidebar_build :: proc(app: ^App, em: f32) {
 	t := current_tab(app)
 	here := t != nil ? t.path : ""
+	k := &app.side_keys
+	keys := app.keys_at == .Sidebar && app.no_dialog
+	// (Up and Down by the rows of the last build; Left and Right taken: the toolkit's arrows would move the focus away)
+	if keys {
+		if ui.key_press(.Down) { k.cursor += 1; k.moved = true }
+		if ui.key_press(.Up) { k.cursor -= 1; k.moved = true }
+		_ = ui.key_press(.Left)
+		_ = ui.key_press(.Right)
+	}
+	k.cursor = clamp(k.cursor, 0, max(k.rows - 1, 0))
+	k.seen, k.path, k.row = 0, "", nil
 	ui.next_merge({axis = .Y, bg = draw.hex(surfaces(app).side)})
 	box := ui.build_box({.Clip, .Draw_Background}, "###sidebar")
+	k.box = box.key
 	if ui.parent(box) {
 		side_filter(app, em)
 		query := strings.to_lower(ui.field_string(&app.side_filter), context.temp_allocator)
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###side_scroll") {
+			scroll := ui.parent_box()
 			ui.spacer(ui.px(em * 0.3))
 			// (the sections in the person's order: a heading dragged, or its menu's Move up and Move down)
 			for sec in app.side_order {
@@ -47,7 +71,7 @@ sidebar_build :: proc(app: ^App, em: f32) {
 							// (its name, then where it is in the weak colour: the name stays when the sidebar is narrow)
 							name := fs.base(p)
 							if name == "" { name = p }
-							sig := side_folder(app, fmt.tprintf("###recent%d", i), p, name, p != name ? home_path(app, fs.parent(p)) : "", here, em)
+							sig := side_folder(app, fmt.tprintf("###recent%d", i), p, name, p != name ? home_path(app, fs.parent(p)) : "", here, side_next(app, p), em)
 							go_from(app, t, sig, p, .Recent)
 						}
 					}
@@ -69,7 +93,7 @@ sidebar_build :: proc(app: ^App, em: f32) {
 						for v, i in app.volumes {
 							if !keeps(query, v.label) { continue }
 							sp := i < len(app.volume_space) ? app.volume_space[i] : fs.Space{}
-							go_from(app, t, side_volume(app, i, v, sp, v.path == here, em), v.path)
+							go_from(app, t, side_volume(app, i, v, sp, v.path == here, side_next(app, v.path), em), v.path)
 						}
 					}
 				case .Network:
@@ -78,7 +102,7 @@ sidebar_build :: proc(app: ^App, em: f32) {
 				if len(app.shares) > 0 && section(app, .Network, em) {
 						for sh, i in app.shares {
 							if !keeps(query, sh.label) { continue }
-							sig := side_row(app, fmt.tprintf("###share%d", i), sh.path, sh.label, sh.path == here, em)
+							sig := side_row(app, fmt.tprintf("###share%d", i), sh.path, sh.label, sh.path == here, side_next(app, sh.path), em)
 							go_from(app, t, sig, sh.path)
 						}
 					}
@@ -86,7 +110,7 @@ sidebar_build :: proc(app: ^App, em: f32) {
 				if section(app, .Places, em) {
 						for p, i in app.places {
 							if !keeps(query, p.name) { continue }
-							sig := side_row(app, fmt.tprintf("###place%d", i), p.path, p.name, p.path == here, em)
+							sig := side_row(app, fmt.tprintf("###place%d", i), p.path, p.name, p.path == here, side_next(app, p.path), em)
 							go_from(app, t, sig, p.path)
 						}
 					}
@@ -94,11 +118,60 @@ sidebar_build :: proc(app: ^App, em: f32) {
 			}
 			app.side_end_y = ui.parent_box().rect.min.y - ui.parent_box().view_off.y + ui.parent_box().view_bounds.y
 			ui.spacer(ui.px(em * 0.6))
+			// (the cursor moved: its row in view, as the last layout placed it)
+			if k.moved && k.row != nil {
+				top := k.row.rect.min.y - scroll.rect.min.y + scroll.view_off.y
+				ui.view_reveal(scroll, top, top + k.row.rect.max.y - k.row.rect.min.y, margin = em * 0.5)
+				k.moved = false
+			}
 		}
 		// (out of the scrolled list: the line and the tint are placed on the screen)
 		side_drag_end(app, em)
 		bookmark_line(app)
 	}
+	k.rows = k.seen
+	// Enter goes to the cursor's place in the tab that has the keyboard, Ctrl+Enter in a new tab; either, or Escape, gives
+	// the keyboard back to the list
+	if keys {
+		switch {
+		case ui.key_press(.Return):
+			if t != nil && k.path != "" { tab_go(app, t, k.path) }
+			keys_to(app, .List)
+		case ui.key_press(.Return, {.Ctrl}):
+			if k.path != "" { tab_open(app, current_panel(app), k.path, current_panel(app).active + 1) }
+			keys_to(app, .List)
+		case ui.key_press(.Escape):
+			keys_to(app, .List)
+		}
+	}
+}
+
+// One more row of the sidebar: whether the keyboard's cursor is on it (its place kept for Enter).
+@(private = "file")
+side_next :: proc(app: ^App, path: string) -> bool {
+	k := &app.side_keys
+	at := k.seen
+	k.seen += 1
+	if app.keys_at != .Sidebar || at != k.cursor { return false }
+	k.path = strings.clone(path, context.temp_allocator)
+	return true
+}
+
+@(private = "file")
+Side_Ring :: struct { color: ui.Color, inset, radius: f32 }
+
+// The keyboard's cursor on the row `b`: a ring of the accent, as the list's cursor.
+@(private = "file")
+side_cursor_mark :: proc(app: ^App, b: ^ui.Box, em: f32) {
+	d := ui.frame_new(Side_Ring)
+	d^ = {ui.color("accent"), em * ROW_INSET_EM, max(1, ui.scale()) * 2 * corner_k()}
+	b.custom, b.custom_user = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		d := (^Side_Ring)(user)
+		px := max(1, ui.scale())
+		r := ui.Rect{{b.rect.min.x + d.inset, b.rect.min.y + px}, {b.rect.max.x - d.inset, b.rect.max.y - px}}
+		draw.rect(dc, r, d.color, radius = d.radius, border = px)
+	}, d
+	app.side_keys.row = b
 }
 
 @(private = "file")
@@ -120,7 +193,7 @@ side_bookmarks :: proc(app: ^App, t: ^Tab, query, here: string, em: f32) {
 	rects := make([dynamic]ui.Rect, context.temp_allocator)
 	for p, i in app.bookmarks {
 		if !keeps(query, fs.base(p)) { continue }
-		sig := side_folder(app, fmt.tprintf("###bookmark%d", i), p, fs.base(p), "", here, em)
+		sig := side_folder(app, fmt.tprintf("###bookmark%d", i), p, fs.base(p), "", here, side_next(app, p), em)
 		append(&rects, sig.box.rect)
 		// (the release of a drag is no click)
 		moved := app.bm_dragging && app.bm_drag == i
@@ -341,7 +414,7 @@ side_menu_build :: proc(app: ^App, em: f32) {
 
 // A folder's row: its name, and `under` (where it is) after it in the weak colour.
 @(private = "file")
-side_folder :: proc(app: ^App, id, path, name, under: string, here: string, em: f32) -> (sig: ui.Signal) {
+side_folder :: proc(app: ^App, id, path, name, under: string, here: string, cursor: bool, em: f32) -> (sig: ui.Signal) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.2)), radius = 0})
 	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Hot_Within, .Middle_Click}
 	on := path == here
@@ -349,6 +422,7 @@ side_folder :: proc(app: ^App, id, path, name, under: string, here: string, em: 
 	ui.next_merge({bg = on ? ui.color("border") : nil})
 	if ui.row(.Center, flags, id) {
 		sig = ui.signal(ui.parent_box())
+		if cursor { side_cursor_mark(app, ui.parent_box(), em) }
 		ui.spacer(ui.px(em * 2.4))
 		path_icon(app, path, true, em * 1.7)
 		ui.spacer(ui.px(em * 0.5))
@@ -369,12 +443,13 @@ side_folder :: proc(app: ^App, id, path, name, under: string, here: string, em: 
 }
 
 @(private = "file")
-side_row :: proc(app: ^App, id, path: string, name: string, here: bool, em: f32) -> (sig: ui.Signal) {
+side_row :: proc(app: ^App, id, path: string, name: string, here: bool, cursor: bool, em: f32) -> (sig: ui.Signal) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.2)), radius = 0, bg = here ? ui.color("border") : nil})
 	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Hot_Within, .Middle_Click}
 	if here { flags += {.Draw_Background} }
 	if ui.row(.Center, flags, id) {
 		sig = ui.signal(ui.parent_box())
+		if cursor { side_cursor_mark(app, ui.parent_box(), em) }
 		ui.spacer(ui.px(em * 2.4))
 		path_icon(app, path, true, em * 1.7)
 		ui.spacer(ui.px(em * 0.5))
@@ -400,13 +475,14 @@ bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 
 // A volume: its icon, its name, and under the name a bar of how full it is.
 @(private = "file")
-side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, em: f32) -> (sig: ui.Signal) {
+side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, cursor: bool, em: f32) -> (sig: ui.Signal) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.5)), radius = 0})
 	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Hot_Within, .Middle_Click}
 	if here { flags += {.Draw_Background} }
 	ui.next_merge({bg = here ? ui.color("border") : nil})
 	if ui.row(.Center, flags, fmt.tprintf("###vol%d", i)) {
 		sig = ui.signal(ui.parent_box())
+		if cursor { side_cursor_mark(app, ui.parent_box(), em) }
 		drop_zone(app, ui.parent_box().rect, v.path)
 		if app.drop_hover == v.path { drop_mark(ui.parent_box()) }
 		ui.spacer(ui.px(em * 2.4))

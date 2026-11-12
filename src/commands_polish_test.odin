@@ -31,6 +31,8 @@ test_command_icons_distinct :: proc(t: ^testing.T) {
 			{"tab_1", "tab_2", "tab_3", "tab_4", "tab_5", "tab_6", "tab_7", "tab_8", "tab_last"},
 			// a cross closes tabs or cancels the jobs, as on a tab's own button
 			{"tab_close", "tab_close_left", "tab_close_right", "jobs_cancel"},
+			// (one stop and the other way round: F6, Ctrl+Shift+F6)
+			{"panel_next", "panel_previous"},
 		}
 		family :: proc(families: [][]string, id: string) -> int {
 			for f, i in families { for x in f { if x == id { return i } } }

@@ -9,6 +9,7 @@ import config "gt:config"
 import "core:os"
 import "core:strings"
 import "core:unicode/utf8"
+import "gt:draw"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:render"
@@ -42,6 +43,8 @@ Inspector :: struct {
 	listing:  fs.Listing,
 	props:    fs.Properties,   // owned strings: what the system says of it besides its size and date
 	has_props: bool,
+	box:      ui.Key,          // its box: the toolkit's focus while it has the keyboard (F6)
+	moved_by: platform.Key,    // (this build: the key that scrolls what it shows, .None: none)
 }
 
 @(private = "file")
@@ -248,6 +251,17 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 	ui.next({width = ui.px(width), height = ui.fill(), axis = .Y})
 	// (no line of its own: the edge that drags it is the line between it and the list)
 	box := ui.build_box({.Clip}, "###inspector")
+	insp.box = box.key
+	if app.keys_at == .Inspector { inspector_keys_mark(box) }
+	// (with the keyboard: Escape gives it back to the list; the moves are taken here, whatever it shows, or the toolkit's
+	// arrows would move the focus away; its text or its rows scroll by them)
+	insp.moved_by = .None
+	if app.keys_at == .Inspector && app.no_dialog {
+		if ui.key_press(.Escape) { keys_to(app, .List) }
+		for k in ([]platform.Key{.Page_Down, .Page_Up, .Down, .Up, .Home, .End, .Left, .Right}) {
+			if ui.key_press(k) { insp.moved_by = k }
+		}
+	}
 	if ui.parent(box) {
 		if several {
 			inspector_summary(app, t, em)
@@ -297,8 +311,10 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 		case .Text:
 			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.scroll_y("###insp_text") {
+				inspector_scroll_keys(app, ui.parent_box(), em)
 				ui.spacer(ui.px(em * 0.5))
-				ui.next({width = ui.fill()})
+				// (as tall as its text: a row of the style's height let the text run past it, and the view had nothing to scroll)
+				ui.next({width = ui.fill(), height = ui.children_sum()})
 				if ui.row() {
 					ui.spacer(ui.px(em * 0.8))
 					ui.next({width = ui.fill()})
@@ -322,6 +338,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 		case .Folder:
 			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.scroll_y("###insp_folder") {
+				inspector_scroll_keys(app, ui.parent_box(), em)
 				for x, i in insp.listing.entries {
 					if !app.show_hidden && .Hidden in x.flags { continue }
 					// (a double click opens it, as in the list: a folder in the tab, a file with its application)
@@ -353,6 +370,34 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 				ui.label("No preview for this kind of file.###insp_none")
 			}
 		}
+	}
+}
+
+// With the keyboard (F6): Page Up and Page Down, Home and End, Up and Down by a line scroll `view`.
+@(private = "file")
+inspector_scroll_keys :: proc(app: ^App, view: ^ui.Box, em: f32) {
+	line := em * 1.5
+	page := max(view.size.y - line, line)
+	y := view.view_target.y
+	#partial switch app.inspector.moved_by {
+	case .Page_Down: y += page
+	case .Page_Up:   y -= page
+	case .Down:      y += line
+	case .Up:        y -= line
+	case .Home:      y = 0
+	case .End:       y = ui.view_limit(view)
+	case:            return
+	}
+	view.view_target.y = clamp(y, 0, ui.view_limit(view))
+	app_frames(app)
+}
+
+// It has the keyboard: a line of the accent along its top, as the shown tab of the panel that has it.
+@(private = "file")
+inspector_keys_mark :: proc(b: ^ui.Box) {
+	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
+		w := max(2, ui.scale() * 2)
+		draw.rect(dc, {b.rect.min, {b.rect.max.x, b.rect.min.y + w}}, ui.color("accent"))
 	}
 }
 
@@ -414,6 +459,7 @@ inspector_summary :: proc(app: ^App, t: ^Tab, em: f32) {
 	inspector_head(app, "", false, fmt.tprintf("%d items", len(targets)), strings.join(parts[:], " · ", context.temp_allocator), em)
 	ui.next({width = ui.fill(), height = ui.fill()})
 	if ui.scroll_y("###insp_items") {
+		inspector_scroll_keys(app, ui.parent_box(), em)
 		for x, i in targets {
 			// (a list to glance at, not to page through: Ctrl+A in a large folder built every row at each frame)
 			if i == INSPECTOR_SUMMARY_ROWS {

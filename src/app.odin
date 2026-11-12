@@ -72,6 +72,8 @@ App :: struct {
 	no_dialog:     bool,                // this build: no dialog takes the keys (typing goes to the filter)                // a heading was clicked or dragged: the section the commands move is known
 	shortcuts_open: bool,               // the sheet of the keys (F1)
 	side_filter: ui.Text_Field,
+	keys_at:     Keys_At,           // what has the keyboard: the panel's list, the sidebar, the inspector (F6)
+	side_keys:   Side_Keys,         // the sidebar's cursor while it has the keyboard (sidebar.odin)
 	volume_space: [dynamic]fs.Space,   // of each volume, read with the places
 	panel_rects: [dynamic]ui.Rect,  // each panel's box as last laid out (the tabs above are as wide)
 	tz:          ^datetime.TZ_Region,   // the local time zone (nil: UTC)

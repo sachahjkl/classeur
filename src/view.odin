@@ -54,10 +54,14 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	clear(&app.text_keys)
 	typing := slice.contains(app.text_keys_before[:], ui.focus_key())
 	app.no_dialog = !app.palette.open && app.palette.recording < 0 && !app.goto.open && !app.batch.open && !app.layouts.naming && !app.setup.open && !app.confirm.open && !app.conflict.open && !app.options.open && !app.shortcuts_open
+	keys_follow(app)
 	if app.no_dialog {
 		gesture_escape(app)
-		commands_keys(app, typing)
-		if !typing { list_keys(app) }
+		// (the sidebar or the inspector has the keyboard: its moves are its own, the commands that act on the list's
+		// rows (Enter, Delete, Space...) wait; those that work while typing still run)
+		elsewhere := app.keys_at != .List
+		commands_keys(app, typing || elsewhere)
+		if !typing && !elsewhere { list_keys(app) }
 	}
 
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, bg = draw.hex(surfaces(app).list)})

@@ -48,7 +48,8 @@ COMMANDS := [?]Command{
 	{id = "panel_split", title = "Split right", icon = lucide.COLUMNS_2, tags = {"new panel at the right"}, keys = {{.D, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_panel_split},
 	{id = "panel_split_below", title = "Split down", icon = lucide.ROWS_2, tags = {"new panel below"}, keys = {{.J, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_panel_split_below},
 	{id = "panel_close", title = "Close panel", icon = lucide.LOG_OUT, keys = {{.W, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_panel_close},
-	{id = "panel_next", title = "Next panel", icon = lucide.PANEL_RIGHT, tags = {"go to"}, keys = {{.F6, {}}, {}}, in_text = true, run = act_panel_next},
+	{id = "panel_next", title = "Next panel", icon = lucide.PANEL_RIGHT, tags = {"go to", "sidebar", "inspector"}, keys = {{.F6, {}}, {}}, in_text = true, run = act_panel_next},
+	{id = "panel_previous", title = "Previous panel", icon = lucide.PANEL_RIGHT, tags = {"go to", "sidebar", "inspector", "back"}, keys = {{.F6, {.Ctrl, .Shift}}, {}}, in_text = true, run = act_panel_previous},
 
 	{id = "select_all", title = "Select all", icon = lucide.CHECK, keys = {{.A, {.Ctrl}}, {}}, run = act_select_all},
 	{id = "select_none", title = "Select none", icon = lucide.SQUARE, keys = {{.A, {.Ctrl, .Shift}}, {}}, run = act_select_none},

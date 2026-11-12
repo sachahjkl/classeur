@@ -212,9 +212,58 @@ act_panel_close :: proc(app: ^App) {
 	panel_close(app, current_panel(app))
 }
 
-act_panel_next :: proc(app: ^App) {
-	if len(app.panels) > 0 { app.focus = (app.focus + 1) % len(app.panels) }
-	if t := current_tab(app); t != nil { t.focus_due = .List }
+// What has the keyboard: the list of the panel that has it, or the sidebar, or the inspector beside that list.
+Keys_At :: enum u8 { List, Sidebar, Inspector }
+
+act_panel_next :: proc(app: ^App) { keys_step(app, 1) }
+act_panel_previous :: proc(app: ^App) { keys_step(app, -1) }
+
+// The keyboard `by` stops on: the sidebar (shown), each panel's list in order, the inspector (open), round.
+@(private = "file")
+keys_step :: proc(app: ^App, by: int) {
+	first := app.sidebar ? 1 : 0
+	n := first + len(app.panels) + (app.inspector.open ? 1 : 0)
+	if n == 0 { return }
+	at := first + app.focus
+	switch app.keys_at {
+	case .List:
+	case .Sidebar:   at = 0
+	case .Inspector: at = n - 1
+	}
+	to := ((at + by) % n + n) % n
+	switch {
+	case app.sidebar && to == 0:            keys_to(app, .Sidebar)
+	case app.inspector.open && to == n - 1: keys_to(app, .Inspector)
+	case:
+		app.focus = to - first
+		keys_to(app, .List)
+	}
+}
+
+// The keyboard to `at`: the toolkit's focus on its box, so that the list's own keys leave its cursor alone.
+keys_to :: proc(app: ^App, at: Keys_At) {
+	app.keys_at = at
+	switch at {
+	case .List:
+		if t := current_tab(app); t != nil { t.focus_due = .List }
+	case .Sidebar:
+		ui.set_focus(app.side_keys.box)
+		app.side_keys.moved = true
+	case .Inspector:
+		ui.set_focus(app.inspector.box)
+	}
+}
+
+// The sidebar or the inspector lost the toolkit's focus (a click elsewhere, its box gone, a dialog): the keyboard is the
+// list's again; given back to it when nothing else took it.
+keys_follow :: proc(app: ^App) {
+	switch app.keys_at {
+	case .List:      return
+	case .Sidebar:   if app.sidebar && app.side_keys.box != 0 && ui.focus_key() == app.side_keys.box { return }
+	case .Inspector: if app.inspector.open && app.inspector.box != 0 && ui.focus_key() == app.inspector.box { return }
+	}
+	app.keys_at = .List
+	if ui.focus_key() == 0 { if t := current_tab(app); t != nil { t.focus_due = .List } }
 }
 
 ////////////////////////////////
