@@ -3,6 +3,11 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.16.3] - 2026-11-12
+
+### Fixed
+- **A paste in a text field no longer freezes the window**: Ctrl+V in the filter, the address, the rename, the batch rename's fields and Go to asks the clipboard without waiting, and the text appears as soon as the program that copied it answers. A slow or hung program no longer stops the window.
+
 ## [0.16.2] - 2026-11-12
 
 ### Fixed
@@ -373,6 +378,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.16.3]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.3
 [0.16.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.2
 [0.16.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.1
 [0.16.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.0
