@@ -461,10 +461,7 @@ act_delete :: proc(app: ^App) {
 	if read_only_here(app, t) { return }
 	paths := target_paths(t)
 	if len(paths) == 0 { return }
-	targets := folder_targets(&t.folder)
-	folders := make([]bool, len(targets), context.temp_allocator)
-	for e, i in targets { folders[i] = e.kind == .Directory }
-	confirm_delete(app, paths, folders)
+	confirm_delete(app, paths)
 }
 
 act_jobs_cancel :: proc(app: ^App) {

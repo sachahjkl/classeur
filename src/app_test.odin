@@ -540,6 +540,9 @@ test_jobs :: proc(t: ^testing.T) {
 		session.key(s, .V, {.Ctrl})
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return job_asking((^App)(s.user)) != nil }, "the question")
 		session.wait_box(s, "both")
+		session.frames(s, 2)
+		// (its four choices on one line, in the dialog)
+		if r, b := session.find(s, "replace"), session.find(s, "buttons"); r != nil && b != nil { testing.expectf(t, r.rect.max.x <= b.rect.max.x + 0.5, "Replace in the dialog (%v, %v)", r.rect, b.rect) }
 		session.click(s, "both")
 		wait_jobs(s)
 		testing.expect(t, fs.exists(fs.join(dir, "Documents/notes 2.txt", context.temp_allocator)), "kept both: notes 2.txt")
@@ -591,8 +594,8 @@ test_jobs :: proc(t: ^testing.T) {
 		point_at(t, tab, "notes.txt")
 		session.key(s, .Delete, {.Shift})
 		testing.expect(t, app.confirm.open)
-		session.wait_box(s, "delete")
-		session.click(s, "delete")
+		session.wait_box(s, "confirm_act")
+		session.click(s, "confirm_act")
 		wait_jobs(s)
 		testing.expect(t, !fs.exists(fs.join(dir, "notes.txt", context.temp_allocator)), "deleted")
 		testing.expect(t, !slice.contains(shown_names(tab), "notes.txt"))
@@ -2827,8 +2830,8 @@ test_header_menu :: proc(t: ^testing.T) {
 	})
 }
 
-// The question before deleting for good: its note folds in the dialog, above the buttons (it ran under them); what it
-// deletes listed, a folder with a folder's icon.
+// The question before deleting for good (the toolkit's ui.confirm): what it deletes named; Enter cancels, nothing is
+// deleted; its button deletes.
 @(test)
 test_delete_dialog :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
@@ -2836,25 +2839,17 @@ test_delete_dialog :: proc(t: ^testing.T) {
 		dir := make_fixture(t, files[:])
 		s, app := start(t, {dir}, size = {1000, 700})
 		context.allocator = runtime.heap_allocator()
-		tab := current_tab(app)
 		session.key(s, .Home)
 		session.key(s, .Down, {.Shift}, repeat = 2)
 		session.key(s, .Delete, {.Shift})
 		session.frames(s, 3)
 		testing.expect(t, app.confirm.open, "the question")
-		testing.expect_value(t, len(app.confirm.paths), 3)
-		testing.expect(t, app.confirm.folders[0], "the first one a folder")
-		note, buttons := session.find(s, "dlg_note"), session.find(s, "buttons")
-		testing.expect(t, note != nil && buttons != nil, "the note and the buttons")
-		if note != nil && buttons != nil {
-			testing.expectf(t, note.rect.max.y <= buttons.rect.min.y, "the note (%v) above the buttons (%v)", note.rect, buttons.rect)
-			testing.expectf(t, note.rect.max.x <= buttons.rect.max.x, "the note (%v) in the dialog (%v)", note.rect, buttons.rect)
-		}
-		testing.expect(t, session.find(s, "dlg_item2") != nil, "the three named")
-		session.save_png(s, "delete_dialog.png")
-		session.key(s, .Escape)
+		testing.expect(t, session.find_text(s, "Delete 3 items for good?") != nil, "its title")
+		testing.expect(t, session.find(s, "confirm_line_2") != nil, "the three named")
+		testing.expect(t, session.find_text(s, "Cancel (Enter)") != nil, "Enter cancels")
+		session.key(s, .Return)
 		session.frames(s, 2)
-		testing.expect(t, !app.confirm.open, "Escape: nothing deleted")
-		_ = tab
+		testing.expect(t, !app.confirm.open, "closed")
+		testing.expect(t, len(app.jobs.list) == 0, "nothing deleted")
 	})
 }
