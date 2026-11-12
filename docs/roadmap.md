@@ -80,6 +80,18 @@ with one line on how it is made, and update [architecture.md](architecture.md).
   icons as boxes, the sidebar's sections moved, tabs dragged with their feedback and torn off at the window's edge, the
   Windows icon and `classeur.com` (checked by the Windows CI).
 
+### A pass of polish (0.16)
+
+- The row's menu has every action of the row; the sidebar's rows have theirs; the trash puts back and empties.
+- Back and Forward come back to the row and the scroll left (`Visit`, `src/tab.odin`); a refused rename keeps its name,
+  Tab renames the next row; tabs too many for their row scroll, and a chevron lists them.
+- Empty views say what to do (gui_toolkit's `ui.empty_state`); the questions are gui_toolkit's `ui.confirm` or laid out
+  as it; the name taken shows both files.
+- Short command titles with their words as tags, an icon each, the keyboard shortcuts on F1 (`ui.shortcuts_sheet`).
+- F6 goes round the sidebar, the panels and the inspector; the list has the keys from the start; the letters go to the
+  filter (`no_typeahead`).
+- The jobs say their speed and the time left; cut rows are dimmed, pasted ones selected; the footer reads plainly.
+
 ## Next
 
 5. The inspector: PDF and videos.

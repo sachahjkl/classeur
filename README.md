@@ -45,7 +45,11 @@ Its site: [classeur.froment.software](https://classeur.froment.software/).
 - **Command palette** (Ctrl+K, or the "…" menu): every action found by typing, the last ones first, under their groups; resizable
   by its corner. **Settings** (Ctrl+,): a page per subject, searched, the themes as cards. The menus are searched by
   typing too, each line with its icon; "Open with", a terminal here (F4) or in the folder under the cursor (Shift+F4).
-- **The sidebar**: recent folders, bookmarks (Ctrl+D), the volumes and how full they are, the places.
+- **The sidebar**: recent folders, bookmarks (Ctrl+D) put in order by a drag, the volumes and how full they are, the
+  places; each row has its menu, and the keyboard reaches it (F6).
+- **The trash** opens as a folder: put back what it holds, or empty it.
+- **The inspector** (Space): the picture with its own size, the text in its language's colours, the folder's rows to
+  open, a summary of several items.
 - **The system's icons**: the desktop's icon theme on Linux, the shell's on Windows.
 - **Watched folders**: a change made by any program shows at once.
 
@@ -77,13 +81,15 @@ What comes next is in [docs/roadmap.md](docs/roadmap.md).
 | Ctrl+D | bookmark the folder |
 | Ctrl+T, Ctrl+W, Ctrl+Shift+T | new tab, close it, open it again |
 | Ctrl+Enter | the folder in a new tab |
-| Ctrl+Shift+D, F6 | a new panel, the next panel |
+| Ctrl+Shift+D | a new panel |
+| F6, Ctrl+Shift+F6 | the keyboard to the next stop, the one before: the sidebar, each panel, the inspector |
 | F2 | rename (several items: batch rename) |
 | Ctrl+Shift+N, Ctrl+Alt+N | new folder, new file |
 | Ctrl+Z, Ctrl+Y | undo, redo |
 | F4 | a terminal here |
 | Ctrl+H | hidden files |
 | Ctrl+K, Ctrl+Shift+P | the command palette |
+| F1 | every key, by group |
 
 ## Build
 

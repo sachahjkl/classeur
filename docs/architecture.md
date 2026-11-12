@@ -41,10 +41,14 @@ is immediate-mode); the data changes only on the interface's thread.
 1. `view_build` reads the keys of the commands first (`commands_keys`). While a text field has the keyboard (the fields
    built in the last frame are noted in `app.text_keys_before`), only the commands marked `in_text` run.
 2. Then the keys of the selection (`list_keys` in `view.odin`: Shift ranges, Ctrl+Space, Escape, Menu).
-3. Then the virtual list of the focused panel takes the moves (Up, Down, Page Up, Page Down, Home, End, type-ahead).
-   A move of the list selects the cursor's row alone (`folder_pick`).
+3. Then the virtual list of the focused panel takes the moves (Up, Down, Page Up, Page Down, Home, End). It takes no
+   letter (`no_typeahead`): the letters typed go to the panel's filter (`type_to_field`). A move of the list selects the
+   cursor's row alone (`folder_pick`). The list has the keyboard from the start (`app_open`).
 4. A press in a panel gives it the keyboard; unless the press is on a text field, the list gets the focus back at the
    next build (`Tab.focus_due`).
+5. F6 and Ctrl+Shift+F6 move the keyboard round its stops (`app.keys_at`): the sidebar, each panel's list, the inspector.
+   While the sidebar or the inspector has it, the list's keys do not run and only the `in_text` commands do; Escape gives
+   it back to the list.
 
 ## Tests
 
