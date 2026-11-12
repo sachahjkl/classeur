@@ -587,6 +587,7 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, names_only: bool, em: f32
 	// (the details: each row as wide as their columns at least)
 	least: f32 = 0
 	if !names_only { least = ui.table_min_width(&app.columns) }
+	t.vl.list.no_typeahead = true   // (the letters typed go to the filter, File Pilot's: filter_field)
 	rows, ok := ui.vlist("###list", &t.vl, f.ids[:], labels)
 	if !ok { return }
 	// (the layout is the panels' together; each tab keeps its own sideways scroll)
@@ -884,15 +885,25 @@ entry_name :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, em: f32) {
 	if r.active && r.tab == t.id && r.name == e.name {
 		key := ui.key_from_string(ui.parent_box().key, "###rename")
 		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.7)), radius = em * 0.15})
+		// Tab, Shift+Tab: the name kept, then the next row's or the previous one's in the field (Explorer's); taken before
+		// the field and the toolkit, which would move the keyboard to the next field
+		step := 0
+		if ui.focus_key() == key {
+			if ui.key_press(.Tab) { step = 1 } else if ui.key_press(.Tab, {.Shift}) { step = -1 }
+		}
+		if r.refused { ui.push_tags("bad") }
 		res := ui.line_edit("###rename", &r.field)
+		if r.refused { ui.pop_tags() }
+		if res.changed { r.refused = false }
 		note_text_field(app, key)
 		if r.focus_due {
 			ui.set_focus(key)
 			r.focus_due = false
-		} else if !res.focused && ui.focus_key() != key {
+		} else if step == 0 && !res.focused && ui.focus_key() != key {
 			rename_commit(app)   // (the keyboard went elsewhere: what was typed stays)
+			return
 		}
-		if res.committed { rename_commit(app) }
+		if res.committed || step != 0 { rename_commit(app, step) }
 		if res.cancelled { rename_end(app) }
 		return
 	}

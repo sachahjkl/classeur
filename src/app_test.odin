@@ -76,7 +76,7 @@ point_at :: proc(t: ^testing.T, tab: ^Tab, name: string, loc := #caller_location
 	folder_pick(&tab.folder, tab.folder.cursor)
 }
 
-@(private = "file")
+// (shared by the tests of the package: each file of tests uses it)
 shown_names :: proc(t: ^Tab) -> []string {
 	out := make([dynamic]string, context.temp_allocator)
 	for i in t.folder.shown { append(&out, t.folder.listing.entries[i].name) }

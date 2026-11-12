@@ -295,16 +295,18 @@ app_open :: proc(o: Open_Options) -> ^App {
 	// (the session's tabs come back; folders given open beside them, as the second start's do)
 	if session_load(app) {
 		folders_show(app, o.folders)
-		return app
-	}
-	first := new(Panel)
-	append(&app.panels, first)
-	if len(o.folders) == 0 {
-		tab_open(app, first, app.home)
 	} else {
-		for f in o.folders { tab_open(app, first, f) }
-		first.active = 0
+		first := new(Panel)
+		append(&app.panels, first)
+		if len(o.folders) == 0 {
+			tab_open(app, first, app.home)
+		} else {
+			for f in o.folders { tab_open(app, first, f) }
+			first.active = 0
+		}
 	}
+	// (the keys go to the list from the start: the arrows did nothing until a click)
+	if t := current_tab(app); t != nil { t.focus_due = .List }
 	return app
 }
 

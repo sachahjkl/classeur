@@ -146,6 +146,8 @@ Panel_Menus :: struct {
 	history_tab: u64,
 	panel_key:   ui.Key,
 	tab_key:     ui.Key,
+	tabs_key:    ui.Key,     // every tab of a panel (the chevron of a row too short for them)
+	tabs_tab:    u64,        // a tab of that panel: the one shown when it opened
 	types_key:   ui.Key,
 	types_tab:   u64,
 	ranks_key:   ui.Key,     // a column's filter: its dates or its sizes (rank_menu_open)
@@ -284,6 +286,37 @@ tab_menu_build :: proc(app: ^App, em: f32) {
 	}
 }
 
+// Every tab of a panel, the shown one ticked: a click shows it (a row with more tabs than it holds hides some).
+tabs_menu_open :: proc(app: ^App, p: ^Panel) {
+	t := panel_tab(p)
+	if t == nil { return }
+	m := &app.panel_menus
+	if m.tabs_key == 0 { m.tabs_key = ui.key_from_string(0, "classeur_tabs_menu") }
+	m.tabs_tab = t.id
+	ui.ctx_menu_open(m.tabs_key, ui.mouse_pos())
+}
+
+@(private = "file")
+tabs_menu_build :: proc(app: ^App, em: f32) {
+	m := &app.panel_menus
+	if m.tabs_key == 0 { return }
+	if ui.ctx_menu(m.tabs_key, em * MENU_WIDTH_EM) {
+		// (the panel is the one that holds the tab noted: closed meanwhile, there is none)
+		for p, pi in app.panels {
+			holds := false
+			for t in p.tabs { if t.id == m.tabs_tab { holds = true } }
+			if !holds { continue }
+			for t, i in p.tabs {
+				if ui.menu_item(fmt.tprintf("%s###tl%d", shown_text(tab_title(app, t)), t.id), checked = i == p.active).clicked {
+					p.active, app.focus = i, pi
+				}
+			}
+			return
+		}
+		ui.ctx_menu_close()
+	}
+}
+
 history_menu_open :: proc(app: ^App, t: ^Tab, at: ui.Rect) {
 	m := &app.panel_menus
 	if m.history_key == 0 { m.history_key = ui.key_from_string(0, "classeur_history_menu") }
@@ -301,6 +334,7 @@ panel_menus_build :: proc(app: ^App, em: f32) {
 	history_menu_build(app, em)
 	panel_menu_build(app, em)
 	tab_menu_build(app, em)
+	tabs_menu_build(app, em)
 	types_menu_build(app, em)
 	rank_menu_build(app, em)
 }
@@ -313,8 +347,8 @@ history_menu_build :: proc(app: ^App, em: f32) {
 		t := find_tab(app, m.history_tab)
 		if t == nil { ui.ctx_menu_close(); return }
 		// the last folder first
-		#reverse for p, i in t.back {
-			if ui.menu_item(fmt.tprintf("%s###h%d", shown_text(home_path(app, p)), i)).clicked {
+		#reverse for v, i in t.back {
+			if ui.menu_item(fmt.tprintf("%s###h%d", shown_text(home_path(app, v.path)), i)).clicked {
 				for len(t.back) > i + 1 { tab_back_quiet(t) }
 				tab_back(app, t)
 			}

@@ -228,6 +228,7 @@ Rename :: struct {
 	name:      string,          // owned: the entry renamed ("": the entry is not there yet, see `pending`)
 	field:     ui.Text_Field,
 	focus_due: bool,
+	refused:   bool,            // the name typed was refused (said why): the field in the colour of an error until it changes
 }
 
 rename_free :: proc(r: ^Rename) {
@@ -258,7 +259,7 @@ act_rename :: proc(app: ^App) {
 rename_begin :: proc(app: ^App, t: ^Tab, name: string) {
 	r := &app.rename
 	delete(r.name)
-	r.active, r.tab, r.name, r.focus_due = true, t.id, strings.clone(name), true
+	r.active, r.tab, r.name, r.focus_due, r.refused = true, t.id, strings.clone(name), true, false
 	base := fs.base(name)
 	ui.field_set(&r.field, base)
 	// the name without its extension selected, as the systems' file managers do
@@ -272,28 +273,84 @@ rename_end :: proc(app: ^App) {
 	if t := find_tab(app, app.rename.tab); t != nil { t.focus_due = .List }
 }
 
-// Renames the entry to what the field holds.
-rename_commit :: proc(app: ^App) {
+// Renames the entry to what the field holds. `step`: then the row after it (1) or before it (-1) is renamed, Tab and
+// Shift+Tab as in Explorer. A name refused leaves the field open, what was typed selected to type another.
+rename_commit :: proc(app: ^App, step := 0) {
 	r := &app.rename
 	t := find_tab(app, r.tab)
-	defer rename_end(app)
-	if t == nil { return }
+	if t == nil { rename_end(app); return }
+	f := &t.folder
+	// (the row Tab goes to, known before the read: the new name may sort elsewhere)
+	next := ""
+	if step != 0 {
+		for i, row in f.shown {
+			if f.listing.entries[i].name != r.name { continue }
+			if e := folder_row_entry(f, row + step); e != nil { next = strings.clone(e.name, context.temp_allocator) }
+			break
+		}
+	}
 	to := strings.trim_space(ui.field_string(&r.field))
-	if to == r.name || to == "" { return }
+	renamed := false
+	if to != fs.base(r.name) && to != "" {
+		if !rename_to(app, t, to) {
+			ui.field_select_all(&r.field)
+			r.refused, r.focus_due = true, true
+			return
+		}
+		renamed = true
+	}
+	if next == "" { rename_end(app); return }
+	// the next row has the cursor (and keeps it when the read comes) and the field
+	if renamed {
+		delete(t.reveal_name)
+		t.reveal_name = strings.clone(next)
+	}
+	if folder_cursor_to_name(f, next) {
+		folder_pick(f, f.cursor)
+		ui.list_select(&t.vl, f.cursor)
+	}
+	rename_begin(app, t, next)
+}
+
+// The entry being renamed named `to`; false when it cannot be (said why).
+@(private = "file")
+rename_to :: proc(app: ^App, t: ^Tab, to: string) -> bool {
+	r := &app.rename
 	if strings.contains_any(to, fs.SEPARATOR_STRING) || to == "." || to == ".." {
 		say(app, "A name cannot hold %s.", fs.SEPARATOR_STRING)
-		return
+		return false
 	}
 	// (in the tree the entry's name is a path from the tab's folder: renamed in its own folder)
 	from_path := fs.join(t.path, r.name, context.temp_allocator)
-	to_path := fs.join(fs.parent(from_path), to, context.temp_allocator)
-	if _, exists := fs.stat(to_path); exists {
-		say(app, "%s is already there.", to)
-		return
+	dir := fs.parent(from_path)
+	to_path := fs.join(dir, to, context.temp_allocator)
+	// a change of case alone, on a system whose names ignore it (Windows): the name "there" is the entry itself. It is
+	// when the folder has no entry of that very name and the two are alike.
+	case_only := false
+	if there, exists := fs.stat(to_path); exists {
+		from, _ := fs.stat(from_path)
+		rel := fs.join(fs.parent(r.name), to, context.temp_allocator)
+		case_only = strings.equal_fold(to, fs.base(r.name)) && folder_find_name(&t.folder, rel) < 0 && there == from
+		if !case_only {
+			say(app, "%s is already there.", to)
+			return false
+		}
 	}
-	if err := os.rename(from_path, to_path); err != nil {
-		say(app, "%s cannot be renamed: %v.", r.name, err)
-		return
+	err: fs.Error
+	if case_only {
+		// (through a free name: renamed straight, a system may see the new name taken by the entry itself)
+		aside := fs.join(dir, fs.free_name(dir, fmt.tprintf("%s.renaming", to), context.temp_allocator), context.temp_allocator)
+		err = fs.rename(from_path, aside)
+		if err == .None {
+			err = fs.rename(aside, to_path)
+			if err != .None { _ = fs.rename(aside, from_path) }   // (its name back)
+		}
+	} else {
+		err = fs.rename(from_path, to_path)
+	}
+	if err != .None {
+		say(app, "%s cannot be renamed: %s.", fs.base(r.name), fs.ERROR_REASON[err])
+		return false
 	}
 	// (a folder or a file just made and named: its step says where it is now)
 	if n := len(app.undo); n > 0 && (app.undo[n - 1].kind == .New_Folder || app.undo[n - 1].kind == .New_File) && app.undo[n - 1].pairs[0][1] == from_path {
@@ -305,6 +362,7 @@ rename_commit :: proc(app: ^App) {
 	delete(t.reveal_name)
 	t.reveal_name = strings.clone(to)
 	tab_load(app, t)
+	return true
 }
 
 act_new_folder :: proc(app: ^App) {

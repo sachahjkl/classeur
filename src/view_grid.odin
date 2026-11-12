@@ -43,6 +43,7 @@ grid_list :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	ids := make([]u64, rows_n, context.temp_allocator)
 	for r in 0 ..< rows_n { ids[r] = f.ids[r * cols] ~ u64(cols) }
 	t.vl.sel = f.cursor >= 0 ? f.cursor / cols : -1
+	t.vl.list.no_typeahead = true   // (the letters typed go to the filter: filter_field)
 	rows, ok := ui.vlist("###grid", &t.vl, ids)
 	if !ok { return }
 	if t.focus_due == .List && t.vl.key != 0 {

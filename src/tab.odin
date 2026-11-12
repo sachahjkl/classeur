@@ -19,10 +19,11 @@ Tab :: struct {
 	serial:      u64,                // the read asked last; an older answer is dropped
 	loading:     bool,
 	load_ms:     f64,                // how long the last read took
-	back:        [dynamic]string,    // owned paths
-	forward:     [dynamic]string,
+	back:        [dynamic]Visit,
+	forward:     [dynamic]Visit,
 	reveal_name: string,             // owned: the row to put the cursor on when the read comes (going up: where we came from)
 	select_names: [dynamic]string,   // owned: the rows selected when the read comes (what a paste made here), the cursor on the first
+	reveal_scroll: Maybe(f32),       // with it, the list's scroll (Back and Forward: where the folder was left)
 	vl:          ui.Virtual_List,
 	filter:      ui.Text_Field,
 	filter_open: bool,
@@ -44,8 +45,34 @@ Tab :: struct {
 	zoom:         int,               // an index of ZOOMS: the view and the size of its items
 	grid_cols:    int,               // (the columns view: the names in a column)
 	cols_key:     ui.Key,            // the columns view's box (the keyboard there)
-	cols_cursor:  int,               // the cursor the columns view last brought into view               // the cards per row of the grid, as last laid out              // a folder opened from it opens in a new tab (the lock of the toolbar)
+	cols_cursor:  int,               // the cursor the columns view last brought into view
 	cursor_rect:  ui.Rect,           // the cursor's row as last built (where the Menu key opens the menu)
+}
+
+// A place of the history: a folder, and where it was left (Back and Forward come back to the same row and scroll).
+Visit :: struct {
+	path:   string,   // owned
+	name:   string,   // owned: the entry the cursor was on, "": none
+	scroll: f32,      // the list's scroll
+}
+
+visit_delete :: proc(v: Visit) {
+	delete(v.path)
+	delete(v.name)
+}
+
+// The tab's place as it leaves it; the visit takes its path.
+@(private = "file")
+tab_visit :: proc(t: ^Tab) -> Visit {
+	v := Visit{path = t.path}
+	// (a folder still being read shows the one before it: nothing of it to keep)
+	if t.folder.loaded && t.folder.listing.path == t.path {
+		if e := folder_cursor_entry(&t.folder); e != nil { v.name = strings.clone(e.name) }
+		if t.vl.key != 0 {
+			if b := ui.box_from_key(t.vl.key); b != nil { v.scroll = b.view_target.y }
+		}
+	}
+	return v
 }
 
 // The views, File Pilot's zoom: the details, the names alone, the names in columns, then cards ever larger.
@@ -79,9 +106,10 @@ tab_set_zoom :: proc(app: ^App, t: ^Tab, zoom: int) {
 Focus_Due :: enum u8 { None, List, Filter, Address }
 
 Panel :: struct {
-	tabs:   [dynamic]^Tab,
-	active: int,
-	below:  bool,   // under the panel before it, in its column (File Pilot's split below); else a column of its own
+	tabs:     [dynamic]^Tab,
+	active:   int,
+	below:    bool,   // under the panel before it, in its column (File Pilot's split below); else a column of its own
+	tab_seen: u64,    // the shown tab the row of tabs last brought into view (another one shown: brought into view too)
 }
 
 tab_new :: proc(app: ^App, path: string) -> ^Tab {
@@ -101,9 +129,9 @@ tab_destroy :: proc(t: ^Tab) {
 	if t.walk != nil { sync.atomic_store(&t.walk.cancel, true) }   // (load_done frees it; no tab will take it)
 	delete(t.path)
 	folder_destroy(&t.folder)
-	for p in t.back { delete(p) }
+	for v in t.back { visit_delete(v) }
 	delete(t.back)
-	for p in t.forward { delete(p) }
+	for v in t.forward { visit_delete(v) }
 	delete(t.forward)
 	delete(t.reveal_name)
 	tab_select_forget(t)
@@ -139,8 +167,8 @@ tab_go :: proc(app: ^App, t: ^Tab, path: string, history := true) {
 		return
 	}
 	if history {
-		append(&t.back, t.path)
-		for p in t.forward { delete(p) }
+		append(&t.back, tab_visit(t))
+		for v in t.forward { visit_delete(v) }
 		clear(&t.forward)
 	} else {
 		delete(t.path)
@@ -149,7 +177,8 @@ tab_go :: proc(app: ^App, t: ^Tab, path: string, history := true) {
 	delete(t.reveal_name)
 	t.reveal_name = ""
 	tab_select_forget(t)   // (the rows a paste made: of the folder left)
-	old := history ? t.back[len(t.back) - 1] : ""
+	t.reveal_scroll = nil
+	old := history ? t.back[len(t.back) - 1].path : ""
 	if old != "" && fs.parent(old) == clean { t.reveal_name = strings.clone(fs.base(old)) }
 	t.path = clean
 	t.flat = false
@@ -175,19 +204,29 @@ tab_up :: proc(app: ^App, t: ^Tab) {
 tab_back :: proc(app: ^App, t: ^Tab) {
 	if len(t.back) == 0 { return }
 	to := pop(&t.back)
-	append(&t.forward, t.path)
+	append(&t.forward, tab_visit(t))
 	t.path = ""
-	tab_go(app, t, to, history = false)
-	delete(to)
+	tab_return(app, t, to)
 }
 
 tab_forward :: proc(app: ^App, t: ^Tab) {
 	if len(t.forward) == 0 { return }
 	to := pop(&t.forward)
-	append(&t.back, t.path)
+	append(&t.back, tab_visit(t))
 	t.path = ""
-	tab_go(app, t, to, history = false)
-	delete(to)
+	tab_return(app, t, to)
+}
+
+// Back to a place of the history: the read puts the cursor on the row it was on, and the list where it was.
+@(private = "file")
+tab_return :: proc(app: ^App, t: ^Tab, to: Visit) {
+	tab_go(app, t, to.path, history = false)
+	if to.name != "" {
+		delete(t.reveal_name)
+		t.reveal_name = strings.clone(to.name)
+		t.reveal_scroll = to.scroll
+	}
+	visit_delete(to)
 }
 
 ////////////////////////////////
@@ -323,6 +362,7 @@ load_done :: proc(data: rawptr, word: u64) {
 				delete(t.reveal_name)
 				t.reveal_name = strings.clone(fs.base(t.path))
 			}
+			t.reveal_scroll = nil   // (another folder: its rows are not where they were)
 			old := t.path
 			t.path = strings.clone(up)
 			delete(old)
@@ -344,9 +384,13 @@ load_done :: proc(data: rawptr, word: u64) {
 	if t.folder.group != t.group { t.folder.group, t.folder.group_now, t.folder.group_tz = t.group, time.now()._nsec, job.app.tz }
 	measures_apply(job.app, &job.listing)
 	folder_set_listing(&t.folder, &job.listing)
+	// (a name being typed in this tab: its row may have moved, and its field with it; the keyboard goes back to it)
+	if r := &job.app.rename; r.active && r.tab == t.id { r.focus_due = true }
 	// the row asked for (made, renamed, the folder we came up from) has the cursor and the selection
 	revealed := t.reveal_name != "" && folder_cursor_to_name(&t.folder, t.reveal_name)
 	if revealed { folder_pick(&t.folder, t.folder.cursor) }
+	// (Back, Forward: the list where it was left; the cursor's row is in it, the reveal below keeps it there)
+	if y, ok := t.reveal_scroll.?; ok && revealed { ui.vlist_scroll_to(&t.vl, y) }
 	if !same_place && !revealed {
 		t.folder.cursor = len(t.folder.shown) > 0 ? 0 : -1
 		t.folder.anchor = t.folder.cursor
@@ -355,6 +399,7 @@ load_done :: proc(data: rawptr, word: u64) {
 	if revealed || !same_place { ui.list_select(&t.vl, t.folder.cursor) }
 	delete(t.reveal_name)
 	t.reveal_name = ""
+	t.reveal_scroll = nil
 	if len(t.select_names) > 0 {
 		if tab_select_apply(t) { ui.list_select(&t.vl, t.folder.cursor / tab_row_items(t)) }
 		tab_select_forget(t)
@@ -487,8 +532,9 @@ recent_add :: proc(app: ^App, path: string) {
 tab_back_quiet :: proc(t: ^Tab) {
 	if len(t.back) == 0 { return }
 	to := pop(&t.back)
-	append(&t.forward, t.path)
-	t.path = to
+	append(&t.forward, tab_visit(t))
+	t.path = to.path
+	delete(to.name)
 }
 
 // The tree view on or off (off: the folders opened are closed).

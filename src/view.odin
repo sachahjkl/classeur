@@ -27,6 +27,8 @@ TAB_EM     :: 14
 TAB_MIN_EM :: 5
 // What a row of tabs holds after them: the new tab's button and the room around it, in ems.
 TAB_ROW_END_EM :: 2.8
+// The button of the list of the tabs, before the new tab's (a row with more tabs than it holds), in ems.
+TAB_LIST_EM :: 2
 
 view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app := (^App)(h.user)
@@ -51,7 +53,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	append(&app.text_keys_before, ..app.text_keys[:])
 	clear(&app.text_keys)
 	typing := slice.contains(app.text_keys_before[:], ui.focus_key())
-	app.no_dialog = !app.palette.open && !app.goto.open && !app.batch.open && !app.layouts.naming && !app.setup.open && !app.confirm.open && !app.conflict.open && !app.options.open
+	app.no_dialog = !app.palette.open && app.palette.recording < 0 && !app.goto.open && !app.batch.open && !app.layouts.naming && !app.setup.open && !app.confirm.open && !app.conflict.open && !app.options.open
 	if app.no_dialog {
 		gesture_escape(app)
 		commands_keys(app, typing)
@@ -234,7 +236,8 @@ TAB_RADIUS_EM :: 0.6
 tab_radius :: proc(em: f32) -> f32 { return em * TAB_RADIUS_EM * ui.rounding(ui.current_state()) }
 
 // A panel's tabs, at the top of the window over it: as wide as TAB_EM, narrower when they do not fit; the shown one
-// in the list's colour, with a line of the accent along its top when its panel has the keyboard.
+// in the list's colour, with a line of the accent along its top when its panel has the keyboard. More tabs than the row
+// holds at TAB_MIN_EM: they scroll sideways (the wheel), the shown one is brought into view, and a chevron lists them.
 tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, em: f32) {
 	focused := index == app.focus
 	id := fmt.tprintf("###tabs%d", index)
@@ -248,59 +251,86 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 		// shared with it, or it would run past the row's end, cut)
 		ghost_at := tab_ghost_slot(app, index)
 		n := len(p.tabs) + (ghost_at >= 0 ? 1 : 0)
+		// (too many even at their least width: the list's button takes its room from theirs)
+		over := room > 0 && n > 0 && avail < f32(n) * em * TAB_MIN_EM
+		if over { avail -= em * TAB_LIST_EM }
 		tab_w := em * TAB_EM
 		if room > 0 && n > 0 { tab_w = clamp(avail / f32(n), em * TAB_MIN_EM, em * TAB_EM) }
+		// the tabs in a view that scrolls sideways, as wide as they are up to their room: the buttons after it stay
+		view_w := f32(n) * tab_w
+		if avail > 0 { view_w = min(view_w, avail) }
+		view_flags := ui.Box_Flags{.Clip, .View_Scroll_X, .View_Clamp_X, .Allow_Overflow_X, .Scrollbar_None}
+		if over { view_flags += {.Scroll_Self} }   // (a mouse's wheel turns one way only: over the tabs, it scrolls them)
+		ui.next({width = ui.px(view_w), height = ui.pct(1), axis = .X, cross = .End})
+		view := ui.build_box(view_flags, "###tab_view")
+		if sig := ui.signal(view); over && sig.scrolled.y != 0 && sig.scrolled.x == 0 {
+			view.view_target.x = clamp(view.view_target.x + sig.scrolled.y * ui.wheel_step(view, .X), 0, ui.view_limit(view, .X))
+		}
+		// a tab shown anew (opened, picked) comes into view, once the view has its width
+		if shown := panel_tab(p); shown != nil && shown.id != p.tab_seen && view.size.x > 0 {
+			slot := p.active + (ghost_at >= 0 && ghost_at <= p.active ? 1 : 0)
+			ui.view_reveal(view, f32(slot) * tab_w, f32(slot + 1) * tab_w, .X)
+			p.tab_seen = shown.id
+		}
 		close := -1
-		for t, i in p.tabs {
-			if i == ghost_at { tab_ghost(app, tab_w, em) }
-			on := i == p.active
-			// (square, from the panel's left edge: the shown tab is the top of the toolbar under it, one surface)
-			// (a hidden tab's hover in the same shape: the rounding of the settings; the box's radius is scaled by it)
-			ui.next({width = ui.px(tab_w), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .Y, radius = em * TAB_RADIUS_EM})
-			flags := ui.Box_Flags{.Clickable, .Hot_Within, .Middle_Click}
-			if !on { flags += {.Draw_Hot_Effects} }
-			tab := ui.build_box(flags, fmt.tprintf("###tab%d", t.id))
-			// (the line of the accent along the top says, with several panels, which one has the keyboard)
-			line := on && focused && len(app.panels) > 1 ? ui.color("accent") : ui.Color{}
-			if on { tab_paint(tab, draw.hex(surfaces(app).list), draw.hex(surfaces(app).edge), line, tab_radius(em)) }
-			drop_zone(app, tab.rect, t.path)
-			if app.drop_hover == t.path && !on { drop_mark(tab) }
-			sig := ui.signal(tab)
-			if ui.parent(tab) {
-				ui.spacer(ui.px(max(2, ui.scale() * 2)))
-				ui.next({width = ui.fill(), height = ui.fill()})
-				if ui.row(.Center) {
-					ui.spacer(ui.px(em * 0.7))
-					path_icon(app, t.path, true, em * 1.6)
-					ui.spacer(ui.px(em * 0.4))
-					ui.next({width = ui.fill(), height = ui.pct(1)})
-					if !on { ui.push_tags("weak") }
-					ui.label(fmt.tprintf("%s###title", shown_text(tab_title(app, t))))
-					if !on { ui.pop_tags() }
-					if on || ui.hot_within(tab.key) {
-						ui.next({width = ui.px(em * 1.6), height = ui.px(em * 1.6), font = app.icons, radius = em * 0.15, font_size = em * 0.85, text_pad = 0})
-						if ui.tags("ghost_button") {
-							if ui.button(fmt.tprintf("%s###close", lucide.X)).clicked { close = i }
+		if ui.parent(view) {
+			for t, i in p.tabs {
+				if i == ghost_at { tab_ghost(app, tab_w, em) }
+				on := i == p.active
+				// (square, from the panel's left edge: the shown tab is the top of the toolbar under it, one surface)
+				// (a hidden tab's hover in the same shape: the rounding of the settings; the box's radius is scaled by it)
+				ui.next({width = ui.px(tab_w), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .Y, radius = em * TAB_RADIUS_EM})
+				flags := ui.Box_Flags{.Clickable, .Hot_Within, .Middle_Click}
+				if !on { flags += {.Draw_Hot_Effects} }
+				tab := ui.build_box(flags, fmt.tprintf("###tab%d", t.id))
+				// (the line of the accent along the top says, with several panels, which one has the keyboard)
+				line := on && focused && len(app.panels) > 1 ? ui.color("accent") : ui.Color{}
+				if on { tab_paint(tab, draw.hex(surfaces(app).list), draw.hex(surfaces(app).edge), line, tab_radius(em)) }
+				// (a tab scrolled out of the row takes no drop where it lies, over what is beside the row)
+				part := ui.Rect{{max(tab.rect.min.x, view.rect.min.x), tab.rect.min.y}, {min(tab.rect.max.x, view.rect.max.x), tab.rect.max.y}}
+				if part.max.x > part.min.x { drop_zone(app, part, t.path) }
+				if app.drop_hover == t.path && !on { drop_mark(tab) }
+				sig := ui.signal(tab)
+				if ui.parent(tab) {
+					ui.spacer(ui.px(max(2, ui.scale() * 2)))
+					ui.next({width = ui.fill(), height = ui.fill()})
+					if ui.row(.Center) {
+						ui.spacer(ui.px(em * 0.7))
+						path_icon(app, t.path, true, em * 1.6)
+						ui.spacer(ui.px(em * 0.4))
+						ui.next({width = ui.fill(), height = ui.pct(1)})
+						if !on { ui.push_tags("weak") }
+						ui.label(fmt.tprintf("%s###title", shown_text(tab_title(app, t))))
+						if !on { ui.pop_tags() }
+						if on || ui.hot_within(tab.key) {
+							ui.next({width = ui.px(em * 1.6), height = ui.px(em * 1.6), font = app.icons, radius = em * 0.15, font_size = em * 0.85, text_pad = 0})
+							if ui.tags("ghost_button") {
+								if ui.button(fmt.tprintf("%s###close", lucide.X)).clicked { close = i }
+							}
+						} else {
+							ui.spacer(ui.px(em * 1.6))
 						}
-					} else {
-						ui.spacer(ui.px(em * 1.6))
+						ui.spacer(ui.px(em * 0.4))
 					}
-					ui.spacer(ui.px(em * 0.4))
+				}
+				if sig.pressed { p.active = i; app.focus = index }
+				if !app.tab_drag.active { hover_tip(sig, home_path(app, t.path), t.locked ? "Locked: folders open in a new tab" : "") }
+				append(&app.tab_rects, Tab_Rect{index, i, tab.rect})
+				tab_drag_signal(app, index, i, sig)
+				// (the tab dragged, dimmed where it was: its ghost follows the pointer; not while its picture is read)
+				if app.tab_drag.active && app.tab_drag.tab == t.id && app.tab_drag.alone == 0 { tab.transparency = 0.5 }
+				if sig.middle_clicked { close = i }
+				if sig.right_clicked {
+					p.active, app.focus = i, index
+					tab_menu_open(app)
 				}
 			}
-			if sig.pressed { p.active = i; app.focus = index }
-			if !app.tab_drag.active { hover_tip(sig, home_path(app, t.path), t.locked ? "Locked: folders open in a new tab" : "") }
-			append(&app.tab_rects, Tab_Rect{index, i, tab.rect})
-			tab_drag_signal(app, index, i, sig)
-			// (the tab dragged, dimmed where it was: its ghost follows the pointer; not while its picture is read)
-			if app.tab_drag.active && app.tab_drag.tab == t.id && app.tab_drag.alone == 0 { tab.transparency = 0.5 }
-			if sig.middle_clicked { close = i }
-			if sig.right_clicked {
-				p.active, app.focus = i, index
-				tab_menu_open(app)
-			}
+			if ghost_at == len(p.tabs) { tab_ghost(app, tab_w, em) }
 		}
-		if ghost_at == len(p.tabs) { tab_ghost(app, tab_w, em) }
+		if over && icon_action(app, fmt.tprintf("tablist%d", index), lucide.CHEVRON_DOWN, "Every tab of the panel", em) {
+			app.focus = index
+			tabs_menu_open(app, p)
+		}
 		ui.spacer(ui.px(em * 0.3))
 		if icon_action(app, fmt.tprintf("newtab%d", index), lucide.PLUS, command_tip(app, "tab_new"), em) {
 			app.focus = index
