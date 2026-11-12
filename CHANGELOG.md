@@ -3,6 +3,18 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.16.1] - 2026-11-12
+
+### Fixed
+- **Large folders no longer hold the window**: a folder of tens of thousands of items is sorted and filtered on a worker as it is read, so the window does not stop when it comes or when a change in it makes it read again. A filter typed in it answers faster, the footer and the list do no work per item at each frame, and a paste of many items selects them at once.
+- **A hung share no longer holds the other folders**: when every reader waits on a share that does not answer for a second, classeur starts another, so local folders, the address's suggestions and the rest still open.
+- **The thumbnails on screen come first**: after a fast scroll through a grid, the cards on screen get their pictures at once instead of after every card passed; a picture changed on disk gets a new thumbnail; the names of the types no longer wait for the pictures, and a grid of many small cards no longer loses its pictures and icons at each frame.
+- **Measures go on in the other panels**: going to another folder in one panel no longer stops the folder measures of the other panels. Measuring a very large tree takes far less memory, and the measures kept are limited to the 20 000 most recent.
+- **Closing does not wait for a search**: closing the window stops a running flat search and the folder measures at once. A read of a share that does not answer no longer holds the window open: classeur waits half a second at most.
+- **A folder changed while it is read is read again**: a file made or removed while a folder is being read now shows once the read ends; before, the change was missed until the next one.
+- **A search of a large tree stays smooth**: while the flat search reads, each batch of results goes among the rows already shown, without filtering and sorting all of them again. A search of a tree of many thousands of files no longer slows down as it goes.
+- **A slow disk or share no longer holds the window**: a rename, a new folder or file, a batch rename, an undo or redo of them, opening a share's address and reading the sidebar's places are done in the background. While a rename is being done, its field stays open; a name refused is said and kept in the field, as before. The sidebar keeps its list until the new one is read. The name of a tab on a share and the share's address in the path are read with the folder, no longer at every frame.
+
 ## [0.16.0] - 2026-11-12
 
 ### Added
@@ -353,6 +365,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.16.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.1
 [0.16.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.0
 [0.15.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.15.2
 [0.15.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.15.1
