@@ -19,23 +19,37 @@ act_open :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
 	targets := folder_targets(&t.folder)
-	// (an archive opens as a folder, File Pilot's: "Open with the system's application" gives it to its program)
-	// (an archive in an archive is taken out and opened: it is not entered)
-	in_archive := fs.archive_holds(fs.join(t.path, "x", context.temp_allocator))
-	as_folder :: proc(e: ^fs.Entry, in_archive: bool) -> bool { return e.kind == .Directory || !in_archive && e.kind == .File && fs.is_archive_name(e.name) }
 	folders := 0
-	for e in targets { if as_folder(e, in_archive) { folders += 1 } }
+	for e in targets { if opens_as_folder(t.path, e^) { folders += 1 } }
 	for e in targets {
 		path := fs.join(t.path, e.name, context.temp_allocator)
-		if as_folder(e, in_archive) {
-			if folders == 1 && !t.locked {
-				tab_go(app, t, path)
-				return
-			}
-			tab_open(app, current_panel(app), path, current_panel(app).active + 1)
-		} else {
+		switch {
+		case !opens_as_folder(t.path, e^):
 			open_system(app, path)
+		case folders == 1 && !t.locked:
+			tab_go(app, t, path)
+			return
+		case:
+			tab_open(app, current_panel(app), path, current_panel(app).active + 1)
 		}
+	}
+}
+
+// Whether `e` of the folder `dir` opens as a folder. An archive does, File Pilot's: "Open with the system's application"
+// gives it to its program. An archive in an archive is taken out and opened: it is not entered.
+opens_as_folder :: proc(dir: string, e: fs.Entry) -> bool {
+	in_archive := fs.archive_holds(fs.join(dir, "x", context.temp_allocator))
+	return e.kind == .Directory || !in_archive && e.kind == .File && fs.is_archive_name(e.name)
+}
+
+// Opens one entry of the folder `dir`: a folder in the tab `t` (in a new tab when `t` is locked), a file with the
+// system's application.
+open_entry :: proc(app: ^App, t: ^Tab, dir: string, e: fs.Entry) {
+	path := fs.join(dir, e.name, context.temp_allocator)
+	switch {
+	case !opens_as_folder(dir, e): open_system(app, path)
+	case t.locked:                 tab_open(app, current_panel(app), path, current_panel(app).active + 1)
+	case:                          tab_go(app, t, path)
 	}
 }
 

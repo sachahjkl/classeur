@@ -25,13 +25,13 @@ import "fs"
 // classeurtool shots: the pictures of the README, from test_shots.
 SHOTS :: #config(CLASSEUR_SHOTS, false)
 
-@(private = "file")
+// (shared by the tests of the package: each file of tests uses it)
 FIXTURE :: [?]string{
 	"Documents/", "Photos/", "Projects/", "notes.txt", "report 2.pdf", "report 10.pdf", "archive.zip", ".hidden",
 	"Documents/letter.odt", "Documents/budget.xlsx",
 }
 
-@(private = "file")
+// (shared by the tests of the package: each file of tests uses it)
 make_fixture :: proc(t: ^testing.T, files: []string) -> string {
 	// (clean: the program's paths are; on Windows the temporary folder comes with '/' in it)
 	dir := fs.clean(testkit.temp_folder(t, "classeur"), context.temp_allocator)
@@ -46,7 +46,7 @@ make_fixture :: proc(t: ^testing.T, files: []string) -> string {
 	return dir
 }
 
-@(private = "file")
+// (shared by the tests of the package: each file of tests uses it)
 start :: proc(t: ^testing.T, folders: []string, size := [2]int{}, home := "", loc := #caller_location) -> (s: ^session.Session, app: ^App) {
 	context.allocator = runtime.heap_allocator()
 	app = app_open({folders = folders, headless = true, size = size, home = home})
@@ -59,7 +59,7 @@ start :: proc(t: ^testing.T, folders: []string, size := [2]int{}, home := "", lo
 }
 
 // Frames until every tab has its folder.
-@(private = "file")
+// (shared by the tests of the package: each file of tests uses it)
 wait_read :: proc(s: ^session.Session, loc := #caller_location) {
 	session.wait_until(s, proc(s: ^session.Session) -> bool {
 		app := (^App)(s.user)
@@ -70,7 +70,7 @@ wait_read :: proc(s: ^session.Session, loc := #caller_location) {
 }
 
 // The cursor on `name`, and it alone selected (as a click does).
-@(private = "file")
+// (shared by the tests of the package: each file of tests uses it)
 point_at :: proc(t: ^testing.T, tab: ^Tab, name: string, loc := #caller_location) {
 	testing.expect(t, folder_cursor_to_name(&tab.folder, name), loc = loc)
 	folder_pick(&tab.folder, tab.folder.cursor)
@@ -253,7 +253,7 @@ landscape :: proc(w, h: int, seed: int) -> []u8 {
 	return out
 }
 
-@(private = "file")
+// (shared by the tests of the package: each file of tests uses it)
 write_pictures :: proc(dir: string, names: []string) {
 	for name, i in names {
 		w, h := 480, 320

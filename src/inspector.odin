@@ -33,9 +33,11 @@ Inspector :: struct {
 	text:     string,          // owned
 	spans:    [dynamic]syntax.Span,   // its colours (worked out with it, on the worker: not each frame)
 	language: bool,            // the text is a source file's: shown in its colours
+	cut:      bool,            // the text is the file's first INSPECTOR_TEXT_BYTES only
 	tex:      render.Texture,
 	has_tex:  bool,
-	size:     [2]int,
+	size:     [2]int,          // the texture's (shrunk to INSPECTOR_PICTURE_PX)
+	pixels:   [2]int,          // the picture's own, as its file holds it
 	preview:  ui.Preview,      // the picture's zoom and pan (the wheel, a drag, a double click: the toolkit's preview)
 	listing:  fs.Listing,
 	props:    fs.Properties,   // owned strings: what the system says of it besides its size and date
@@ -51,8 +53,10 @@ Inspect_Job :: struct {
 	text:    string,           // owned until taken
 	spans:   [dynamic]syntax.Span,   // owned until taken
 	language: bool,
+	cut:     bool,
 	rgba:    []u8,
 	size:    [2]int,
+	pixels:  [2]int,
 	listing: fs.Listing,
 	props:   fs.Properties,    // owned strings
 	has_props: bool,
@@ -71,7 +75,8 @@ inspector_clear :: proc(app: ^App) {
 	delete(insp.text)
 	insp.text = ""
 	delete(insp.spans)
-	insp.spans, insp.language = nil, false
+	insp.spans, insp.language, insp.cut = nil, false, false
+	insp.pixels = {}
 	if insp.has_tex { render.destroy_texture(&app.shared.r, insp.tex) }
 	insp.has_tex = false
 	insp.preview = {}   // (another picture: fitted again)
@@ -160,14 +165,17 @@ inspect_run :: proc(data: rawptr) {
 		img, decoded := platform.clipboard_image_decode(thumb_mime(job.path), bytes)
 		if !decoded { job.kind = .Other; return }
 		defer delete(img.rgba)
+		job.pixels = img.size
 		job.rgba, job.size = shrink(img.rgba, img.size, INSPECTOR_PICTURE_PX)
 	case .Text:
 		f, err := os.open(job.path)
 		if err != nil { job.kind = .Other; return }
 		defer os.close(f)
-		buf := make([]u8, INSPECTOR_TEXT_BYTES, context.temp_allocator)
+		// (one byte more than is shown: whether the file goes on past it)
+		buf := make([]u8, INSPECTOR_TEXT_BYTES + 1, context.temp_allocator)
 		n, _ := os.read(f, buf)
-		text := string(buf[:max(n, 0)])
+		job.cut = n > INSPECTOR_TEXT_BYTES
+		text := string(buf[:clamp(n, 0, INSPECTOR_TEXT_BYTES)])
 		for len(text) > 0 && !utf8.valid_string(text) { text = text[:len(text) - 1] }   // (cut inside a character)
 		if strings.index_byte(text, 0) >= 0 || (n > 0 && len(text) == 0) { job.kind = .Other; return }
 		job.text = strings.clone(text)
@@ -208,11 +216,11 @@ inspect_done :: proc(data: rawptr, word: u64) {
 	case .Picture:
 		insp.tex = render.create_texture_rgba(&app.shared.r, job.size.x, job.size.y)
 		render.update_texture_rgba(&app.shared.r, insp.tex, 0, 0, job.size.x, job.size.y, job.rgba)
-		insp.has_tex, insp.size = true, job.size
+		insp.has_tex, insp.size, insp.pixels = true, job.size, job.pixels
 	case .Text:
 		insp.text, job.text = job.text, ""
 		insp.spans, job.spans = job.spans, nil
-		insp.language = job.language
+		insp.language, insp.cut = job.language, job.cut
 	case .Folder:
 		insp.listing, job.listing = job.listing, {}
 		order := make([]u32, len(insp.listing.entries), context.temp_allocator)
@@ -230,39 +238,39 @@ inspect_done :: proc(data: rawptr, word: u64) {
 inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 	insp := &app.inspector
 	e := folder_cursor_entry(&t.folder)
-	if e != nil { inspector_ask(app, fs.join(t.path, e.name, context.temp_allocator), e^) }
+	several := t.folder.count > 1
+	// (several selected: a summary of them, nothing to read)
+	if e != nil && !several { inspector_ask(app, fs.join(t.path, e.name, context.temp_allocator), e^) }
 	// (its edge, the toolkit's: dragged, folded to a strip, Enter and the arrows)
 	r := ui.pane_split("###insp_split", .X, &insp.pane, inspector_pane_options(app))
 	if r.size <= 0 { return }
-	ui.next({width = ui.px(r.size * ui.scale()), height = ui.fill(), axis = .Y})
+	width := r.size * ui.scale()
+	ui.next({width = ui.px(width), height = ui.fill(), axis = .Y})
 	// (no line of its own: the edge that drags it is the line between it and the list)
 	box := ui.build_box({.Clip}, "###inspector")
 	if ui.parent(box) {
-		if e == nil { return }
-		// what it is: its icon, its name, its size and date
-		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 3.2))})
-		if ui.row(.Center, {.Draw_Side_Bottom}, "###insp_head") {
-			ui.spacer(ui.px(em * 0.6))
-			entry_glyph(app, t.path, e^, em * 2.4)
-			ui.spacer(ui.px(em * 0.4))
-			ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
-			if ui.column() {
-				ui.spacer(ui.fill())
-				ui.next({width = ui.fill(), height = ui.px(em * 1.4)})
-				ui.label(fmt.tprintf("%s###name", shown_text(fs.base(e.name))))
-				if ui.tags("weak") {
-					size := e.size >= 0 ? size_text(e.size) : ""
-					if m, ok := measure_of(app, t, e^); ok { size = fmt.tprintf("%s · %d folders · %d files", size_text(m.bytes), m.folders, m.files) }
-					ui.next({width = ui.fill(), height = ui.px(em * 1.3), font_size = em * 0.86})
-					ui.label(fmt.tprintf("%s · %s · %s###meta", type_text(e^), size, date_text(app, e.mtime)))
-				}
-				ui.spacer(ui.fill())
-			}
-			if ui.tags("weak") { if icon_action(app, "insp_close", lucide.X, command_tip(app, "inspector"), em) { act_inspector(app) } }
-			ui.spacer(ui.px(em * 0.3))
+		if several {
+			inspector_summary(app, t, em)
+			return
 		}
+		if e == nil {
+			// (the folder itself in the head: the pane keeps its close button)
+			name := fs.base(t.path)
+			if name == "" { name = t.path }
+			inspector_head(app, t.path, true, name, "", em)
+			if ui.tags("weak") {
+				ui.next({width = ui.fill(), height = ui.px(em * 4), text_align = .Center})
+				ui.label(len(t.folder.shown) == 0 ? "This folder is empty.###insp_nothing" : "Nothing selected.###insp_nothing")
+			}
+			return
+		}
+		// what it is: its icon, its name, its size, its pixels (a picture) and its date
+		size := e.size >= 0 ? size_text(e.size) : ""
+		if m, ok := measure_of(app, t, e^); ok { size = fmt.tprintf("%s · %d folders · %d files", size_text(m.bytes), m.folders, m.files) }
+		if insp.ready && insp.kind == .Picture && insp.pixels.x > 0 { size = fmt.tprintf("%s · %d × %d", size, insp.pixels.x, insp.pixels.y) }
+		meta := fmt.tprintf("%s · %s · %s", type_text(e^), size, date_text(app, e.mtime))
+		inspector_head(app, fs.join(t.path, e.name, context.temp_allocator), e.kind == .Directory, fs.base(e.name), meta, em)
 		if insp.ready && insp.has_props { inspector_props(app, t, e^, em) }
-		ui.next({width = ui.fill(), height = ui.fill()})
 		if !insp.ready {
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), height = ui.px(em * 4), text_align = .Center})
@@ -274,7 +282,12 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 		case .Picture:
 			// (fitted; the wheel zooms about the pointer, a drag moves it, a double click goes to its pixels and back; its
 			// keys stay the list's: the arrows move the cursor, Space closes the inspector)
-			ui.next({width = ui.fill(), height = ui.fill()})
+			// (at the top of its room, under the properties: its box as tall as the picture fitted to the pane's width,
+			// shorter when the pane is not that tall)
+			room := width - em * 1.6
+			fitted := min(f32(insp.size.y), room * f32(insp.size.y) / f32(max(insp.size.x, 1)))
+			ui.spacer(ui.px(em * 0.6))
+			ui.next({width = ui.fill(), height = ui.px(max(fitted, em), 0)})
 			if ui.row() {
 				ui.spacer(ui.px(em * 0.8))
 				ui.next({width = ui.fill(), height = ui.fill()})
@@ -282,6 +295,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 				ui.spacer(ui.px(em * 0.8))
 			}
 		case .Text:
+			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.scroll_y("###insp_text") {
 				ui.spacer(ui.px(em * 0.5))
 				ui.next({width = ui.fill()})
@@ -298,18 +312,32 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 					}
 					ui.spacer(ui.px(em * 0.8))
 				}
+				if insp.cut {
+					if ui.tags("weak") {
+						ui.next({width = ui.fill(), height = ui.px(em * 3), text_align = .Center, font_size = em * 0.86})
+						ui.label(fmt.tprintf("The first %s are shown.###insp_cut", size_text(INSPECTOR_TEXT_BYTES)))
+					}
+				}
 			}
 		case .Folder:
+			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.scroll_y("###insp_folder") {
 				for x, i in insp.listing.entries {
 					if !app.show_hidden && .Hidden in x.flags { continue }
+					// (a double click opens it, as in the list: a folder in the tab, a file with its application)
 					ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0))})
-					if ui.row(.Center, {}, fmt.tprintf("###insp_e%d", i)) {
+					sig: ui.Signal
+					if ui.row(.Center, {.Clickable, .Draw_Hot_Effects, .Hot_Within}, fmt.tprintf("###insp_e%d", i)) {
+						sig = ui.signal(ui.parent_box())
 						ui.spacer(ui.px(em * 0.8))
 						entry_glyph(app, insp.path, x, em * 1.8)
 						ui.spacer(ui.px(em * 0.4))
 						ui.next({width = ui.fill(), height = ui.pct(1)})
 						ui.label(fmt.tprintf("%s###n", shown_text(x.name)))
+					}
+					if sig.double_clicked {
+						open_entry(app, t, insp.path, x)
+						break
 					}
 				}
 				if len(insp.listing.entries) == 0 {
@@ -323,6 +351,85 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), height = ui.px(em * 4), text_align = .Center})
 				ui.label("No preview for this kind of file.###insp_none")
+			}
+		}
+	}
+}
+
+// Its head: an icon, a title, a weak line under it (none when `meta` is empty) and the close button. The icon is the
+// system's for `path`; with no path, Lucide's files (several selected).
+@(private = "file")
+inspector_head :: proc(app: ^App, path: string, folder: bool, title, meta: string, em: f32) {
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 3.2))})
+	if ui.row(.Center, {.Draw_Side_Bottom}, "###insp_head") {
+		ui.spacer(ui.px(em * 0.6))
+		if path != "" {
+			path_icon(app, path, folder, em * 2.4)
+		} else {
+			if ui.tags("weak") {
+				ui.next({width = ui.px(em * 2.4), height = ui.pct(1), font = app.icons, text_align = .Center, font_size = em * 1.5})
+				ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###icon", lucide.FILES))
+			}
+		}
+		ui.spacer(ui.px(em * 0.4))
+		ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
+		if ui.column() {
+			ui.spacer(ui.fill())
+			ui.next({width = ui.fill(), height = ui.px(em * 1.4)})
+			ui.label(fmt.tprintf("%s###name", shown_text(title)))
+			if meta != "" {
+				if ui.tags("weak") {
+					ui.next({width = ui.fill(), height = ui.px(em * 1.3), font_size = em * 0.86})
+					ui.label(fmt.tprintf("%s###meta", meta))
+				}
+			}
+			ui.spacer(ui.fill())
+		}
+		if ui.tags("weak") { if icon_action(app, "insp_close", lucide.X, command_tip(app, "inspector"), em) { act_inspector(app) } }
+		ui.spacer(ui.px(em * 0.3))
+	}
+}
+
+INSPECTOR_SUMMARY_ROWS :: 200   // the selected items the summary names; the others counted
+
+// Several selected: how many, of which kinds, their size (the files' and the folders' measured), then their list.
+@(private = "file")
+inspector_summary :: proc(app: ^App, t: ^Tab, em: f32) {
+	targets := folder_targets(&t.folder)
+	folders, files := 0, 0
+	bytes: i64
+	for x in targets {
+		if x.kind == .Directory {
+			folders += 1
+			if m, ok := measure_of(app, t, x^); ok { bytes += m.bytes }
+		} else {
+			files += 1
+			if x.size > 0 { bytes += x.size }
+		}
+	}
+	parts := make([dynamic]string, context.temp_allocator)
+	if folders > 0 { append(&parts, fmt.tprintf("%d %s", folders, folders == 1 ? "folder" : "folders")) }
+	if files > 0 { append(&parts, fmt.tprintf("%d %s", files, files == 1 ? "file" : "files")) }
+	append(&parts, size_text(bytes))
+	inspector_head(app, "", false, fmt.tprintf("%d items", len(targets)), strings.join(parts[:], " · ", context.temp_allocator), em)
+	ui.next({width = ui.fill(), height = ui.fill()})
+	if ui.scroll_y("###insp_items") {
+		for x, i in targets {
+			// (a list to glance at, not to page through: Ctrl+A in a large folder built every row at each frame)
+			if i == INSPECTOR_SUMMARY_ROWS {
+				if ui.tags("weak") {
+					ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0)), text_pad = em * 3.0})
+					ui.label(fmt.tprintf("and %d more###insp_more", len(targets) - i))
+				}
+				break
+			}
+			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0))})
+			if ui.row(.Center, {}, fmt.tprintf("###insp_s%d", i)) {
+				ui.spacer(ui.px(em * 0.8))
+				entry_glyph(app, t.path, x^, em * 1.8)
+				ui.spacer(ui.px(em * 0.4))
+				ui.next({width = ui.fill(), height = ui.pct(1)})
+				ui.label(fmt.tprintf("%s###n", shown_text(x.name)))
 			}
 		}
 	}
