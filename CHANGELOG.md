@@ -3,6 +3,11 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.17.1] - 2026-11-12
+
+### Fixed
+- **A picture in the inspector takes the pane's whole height**: its preview fills the room under the properties, fitted in it, with its zoom buttons at the pane's foot instead of over the picture's edge.
+
 ## [0.17.0] - 2026-11-12
 
 ### Added
@@ -395,6 +400,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.17.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.17.1
 [0.17.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.17.0
 [0.16.3]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.3
 [0.16.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.2
