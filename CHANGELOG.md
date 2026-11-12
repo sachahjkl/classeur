@@ -3,6 +3,23 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.17.0] - 2026-11-12
+
+### Added
+- **The sidebar finds the network's file servers**: its Network section is always there and lists, after the shares mounted, the devices that announce a file service on the local network (SMB, SFTP, WebDAV, NFS, AFP, FTP), and on Windows the computers of the network neighbourhood. A click opens the device's first service in the tab, its menu lists each one, and Find network devices (Ctrl+Shift+F5) searches again.
+- **The Recycle Bin opens in a tab on Windows**: trash:/// and the sidebar's Recycle Bin list the items of every drive by their original names, with the folder each was deleted from, its size and when it was deleted. Put back returns the selection where it was (a name taken there is asked about), Empty the trash deletes every item after the question, and Delete in the trash deletes for good after the question.
+- **Thumbnails of more kinds of files**: the grid shows the thumbnail of a PDF, a video or a document when the system has a thumbnailer for it, and the thumbnails are kept in the system's cache on the disk, shared with the other file managers; a large picture's thumbnail comes from that cache the next time.
+- **The inspector shows PDF files and videos**: a PDF shows its first page and a video one of its frames, from the thumbnails the system makes, with a line under the picture that says which.
+- **The program's own commands in the palette**: Quit (Ctrl+Q), Restart classeur, New window (Ctrl+N), Minimize, Maximize and Full screen (F11) of the window, Check for updates, Install the update and Restart to update when there is one, About classeur, the website, Report a problem, Release notes, Open settings folder, Copy the version, Next and Previous theme, Compact rows, Animations, Larger, Smaller and Default text size, Reload all folders, Reset the layout and Clear thumbnails. Each has its keys, and the palette finds them by the words a person types ("exit" finds Quit).
+
+### Changed
+- **Space opens the inspector from an empty filter too**: in the filter with nothing typed, Space shows or hides the inspector, as it does in the list, and types no space (no name starts with one); once letters are typed it is a space.
+- **Put back asks when the name is taken**: an item of the trash whose place holds another file now asks to replace it, skip it or keep both, as a copy does, instead of failing. Delete on an item of the trash deletes it for good after the question, with its record, instead of moving it to the trash again.
+
+### Fixed
+- **Relative dates turn at midnight**: with relative dates on, "Today" becomes "Yesterday" just after midnight, even when the window is idle.
+- **Escape cancels a bookmark's drag**: the bookmarks keep their order, and letting go of the button afterwards opens nothing, as with the other drags.
+
 ## [0.16.3] - 2026-11-12
 
 ### Fixed
@@ -378,6 +395,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.17.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.17.0
 [0.16.3]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.3
 [0.16.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.2
 [0.16.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.1
