@@ -20,7 +20,12 @@ test_controls_follow_the_rounding :: proc(t: ^testing.T) {
 		st := &app.main.state
 
 		// at the default rounding: the corners of the rows' pill, CONTROL_RADIUS_EM (the toolkit's own scaling squared them)
-		crumb := session.find(s, "crumb0")
+		// (the first crumb shown: a long path, as Windows' temporary folder, leaves out the first ones)
+		first_crumb :: proc(s: ^session.Session) -> ^ui.Box {
+			for i in 0 ..< 64 { if b := session.find(s, fmt.tprintf("crumb%d", i)); b != nil { return b } }
+			return nil
+		}
+		crumb := first_crumb(s)
 		back := session.find(s, "back")
 		if !testing.expect(t, crumb != nil && back != nil, "a crumb and the back button") { return }
 		testing.expectf(t, ui.box_drawn_radius(st, crumb) > 0, "a crumb is rounded at the default: %v", ui.box_drawn_radius(st, crumb))
@@ -29,7 +34,7 @@ test_controls_follow_the_rounding :: proc(t: ^testing.T) {
 		// at 0: square
 		ui.set_rounding(st, 0)
 		session.frames(s, 2)
-		crumb = session.find(s, "crumb0")
+		crumb = first_crumb(s)
 		back = session.find(s, "back")
 		if !testing.expect(t, crumb != nil && back != nil) { return }
 		testing.expect_value(t, ui.box_drawn_radius(st, crumb), 0)
