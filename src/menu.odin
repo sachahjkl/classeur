@@ -188,6 +188,7 @@ types_menu_open :: proc(app: ^App, t: ^Tab) {
 	m := &app.panel_menus
 	if m.types_key == 0 { m.types_key = ui.key_from_string(0, "classeur_types_menu") }
 	m.types_tab = t.id
+	t.folder.types_due = true   // (counted once as it opens, then kept while the rows stay the same)
 	ui.ctx_menu_open(m.types_key, ui.mouse_pos())
 }
 
@@ -208,7 +209,7 @@ types_menu_build :: proc(app: ^App, em: f32) {
 		if ui.menu_item("Files only###k1", checked = f.kinds == .Files, keep_open = true).clicked { folder_set_kinds(f, .Files) }
 		if ui.menu_item("Folders only###k2", checked = f.kinds == .Folders, keep_open = true).clicked { folder_set_kinds(f, .Folders) }
 		ui.menu_separator()
-		types := folder_types(f)
+		types := folder_types_kept(f)
 		all := len(f.types_off) == 0
 		if ui.menu_item("Every type###tall", checked = all, keep_open = true).clicked { folder_all_types(f, !all) }
 		for ty, i in types {

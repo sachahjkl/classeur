@@ -51,11 +51,15 @@ App :: struct {
 	vol_same:    bool,
 	vol_known:   bool,                  // vol_same is the worker's answer (else the guess is used: dnd.odin)
 	drag_first_folder: bool,            // the first of the files dragged is a folder (the ghost's icon)
+	drag_checked: string,               // owned: the folder the dragged files were last checked against (drop_takes) ...
+	drag_check_ok: bool,                // ... whether it takes them
+	drag_check_valid: bool,             // ... for this drag's files (a new drag checks again)
 	frame:       u64,               // the frames built (what a thumbnail was last used in)
 	shown_frame: u64,               // atomic: the last frame built, for the workers (a thumbnail not wanted since is not read)
 	default_zoom: int,             // the measures of folders (measure.odin)
 	measures:    map[string]Measure,   // by path (the keys owned)
 	measure_asks: map[u64]^Measure_Ask,   // by tab: what each asked on its folder (measure.odin)
+	measures_serial: u64,              // raised as each measure comes (what is worked out of them is made again)
 	recents:     [dynamic]string,   // owned: the folders visited, the last first (the sidebar)
 	bookmarks:   [dynamic]string,   // owned
 	undo:        [dynamic]Undo_Step,   // what was done to files, the last at the end (undo.odin)

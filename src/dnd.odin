@@ -45,15 +45,12 @@ drop_target :: proc(app: ^App, pos: [2]f32) -> string {
 
 // What a drop of `files` into `dir` would do.
 @(private = "file")
-drop_effect :: proc(app: ^App, files: []string, dir: string, allowed: platform.Drop_Effects, mods: platform.Modifiers) -> Maybe(platform.Drop_Effect) {
+// `checked`: drop_takes's answer for these files and `dir`, known already (nil: asked here).
+drop_effect :: proc(app: ^App, files: []string, dir: string, allowed: platform.Drop_Effects, mods: platform.Modifiers, checked: Maybe(bool) = nil) -> Maybe(platform.Drop_Effect) {
 	if dir == "" || len(files) == 0 { return nil }
-	all_here := true
-	for f in files {
-		if fs.parent(f) != dir { all_here = false }
-		// (a folder into itself or below it)
-		if dir == f || strings.has_prefix(dir, strings.concatenate({f, fs.SEPARATOR_STRING}, context.temp_allocator)) { return nil }
-	}
-	if all_here { return nil }
+	takes, known := checked.?
+	if !known { takes = drop_takes(files, dir) }
+	if !takes { return nil }
 	want: platform.Drop_Effect = same_volume_cached(app, files[0], dir) ? .Move : .Copy
 	if .Ctrl in mods { want = .Copy }
 	if .Shift in mods { want = .Move }
@@ -63,6 +60,19 @@ drop_effect :: proc(app: ^App, files: []string, dir: string, allowed: platform.D
 		if want not_in allowed { return nil }
 	}
 	return want
+}
+
+// Whether `dir` takes a drop of `files`: not a folder into itself or below it, not all of them where they are already.
+// A pass over every file: asked once per target of a drag, not at each frame (file_drag_frame).
+@(private = "file")
+drop_takes :: proc(files: []string, dir: string) -> bool {
+	all_here := true
+	for f in files {
+		if fs.parent(f) != dir { all_here = false }
+		// (a folder into itself or below it)
+		if dir == f || (strings.has_prefix(dir, f) && len(dir) > len(f) && fs.is_separator(dir[len(f)])) { return false }
+	}
+	return !all_here
 }
 
 // Whether the files' folder and the target are on one volume, asked once per pair (a drag sends an event per move).
@@ -179,6 +189,7 @@ drag_maybe :: proc(app: ^App, t: ^Tab, sig: ui.Signal) {
 	for e in targets { append(&app.drag_paths, fs.join(t.path, e.name)) }
 	// (the first one's kind, for the ghost's icon: known from the listing, no disk read at each frame)
 	app.drag_first_folder = len(targets) > 0 && targets[0].kind == .Directory
+	app.drag_check_valid = false   // (other files: checked again against their target)
 	delete(app.spring_target)
 	app.spring_target = ""
 	app.file_drag = len(app.drag_paths) > 0
@@ -196,7 +207,14 @@ file_drag_frame :: proc(app: ^App, em: f32) {
 	if ui.key_held(.Ctrl) { mods += {.Ctrl} }
 	if ui.key_held(.Shift) { mods += {.Shift} }
 	if ui.key_held(.Alt) { mods += {.Alt} }
-	effect := drop_effect(app, app.drag_paths[:], dir, {.Copy, .Move}, mods)
+	// (the dragged files checked against a target once, when it changes: a frame goes through none of them)
+	if !app.drag_check_valid || app.drag_checked != dir {
+		delete(app.drag_checked)
+		app.drag_checked = strings.clone(dir)
+		app.drag_check_ok = dir != "" && drop_takes(app.drag_paths[:], dir)
+		app.drag_check_valid = true
+	}
+	effect := drop_effect(app, app.drag_paths[:], dir, {.Copy, .Move}, mods, app.drag_check_ok)
 	delete(app.drop_hover)
 	app.drop_hover = effect != nil ? strings.clone(dir) : ""
 	spring(app, m, dir)
@@ -289,6 +307,7 @@ file_drag_end :: proc(app: ^App) {
 	app.spring_target = ""
 	for p in app.drag_paths { delete(p) }
 	clear(&app.drag_paths)
+	app.drag_check_valid = false
 	delete(app.drop_hover)
 	app.drop_hover = ""
 	app_frames(app)
@@ -329,6 +348,7 @@ dnd_free :: proc(app: ^App) {
 	delete(app.drag_paths)
 	delete(app.drop_hover)
 	delete(app.spring_target)
+	delete(app.drag_checked)
 }
 
 // The tests' way to ask drop_effect.

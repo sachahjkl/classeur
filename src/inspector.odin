@@ -40,12 +40,28 @@ Inspector :: struct {
 	size:     [2]int,          // the texture's (shrunk to INSPECTOR_PICTURE_PX)
 	pixels:   [2]int,          // the picture's own, as its file holds it
 	preview:  ui.Preview,      // the picture's zoom and pan (the wheel, a drag, a double click: the toolkit's preview)
-	listing:  fs.Listing,
+	listing:  fs.Listing,      // sorted (on the worker)
+	visible:  [dynamic]u32,    // its entries that are not hidden (made on the worker: a frame goes through none)
 	props:    fs.Properties,   // owned strings: what the system says of it besides its size and date
 	has_props: bool,
 	box:      ui.Key,          // its box: the toolkit's focus while it has the keyboard (F6)
 	moved_by: platform.Key,    // (this build: the key that scrolls what it shows, .None: none)
+	summary:  Summary,         // several selected: what the pane says of them
 }
+
+// Several selected: how many, of which kinds, their size, the first of them; worked out when the selection, the rows or
+// a measure change (summary_update), read by the frames.
+Summary :: struct {
+	key:     Summary_Key,
+	count:   int,
+	folders: int,
+	files:   int,
+	bytes:   i64,
+	rows:    [dynamic]u32,     // the first INSPECTOR_SUMMARY_ROWS selected, their entries' indices, in the rows' order
+	made:    int,              // the times it was worked out
+}
+
+Summary_Key :: struct { tab, selection, ids, measures: u64, entries: int }
 
 @(private = "file")
 Inspect_Job :: struct {
@@ -61,6 +77,8 @@ Inspect_Job :: struct {
 	size:    [2]int,
 	pixels:  [2]int,
 	listing: fs.Listing,
+	sort:    fs.Sort,          // the listing's order
+	visible: [dynamic]u32,     // owned until taken
 	props:   fs.Properties,    // owned strings
 	has_props: bool,
 }
@@ -70,6 +88,8 @@ inspector_free :: proc(app: ^App) {
 	inspector_clear(app)
 	delete(insp.path)
 	insp.path = ""
+	delete(insp.summary.rows)
+	insp.summary = {}
 }
 
 @(private = "file")
@@ -84,6 +104,8 @@ inspector_clear :: proc(app: ^App) {
 	insp.has_tex = false
 	insp.preview = {}   // (another picture: fitted again)
 	fs.listing_destroy(&insp.listing)
+	delete(insp.visible)
+	insp.visible = nil
 	props_free(&insp.props)
 	insp.ready, insp.kind, insp.has_props = false, .None, false
 }
@@ -127,7 +149,7 @@ inspector_ask :: proc(app: ^App, path: string, e: fs.Entry) {
 	insp.path = strings.clone(path)
 	insp.serial += 1
 	job := new(Inspect_Job)
-	job^ = {app = app, serial = insp.serial, path = strings.clone(path)}
+	job^ = {app = app, serial = insp.serial, path = strings.clone(path), sort = app.default_sort}
 	switch {
 	case e.kind == .Directory:                                job.kind = .Folder
 	case e.kind == .File && thumb_mime(e.name) != "":         job.kind = .Picture
@@ -160,6 +182,16 @@ inspect_run :: proc(data: rawptr) {
 	switch job.kind {
 	case .Folder:
 		fs.list(&job.listing, job.path)
+		// (sorted here, and the entries not hidden found here: not on the interface's thread)
+		entries := job.listing.entries[:]
+		order := make([]u32, len(entries), context.temp_allocator)
+		for &o, i in order { o = u32(i) }
+		fs.sort_order(entries, order, job.sort)
+		sorted := make([]fs.Entry, len(entries), context.temp_allocator)
+		for i, k in order { sorted[k] = entries[i] }
+		copy(entries, sorted)
+		job.visible = make([dynamic]u32, 0, len(entries))
+		for e, i in entries { if .Hidden not_in e.flags { append(&job.visible, u32(i)) } }
 	case .Picture:
 		info, ok := fs.stat(job.path)
 		if !ok || info.size > THUMB_MAX_BYTES { job.kind = .Other; return }
@@ -202,6 +234,7 @@ inspect_free :: proc(job: ^Inspect_Job) {
 	delete(job.rgba)
 	props_free(&job.props)
 	fs.listing_destroy(&job.listing)
+	delete(job.visible)
 	free(job)
 }
 
@@ -226,12 +259,7 @@ inspect_done :: proc(data: rawptr, word: u64) {
 		insp.language, insp.cut = job.language, job.cut
 	case .Folder:
 		insp.listing, job.listing = job.listing, {}
-		order := make([]u32, len(insp.listing.entries), context.temp_allocator)
-		for i in 0 ..< len(order) { order[i] = u32(i) }
-		sorted := make([dynamic]fs.Entry, context.temp_allocator)
-		fs.sort_order(insp.listing.entries[:], order, app.default_sort)
-		for i in order { append(&sorted, insp.listing.entries[i]) }
-		copy(insp.listing.entries[:], sorted[:])
+		insp.visible, job.visible = job.visible, nil
 	case .Other, .None:
 	}
 	app_frames(app)
@@ -339,8 +367,11 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.scroll_y("###insp_folder") {
 				inspector_scroll_keys(app, ui.parent_box(), em)
-				for x, i in insp.listing.entries {
-					if !app.show_hidden && .Hidden in x.flags { continue }
+				// (a glance, as the summary: its first rows built, the others counted; a frame goes through no more)
+				n := app.show_hidden ? len(insp.listing.entries) : len(insp.visible)
+				for k in 0 ..< min(n, INSPECTOR_SUMMARY_ROWS) {
+					i := app.show_hidden ? k : int(insp.visible[k])
+					x := insp.listing.entries[i]
 					// (a double click opens it, as in the list: a folder in the tab, a file with its application)
 					ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0))})
 					sig: ui.Signal
@@ -355,6 +386,12 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 					if sig.double_clicked {
 						open_entry(app, t, insp.path, x)
 						break
+					}
+				}
+				if n > INSPECTOR_SUMMARY_ROWS {
+					if ui.tags("weak") {
+						ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0)), text_pad = em * 3.0})
+						ui.label(fmt.tprintf("and %d more###insp_more", n - INSPECTOR_SUMMARY_ROWS))
 					}
 				}
 				if len(insp.listing.entries) == 0 {
@@ -435,50 +472,72 @@ inspector_head :: proc(app: ^App, path: string, folder: bool, title, meta: strin
 	}
 }
 
-INSPECTOR_SUMMARY_ROWS :: 200   // the selected items the summary names; the others counted
+INSPECTOR_SUMMARY_ROWS :: 200   // the rows a list of the pane names (the selection, a folder's entries); the others counted
 
 // Several selected: how many, of which kinds, their size (the files' and the folders' measured), then their list.
 @(private = "file")
 inspector_summary :: proc(app: ^App, t: ^Tab, em: f32) {
-	targets := folder_targets(&t.folder)
-	folders, files := 0, 0
-	bytes: i64
-	for x in targets {
-		if x.kind == .Directory {
-			folders += 1
-			if m, ok := measure_of(app, t, x^); ok { bytes += m.bytes }
-		} else {
-			files += 1
-			if x.size > 0 { bytes += x.size }
-		}
-	}
+	s := summary_update(app, t)
 	parts := make([dynamic]string, context.temp_allocator)
-	if folders > 0 { append(&parts, fmt.tprintf("%d %s", folders, folders == 1 ? "folder" : "folders")) }
-	if files > 0 { append(&parts, fmt.tprintf("%d %s", files, files == 1 ? "file" : "files")) }
-	append(&parts, size_text(bytes))
-	inspector_head(app, "", false, fmt.tprintf("%d items", len(targets)), strings.join(parts[:], " · ", context.temp_allocator), em)
+	if s.folders > 0 { append(&parts, fmt.tprintf("%d %s", s.folders, s.folders == 1 ? "folder" : "folders")) }
+	if s.files > 0 { append(&parts, fmt.tprintf("%d %s", s.files, s.files == 1 ? "file" : "files")) }
+	append(&parts, size_text(s.bytes))
+	inspector_head(app, "", false, fmt.tprintf("%d items", s.count), strings.join(parts[:], " · ", context.temp_allocator), em)
 	ui.next({width = ui.fill(), height = ui.fill()})
 	if ui.scroll_y("###insp_items") {
 		inspector_scroll_keys(app, ui.parent_box(), em)
-		for x, i in targets {
-			// (a list to glance at, not to page through: Ctrl+A in a large folder built every row at each frame)
-			if i == INSPECTOR_SUMMARY_ROWS {
-				if ui.tags("weak") {
-					ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0)), text_pad = em * 3.0})
-					ui.label(fmt.tprintf("and %d more###insp_more", len(targets) - i))
-				}
-				break
-			}
+		// (a list to glance at, not to page through: Ctrl+A in a large folder built every row at each frame)
+		for i, k in s.rows {
+			x := t.folder.listing.entries[i]
 			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0))})
-			if ui.row(.Center, {}, fmt.tprintf("###insp_s%d", i)) {
+			if ui.row(.Center, {}, fmt.tprintf("###insp_s%d", k)) {
 				ui.spacer(ui.px(em * 0.8))
-				entry_glyph(app, t.path, x^, em * 1.8)
+				entry_glyph(app, t.path, x, em * 1.8)
 				ui.spacer(ui.px(em * 0.4))
 				ui.next({width = ui.fill(), height = ui.pct(1)})
 				ui.label(fmt.tprintf("%s###n", shown_text(x.name)))
 			}
 		}
+		if s.count > len(s.rows) {
+			if ui.tags("weak") {
+				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0)), text_pad = em * 3.0})
+				ui.label(fmt.tprintf("and %d more###insp_more", s.count - len(s.rows)))
+			}
+		}
 	}
+}
+
+// The summary of the selection of `t`, worked out again only when the selection, the rows or a measure changed since:
+// a frame with nothing changed goes through none of the selected rows.
+summary_update :: proc(app: ^App, t: ^Tab) -> ^Summary {
+	s := &app.inspector.summary
+	f := &t.folder
+	key := Summary_Key{t.id, f.sel_serial, f.ids_version, app.measures_serial, len(f.listing.entries)}
+	if s.made > 0 && s.key == key { return s }
+	s.key = key
+	s.made += 1
+	s.count, s.folders, s.files, s.bytes = 0, 0, 0, 0
+	clear(&s.rows)
+	add :: proc(app: ^App, t: ^Tab, s: ^Summary, i: u32) {
+		x := t.folder.listing.entries[i]
+		if x.kind == .Directory {
+			s.folders += 1
+			if m, ok := measure_of(app, t, x); ok { s.bytes += m.bytes }
+		} else {
+			s.files += 1
+			if x.size > 0 { s.bytes += x.size }
+		}
+		if len(s.rows) < INSPECTOR_SUMMARY_ROWS { append(&s.rows, i) }
+		s.count += 1
+	}
+	// (the selected rows, as folder_targets has them: shown only for several, never the cursor's entry alone)
+	if f.count == 0 { return s }
+	for i in f.shown {
+		if !f.selected[i] { continue }
+		add(app, t, s, i)
+		if s.count == f.count { break }
+	}
+	return s
 }
 
 // Its properties (File Pilot's): where it is, its dates, its permissions and its owner (Linux) or attributes (Windows).

@@ -188,6 +188,7 @@ measure_done :: proc(data: rawptr, word: u64) {
 	if m, ok := &app.measures[job.path]; ok && m.mtime == job.mtime {
 		job.m.mtime, job.m.tab, job.m.used = job.mtime, m.tab, app.frame
 		m^ = job.m
+		app.measures_serial += 1
 		app_frames(app)
 		// the folder's size in its entry, in the tabs that show it: sorted by size, folders go among the sizes
 		// (the listing shown, not the one a tab waits for; the entry found by its name, at the date it was measured at)

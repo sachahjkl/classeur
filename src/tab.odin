@@ -48,6 +48,9 @@ Tab :: struct {
 	reload_due:   bool,              // its folder changed while it was read: read again when the read comes
 	zoom:         int,               // an index of ZOOMS: the view and the size of its items
 	grid_cols:    int,               // (the columns view: the names in a column)
+	grid_ids:     [dynamic]u64,      // the grid's rows' identities, made when the rows or the cards per row change
+	grid_ids_version: u64,           // what they were made for (folder's ids_version, cards per row): the virtual list's
+	grid_ids_made: int,              // the times they were made
 	cols_key:     ui.Key,            // the columns view's box (the keyboard there)
 	cols_cursor:  int,               // the cursor the columns view last brought into view
 	cursor_rect:  ui.Rect,           // the cursor's row as last built (where the Menu key opens the menu)
@@ -145,6 +148,7 @@ tab_destroy :: proc(t: ^Tab) {
 	tab_select_forget(t)
 	delete(t.select_names)
 	ui.vlist_destroy(&t.vl)
+	delete(t.grid_ids)
 	ui.field_destroy(&t.filter)
 	ui.field_destroy(&t.address)
 	for p in t.tree_open { delete(p) }

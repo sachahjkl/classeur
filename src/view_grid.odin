@@ -39,12 +39,10 @@ grid_list :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	if lines { item_w = room / f32(cols) - gap }
 	t.grid_cols = cols
 	n := len(f.shown)
-	rows_n := (n + cols - 1) / cols
-	ids := make([]u64, rows_n, context.temp_allocator)
-	for r in 0 ..< rows_n { ids[r] = f.ids[r * cols] ~ u64(cols) }
+	grid_ids_update(t, cols)
 	t.vl.sel = f.cursor >= 0 ? f.cursor / cols : -1
 	t.vl.list.no_typeahead = true   // (the letters typed go to the filter: filter_field)
-	rows, ok := ui.vlist("###grid", &t.vl, ids)
+	rows, ok := ui.vlist("###grid", &t.vl, t.grid_ids[:], ids_version = t.grid_ids_version)
 	if !ok { return }
 	if t.focus_due == .List && t.vl.key != 0 {
 		ui.set_focus(t.vl.key)
@@ -73,6 +71,20 @@ grid_list :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	}
 	// (a press on the empty part, between the cards or under them: the rectangle selection, as in the list)
 	band_update(app, t, pressed_item, pressed_empty, right_empty, {kind = .Grid, count = cols, item_w = item_w, gap = gap})
+}
+
+// The identities of the grid's rows (a row: `cols` cards, named by its first card and their number), made again only
+// when the folder's rows or the cards per row changed. Their version has its top bit set: never 0 (compared), never a
+// folder's ids_version (the details' list shares the tab's virtual list).
+grid_ids_update :: proc(t: ^Tab, cols: int) {
+	f := &t.folder
+	version := (u64(1) << 63) | (f.ids_version << 16) | u64(cols & 0xffff)
+	if t.grid_ids_made > 0 && t.grid_ids_version == version { return }
+	rows_n := (len(f.shown) + cols - 1) / cols
+	resize(&t.grid_ids, rows_n)
+	for r in 0 ..< rows_n { t.grid_ids[r] = f.ids[r * cols] ~ u64(cols) }
+	t.grid_ids_version = version
+	t.grid_ids_made += 1
 }
 
 // One item: a line (the icon, the name) or a card (the thumbnail or the icon large, the name, the size). True: it

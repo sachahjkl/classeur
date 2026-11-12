@@ -58,6 +58,13 @@ Folder :: struct {
 	selected:    [dynamic]bool,     // per entry
 	count:       int,               // entries selected
 	sel_bytes:   i64,               // the bytes of the files selected (folders count none)
+	sel_serial:  u64,               // raised at each change of the selection (what is worked out of it is made again)
+	// the types' popup's counts (folder_types_kept), exts owned: counted when the listing or its rows change, not each frame
+	types:       [dynamic]Type_Count,
+	types_of:    u64,               // the `ids_version` they were counted at
+	types_n:     int,               // the entries they were counted for
+	types_due:   bool,              // counted again at the next ask (the popup opened)
+	types_made:  int,               // the times they were counted
 	cursor:      int,               // the active row, -1: none
 	anchor:      int,               // where a Shift range starts
 }
@@ -79,6 +86,8 @@ folder_destroy :: proc(f: ^Folder) {
 	virtual.arena_destroy(&f.lower_arena)
 	delete(f.days)
 	delete(f.selected)
+	for x in f.types { delete(x.ext) }
+	delete(f.types)
 	f^ = {}
 }
 
@@ -174,6 +183,7 @@ folder_take :: proc(f, p: ^Folder) {
 	f.count, f.sel_bytes = 0, 0
 	f.loaded = true
 	f.ids_version += 1
+	f.sel_serial += 1
 	folder_destroy(p)
 
 	f.cursor = -1
@@ -362,6 +372,9 @@ folder_merge_shown :: proc(f: ^Folder, added: []u32) {
 	}
 	f.cursor = moved(f.cursor, at)
 	f.anchor = moved(f.anchor, at)
+	f.ids_version += 1
+	// (the selected rows' order changed: the inspector's summary lists them in it)
+	f.sel_serial += 1
 }
 
 // The entry of a name in the listing (-1: none), by an index of the names made at the first ask after the listing changed.
@@ -485,6 +498,18 @@ folder_types :: proc(f: ^Folder, allocator := context.temp_allocator) -> []Type_
 	return out[:]
 }
 
+// folder_types, kept: counted again only when the listing or its rows changed (or `types_due`), not at each frame the
+// popup is open.
+folder_types_kept :: proc(f: ^Folder) -> []Type_Count {
+	if f.types_made > 0 && !f.types_due && f.types_of == f.ids_version && f.types_n == len(f.listing.entries) { return f.types[:] }
+	for x in f.types { delete(x.ext) }
+	clear(&f.types)
+	for x in folder_types(f) { append(&f.types, Type_Count{strings.clone(x.ext), x.count}) }
+	f.types_of, f.types_n, f.types_due = f.ids_version, len(f.listing.entries), false
+	f.types_made += 1
+	return f.types[:]
+}
+
 // Whether the types' popup leaves anything out.
 folder_types_filtered :: proc(f: ^Folder) -> bool { return f.kinds != .All || len(f.types_off) > 0 || f.dates_off != {} || f.sizes_off != {} }
 
@@ -580,6 +605,7 @@ folder_refilter :: proc(f: ^Folder) {
 		if e.kind == .Directory { f.folders += 1 } else { f.files += 1 }
 	}
 	resize(&f.selected, len(entries))
+	f.sel_serial += 1
 	f.count, f.sel_bytes = 0, 0
 	for &sel, i in f.selected {
 		if sel && f.row_of[i] < 0 { sel = false }
@@ -628,6 +654,7 @@ folder_row_selected :: proc(f: ^Folder, row: int) -> bool {
 }
 
 folder_select_none :: proc(f: ^Folder) {
+	if f.count > 0 { f.sel_serial += 1 }
 	for &s in f.selected { s = false }
 	f.count, f.sel_bytes = 0, 0
 }
@@ -639,6 +666,7 @@ folder_select_all :: proc(f: ^Folder) {
 		f.sel_bytes += file_bytes(f.listing.entries[i])
 	}
 	f.count = len(f.shown)
+	f.sel_serial += 1
 }
 
 folder_set_row :: proc(f: ^Folder, row: int, on: bool) {
@@ -646,6 +674,7 @@ folder_set_row :: proc(f: ^Folder, row: int, on: bool) {
 	i := f.shown[row]
 	if f.selected[i] == on { return }
 	f.selected[i] = on
+	f.sel_serial += 1
 	f.count += on ? 1 : -1
 	f.sel_bytes += on ? file_bytes(f.listing.entries[i]) : -file_bytes(f.listing.entries[i])
 }
