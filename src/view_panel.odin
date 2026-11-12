@@ -556,21 +556,51 @@ icon_check :: proc(app: ^App, t: ^Tab, e: fs.Entry, row: int, selected: bool, em
 empty_state :: proc(app: ^App, t: ^Tab, em: f32) -> bool {
 	f := &t.folder
 	if f.loaded && f.listing.error == .None && len(f.shown) > 0 { return false }
-	message := "Reading…"
+	// what it is, and what can be done about it: each button runs a command's procedure (the toolkit's empty state)
+	Case :: enum { Reading, Error, Empty, Filter, Funnels, Hidden }
+	c: Case
 	switch {
-	case !f.loaded:                    message = "Reading…"
-	case f.listing.error != .None:     message = fs.ERROR_TEXT[f.listing.error]
-	case len(f.listing.entries) == 0:  message = "This folder is empty."
-	case f.filter != "":               message = "No name has these letters."
-	case folder_types_filtered(f):     message = "No row fits the filters (the funnels of the columns)."
-	case:                              message = "Only hidden files are here (Ctrl+H shows them)."
+	case !f.loaded:                    c = .Reading
+	case f.listing.error != .None:     c = .Error
+	case len(f.listing.entries) == 0:  c = .Empty
+	case f.filter != "":               c = .Filter
+	case folder_types_filtered(f):     c = .Funnels
+	case:                              c = .Hidden
 	}
-	ui.next({width = ui.fill(), height = ui.fill()})
+	e: ui.Empty_State
+	switch c {
+	case .Reading:
+	case .Error:   e = {icon = lucide.ALERT_CIRCLE, title = fs.ERROR_TEXT[f.listing.error], actions = {"Go up", "Try again"}}
+	case .Empty:   e = {icon = lucide.FOLDER_OPEN, title = "This folder is empty", actions = {"New folder", "Paste"}}
+	case .Filter:  e = {icon = lucide.FOLDER_SEARCH, title = "No name matches", note = fmt.tprintf("Nothing here has the letters %q.", f.filter), actions = {"Clear the filter"}}
+	case .Funnels: e = {icon = lucide.FILTER, title = "No row fits the filters", note = "The types or the columns' funnels leave every row out.", actions = {"Show every row"}}
+	case .Hidden:  e = {icon = lucide.EYE_OFF, title = "Only hidden files are here", actions = {"Show hidden files"}}
+	}
+	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	empty := ui.build_box({.Clickable}, "###empty")
 	if ui.parent(empty) {
-		if ui.tags("weak") {
-			ui.next({width = ui.fill(), height = ui.px(em * 5), text_align = .Center})
-			ui.label(fmt.tprintf("%s###msg", message))
+		if c == .Reading {
+			if ui.tags("weak") {
+				ui.next({width = ui.fill(), height = ui.px(em * 5), text_align = .Center})
+				ui.label("Reading…###msg")
+			}
+		} else {
+			a := ui.empty_state("folder_empty", e)
+			switch {
+			case a < 0:
+			case c == .Error:   if a == 0 { tab_up(app, t) } else { tab_load(app, t) }
+			case c == .Empty:   if a == 0 { act_new_folder(app) } else { act_paste(app) }
+			case c == .Filter:
+				ui.field_clear(&t.filter)
+				folder_set_filter(f, "")
+				if t.flat { t.flat = false; tab_load(app, t) }
+				t.focus_due = .List
+			case c == .Funnels:
+				act_every_type(app)
+				folder_all_ranks(f, .Date)
+				folder_all_ranks(f, .Size)
+			case c == .Hidden:  act_toggle_hidden(app)
+			}
 		}
 	}
 	if ui.signal(empty).right_clicked && f.loaded && f.listing.error == .None { entry_menu_open(app, t, ui.mouse_pos(), on_entry = false) }
