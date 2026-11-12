@@ -718,7 +718,7 @@ clipboard_put :: proc(app: ^App, cut: bool) {
 	platform.clipboard_set(app.main.win, {files = paths, files_cut = cut, text = strings.join(paths, "\n", context.temp_allocator)})
 	// (what is cut is drawn dimmed until it is pasted: what was cut before is not any more)
 	cut_forget(app)
-	if cut { for p in paths { append(&app.cut, strings.clone(p)) } }
+	if cut { for p in paths { if p not_in app.cut { app.cut[strings.clone(p)] = true } } }
 	say(app, "%d item%s %s.", len(paths), len(paths) == 1 ? "" : "s", cut ? "cut: paste them to move them" : "copied")
 }
 
@@ -729,10 +729,7 @@ cut_forget :: proc(app: ^App) {
 }
 
 // Whether `path` was cut and waits for its paste (its row, card or line is drawn dimmed).
-row_is_cut :: proc(app: ^App, path: string) -> bool {
-	for p in app.cut { if p == path { return true } }
-	return false
-}
+row_is_cut :: proc(app: ^App, path: string) -> bool { return path in app.cut }
 
 // row_is_cut for an entry of the tab (no path made while nothing is cut).
 entry_is_cut :: proc(app: ^App, t: ^Tab, e: fs.Entry) -> bool {

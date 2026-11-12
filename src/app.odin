@@ -121,7 +121,8 @@ App :: struct {
 	tab_rects:   [dynamic]Tab_Rect, // the tabs' boxes of this frame
 	tab_rects_last: [dynamic]Tab_Rect,   // and of the last one (what a released tab is tested against)
 	rename:      Rename,            // the rename in place (actions.odin)
-	cut:         [dynamic]string,   // owned: the paths cut, drawn dimmed until the paste or another copy or cut
+	cut:         map[string]bool,   // owned keys: the paths cut, drawn dimmed until the paste or another copy or cut (a
+	                                // set: each row shown asks it at each frame)
 	status:      string,            // a message for the status bar (owned), until status_until (ui clock, ms)
 	status_until: f64,
 	room:        f32,               // the window's width at this build, logical pixels
