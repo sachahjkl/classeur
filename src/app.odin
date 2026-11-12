@@ -97,6 +97,7 @@ App :: struct {
 	tab_rects:   [dynamic]Tab_Rect, // the tabs' boxes of this frame
 	tab_rects_last: [dynamic]Tab_Rect,   // and of the last one (what a released tab is tested against)
 	rename:      Rename,            // the rename in place (actions.odin)
+	cut:         [dynamic]string,   // owned: the paths cut, drawn dimmed until the paste or another copy or cut
 	status:      string,            // a message for the status bar (owned), until status_until (ui clock, ms)
 	status_until: f64,
 	room:        f32,               // the window's width at this build, logical pixels
@@ -373,6 +374,8 @@ app_free :: proc(app: ^App) {
 	ui.table_layout_destroy(&app.columns)
 	delete(app.tab_rects_last)
 	rename_free(&app.rename)
+	cut_forget(app)
+	delete(app.cut)
 	confirm_free(&app.confirm)
 	options_free(&app.options)
 	prefs_close(app)

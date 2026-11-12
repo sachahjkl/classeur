@@ -445,13 +445,23 @@ column_funnel :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, hot: 
 @(private = "file")
 Size_Bar :: struct { share: f32, color: ui.Color, em: f32 }
 
+// The least share of the largest row's size a bar is drawn for: under it, a bar of a pixel or two reads as a stray dot.
+SIZE_BAR_LEAST :: 0.02
+
+// Whether the Size cell of `bytes` draws its bar under the size (`largest`: the largest row's).
+size_bar_shown :: proc(bytes, largest: i64) -> bool {
+	return bytes > 0 && largest > 0 && f64(bytes) / f64(largest) >= SIZE_BAR_LEAST
+}
+
 @(private = "file")
 size_bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Size_Bar)(user)
 	r := b.rect
 	h := max(2, math.round(d.em * 0.14))
-	right := r.max.x - d.em * 0.35
-	w := max((right - r.min.x - d.em * 0.35) * clamp(d.share, 0, 1), 1)
+	// (its right end under the text's: the cell's padding on both sides)
+	right, left := r.max.x - b.text_pad, r.min.x + b.text_pad
+	w := (right - left) * clamp(d.share, 0, 1)
+	if w < 1 { return }
 	y := r.max.y - d.em * 0.45
 	draw.rect(dc, {{right - w, y - h}, {right, y}}, d.color)
 }
@@ -642,11 +652,11 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, names_only: bool, em: f32
 					}
 					if !folded {
 						ui.next({width = ui.fill(), height = ui.fill()})
-						if ui.row(.Center, {}, "###cells") { check = entry_row(app, t, e, row, selected, names_only, em) }
+						if ui.row(.Center, {}, "###cells") { check = entry_cells(app, t, e, row, selected, names_only, em) }
 					}
 				}
 			} else {
-				check = entry_row(app, t, e, row, selected, names_only, em)
+				check = entry_cells(app, t, e, row, selected, names_only, em)
 			}
 		}
 		if row == t.vl.sel { t.cursor_rect = sig.box.rect }
@@ -794,6 +804,18 @@ row_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	if d.cursor { draw.rect(dc, inner, l.ring, radius = l.radius, border = px) }
 }
 
+// How much of what was cut is see-through (its icon and its text; its row's pill stays as it is).
+CUT_TRANSPARENCY :: 0.5
+
+// A row's cells (entry_row), in a box that dims them while the entry is cut.
+@(private = "file")
+entry_cells :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, names_only: bool, em: f32) -> (check: bool) {
+	if !entry_is_cut(app, t, e^) { return entry_row(app, t, e, row, selected, names_only, em) }
+	ui.next({width = ui.fill(), height = ui.pct(1), transparency = CUT_TRANSPARENCY})
+	if ui.row(.Center, {}, "###cut") { check = entry_row(app, t, e, row, selected, names_only, em) }
+	return
+}
+
 // The cells of a row: its box, its icon, its name (or the field that renames it), its date, its type, its counts and its
 // size. `names_only`: the icon and the name. True: its box was clicked.
 @(private = "file")
@@ -812,14 +834,10 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, na
 		ui.spacer(ui.px(em * ROW_INSET_EM))
 		return
 	}
-	folder := e.kind == .Directory
 	m: Measure
 	measured := false
-	if folder { m, measured = measure_of(app, t, e^) }
-	count := proc(n: i64, measured: bool) -> string {
-		if !measured || n == 0 { return "--" }
-		return count_text(n)
-	}
+	if e.kind == .Directory { m, measured = measure_of(app, t, e^) }
+	folders, files := entry_counts_text(app, t, e^)
 	if !selected { ui.push_tags("weak") }
 	// (at the titles' size: the toolkit's columns are in ems of it, a smaller text made them narrower than their titles)
 	{
@@ -830,15 +848,15 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, na
 			case .Name:
 			case .Modified: ui.table_cell(l, k, date_text(app, e.mtime))
 			case .Type:     ui.table_cell(l, k, type_text(e^))
-			case .Folders:  ui.table_cell(l, k, folder ? count(m.folders, measured) : "--")
-			case .Files:    ui.table_cell(l, k, folder ? count(m.files, measured) : "--")
+			case .Folders:  ui.table_cell(l, k, folders)
+			case .Files:    ui.table_cell(l, k, files)
 			case .Size:
 				size := "--"
 				if e.size >= 0 { size = size_text(e.size) } else if measured && m.bytes > 0 { size = size_text(m.bytes) }
 				ui.table_cell(l, k, size)
 				// (File Pilot's: a thin bar under the size, its share of the largest row's)
 				bytes := e.size >= 0 ? e.size : (measured ? m.bytes : 0)
-				if cell := ui.parent_box().last; cell != nil && bytes > 0 && t.folder.size_max > 0 {
+				if cell := ui.parent_box().last; cell != nil && size_bar_shown(bytes, t.folder.size_max) {
 					d := ui.frame_new(Size_Bar)
 					d^ = {f32(f64(bytes) / f64(t.folder.size_max)), ui.color("accent") * {1, 1, 1, 0.55}, em}
 					cell.custom, cell.custom_user = size_bar_draw, d
@@ -849,6 +867,15 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, na
 	if !selected { ui.pop_tags() }
 	ui.table_row_end()
 	return
+}
+
+// The Folders and Files cells of an entry: empty for a file; for a folder its counts once measured, "--" until then
+// (or when it is not measured: a link, the measures off).
+entry_counts_text :: proc(app: ^App, t: ^Tab, e: fs.Entry) -> (folders, files: string) {
+	if e.kind != .Directory { return "", "" }
+	m, measured := measure_of(app, t, e)
+	if !measured { return "--", "--" }
+	return count_text(m.folders), count_text(m.files)
 }
 
 // The name of an entry, or the field that renames it.
@@ -939,7 +966,13 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	if ui.row(.Center, {.Draw_Background, .Draw_Side_Top}, "###footer") {
 		filter_field(app, t, focused, em)
 		cell_rule()
-		ui.spacer(ui.fill())
+		// the cursor's item (its name, type and size) or what is selected; the job at work in its place
+		if _, running := jobs_progress(app); focused && running {
+			ui.spacer(ui.fill())
+		} else if ui.tags("weak") {
+			ui.next({width = ui.fill(), height = ui.pct(1), font_size = em * 0.92, text_pad = em * 0.6})
+			ui.label(fmt.tprintf("%s###item_info", footer_info(app, t)))
+		}
 		if focused {
 			job_status(app, em)
 			failed := 0
@@ -960,16 +993,20 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 		ui.next({width = ui.children_sum(), height = ui.pct(1)})
 		if ui.row(.Center, {}, "###stats") {
 			if ui.style({font_size = em * 0.92}) {
+				// (of all: the hidden ones only while they are shown, their absence is no filter)
 				folders, files, folders_shown, files_shown: int
-				for e in f.listing.entries { if e.kind == .Directory { folders += 1 } else { files += 1 } }
+				for e in f.listing.entries {
+					if !f.show_hidden && (.Hidden in e.flags || .System in e.flags) { continue }
+					if e.kind == .Directory { folders += 1 } else { files += 1 }
+				}
 				for i in f.shown { if f.listing.entries[i].kind == .Directory { folders_shown += 1 } else { files_shown += 1 } }
 				if t.walk != nil { stat(app, "walk", lucide.LOADER, fmt.tprintf("%s…", count_text(i64(tab_walked(t)))), "Entries read so far", em) }
 				if f.count > 0 {
 					bytes, _ := folder_selection_size(f)
 					stat(app, "sel", lucide.LAYERS_2, bytes > 0 ? fmt.tprintf("%d · %s", f.count, size_text(bytes)) : fmt.tprintf("%d", f.count), "Selected, and the size of their files", em)
 				}
-				stat(app, "fol", lucide.FOLDER, fmt.tprintf("%d/%s", folders_shown, count_text(i64(folders))), "Folders shown, of all", em)
-				stat(app, "fil", lucide.FILE, fmt.tprintf("%d/%s", files_shown, count_text(i64(files))), "Files shown, of all", em)
+				stat(app, "fol", lucide.FOLDER, shown_count_text(folders_shown, folders), folders_shown < folders ? "Folders shown, of all: a filter leaves some out" : "Folders", em, lit = folders_shown < folders)
+				stat(app, "fil", lucide.FILE, shown_count_text(files_shown, files), files_shown < files ? "Files shown, of all: a filter leaves some out" : "Files", em, lit = files_shown < files)
 				if t.has_space && t.space.total > 0 {
 					used := 100 - int(100 * f64(t.space.free) / f64(t.space.total))
 					stat(app, "disk", lucide.HARD_DRIVE, fmt.tprintf("%d%%", used), fmt.tprintf("%s free of %s", size_text(t.space.free), size_text(t.space.total)), em)
@@ -1010,12 +1047,17 @@ zoom_pill :: proc(app: ^App, t: ^Tab, em: f32) {
 	d := ui.frame_new(Zoom_Draw)
 	shown := ui.anim(ui.key_from_string(0, fmt.tprintf("classeur_zoom%d", t.id)), f32(z.percent) / 100, 22)
 	d^ = {shown, selection_color(app), ui.color("border"), corner_k()}
-	ui.next({width = ui.px(em * 3.4), height = ui.px(em * 1.5)})
+	ui.next({width = ui.px(em * 4.6), height = ui.px(em * 1.5), axis = .X, cross = .Center})
 	b := ui.custom("###zoom", zoom_draw, d, {.Clickable})
-	// (the percent over the bar: a box of its own, drawn after the bar)
+	// (the view's icon, then the percent, over the bar: boxes of their own, drawn after it; the icon says it is the view,
+	// not a progress)
 	if ui.parent(b) {
-		ui.next({width = ui.fill(), height = ui.pct(1), text_align = .Center, fg = z.percent > 40 ? draw.hex(0xffffffff) : nil})
+		fg: Maybe(ui.Color) = z.percent > 40 ? draw.hex(0xffffffff) : nil
+		ui.spacer(ui.fill())
+		glyph(app, ZOOM_ICONS[clamp(t.zoom, 0, len(ZOOMS) - 1)], em * 1.3, fg)
+		ui.next({width = ui.text_size(em * 0.15), height = ui.pct(1), fg = fg})
 		ui.label(fmt.tprintf("%d%%###pct", z.percent))
+		ui.spacer(ui.fill())
 	}
 	sig := ui.signal(b)
 	if sig.clicked { zoom_slider_open(app, t, b.rect) }
@@ -1118,16 +1160,35 @@ zoom_slider_build :: proc(app: ^App, em: f32) {
 	}
 }
 
-// A count of the footer: its icon and its number, its meaning in its tooltip.
+// A count of the footer: its number alone ("7"), or "3/7" when a filter leaves rows out.
+shown_count_text :: proc(shown, all: int) -> string {
+	if shown >= all { return count_text(i64(all)) }
+	return fmt.tprintf("%d/%s", shown, count_text(i64(all)))
+}
+
+// What the footer says at its left: the cursor's item (its name, its type, its size). Nothing when several rows are
+// selected: the selection's count at the right says how many and their size.
+footer_info :: proc(app: ^App, t: ^Tab) -> string {
+	f := &t.folder
+	if f.count > 1 { return "" }
+	e := folder_cursor_entry(f)
+	if e == nil { return "" }
+	name := shown_text(fs.base(shown_name(app, e^)))
+	if e.size < 0 { return fmt.tprintf("%s · %s", name, type_text(e^)) }   // (a folder not measured)
+	return fmt.tprintf("%s · %s · %s", name, type_text(e^), size_text(e.size))
+}
+
+// A count of the footer: its icon and its number, its meaning in its tooltip. `lit`: in the accent (a filter leaves
+// rows out).
 @(private = "file")
-stat :: proc(app: ^App, id, icon, text, tip: string, em: f32) {
+stat :: proc(app: ^App, id, icon, text, tip: string, em: f32, lit := false) {
 	ui.next({width = ui.children_sum(), height = ui.pct(1)})
 	sig: ui.Signal
 	if ui.row(.Center, {.Clickable}, fmt.tprintf("###stat_%s", id)) {
 		sig = ui.signal(ui.parent_box())
 		ui.spacer(ui.px(em * 0.5))
 		if ui.tags("weak") { glyph(app, icon, em * 1.5) }
-		ui.next({width = ui.text_size(em * 0.2), height = ui.pct(1)})
+		ui.next({width = ui.text_size(em * 0.2), height = ui.pct(1), fg = lit ? ui.color("accent") : nil})
 		ui.label(fmt.tprintf("%s###v", text))
 	}
 	if ui.hovered_for(sig, 0.4) {

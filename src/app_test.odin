@@ -503,7 +503,7 @@ test_shots :: proc(t: ^testing.T) {
 }
 
 // Frames until every job has ended and its folders are read again.
-@(private = "file")
+// (shared by the tests of the package: each file of tests uses it)
 wait_jobs :: proc(s: ^session.Session, loc := #caller_location) {
 	session.wait_until(s, proc(s: ^session.Session) -> bool {
 		app := (^App)(s.user)

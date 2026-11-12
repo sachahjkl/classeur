@@ -457,6 +457,11 @@ job_ended :: proc(data: rawptr, word: u64) {
 	}
 	for p in app.panels {
 		for t in p.tabs {
+			// (a copy or a move into the tab's folder: what it made there is selected once the folder is read again)
+			if (job.kind == .Copy || job.kind == .Move) && job.dest != "" && t.path == job.dest {
+				tab_select_forget(t)
+				for d in job.done { if fs.parent(d[1]) == t.path { append(&t.select_names, strings.clone(fs.base(d[1]))) } }
+			}
 			for d in touched { if t.path == d { tab_load(app, t); break } }
 		}
 	}

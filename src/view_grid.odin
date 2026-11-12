@@ -6,15 +6,18 @@ package classeur
 
 import "core:fmt"
 import "core:slice"
+import "core:strings"
 import "gt:draw"
 import "gt:render"
 import "gt:ui"
 import "fs"
 
 // A card's height and its picture's, of its width; the room between cards, in ems; a line's width in the Columns view.
-CARD_HEIGHT  :: 1.12
+// (the height leaves room for a name on two lines from the second size of cards up)
+CARD_HEIGHT  :: 1.2
 CARD_PICTURE :: 0.72
 CARD_GAP_EM  :: 0.6
+CARD_LINE_EM :: 1.3   // a line of a card's name, in ems
 COLUMN_EM    :: 20
 
 grid_list :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
@@ -97,6 +100,13 @@ item :: proc(app: ^App, t: ^Tab, row: int, look: ^Row_Look, line: bool, width, h
 	sig := ui.signal(b)
 	if selected && look.focused { ui.push_tags("selected") }
 	if ui.parent(b) {
+		// (cut: what it shows dimmed, in a box of its own; its pill stays as it is)
+		cut := entry_is_cut(app, t, e^)
+		if cut {
+			ui.next({width = ui.fill(), height = ui.fill(), axis = line ? .X : .Y, cross = line ? .Center : nil, transparency = CUT_TRANSPARENCY})
+			ui.push_parent(ui.build_box({}, "###cut"))
+		}
+		defer if cut { ui.pop_parent() }
 		if line {
 			ui.spacer(ui.px(em * 0.4))
 			tree_lead(app, t, e, em)
@@ -166,8 +176,13 @@ card_body :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, width, heigh
 		ui.spacer(ui.px(em * 0.5))
 	}
 	ui.spacer(ui.fill())
-	ui.next({width = ui.fill(), height = ui.px(em * 1.5), text_align = .Center})
-	ui.label(fmt.tprintf("%s###n", shown_text(fs.base(shown_name(app, e^)))))
+	// the name on two lines where the card has room for them (under its picture, above its size), else on one; too long,
+	// cut in its middle
+	lines := height - pic - em * (0.5 + 1.3 + 0.4) >= em * CARD_LINE_EM * 2 ? 2 : 1
+	st := ui.top_style()
+	name := card_name(shown_text(fs.base(shown_name(app, e^))), width - 2 * st.text_pad - 1, lines)
+	ui.next({width = ui.fill(), height = ui.px(lines == 2 ? em * CARD_LINE_EM * 2 : em * 1.5), text_align = .Center})
+	ui.paragraph(fmt.tprintf("%s###n", name))
 	size := ""
 	if e.size >= 0 { size = size_text(e.size) } else if m, ok := measure_of(app, t, e^); ok { size = size_text(m.bytes) }
 	if !selected { ui.push_tags("weak") }
@@ -175,6 +190,31 @@ card_body :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, width, heigh
 	ui.label(fmt.tprintf("%s###s", size))
 	if !selected { ui.pop_tags() }
 	ui.spacer(ui.px(em * 0.4))
+}
+
+// A card's name in at most `lines` lines of `width` pixels, at the style's font (wrapped at its spaces, as the card's
+// paragraph wraps it): too long, it is cut in its middle, its end kept (the extension says what the file is).
+card_name :: proc(name: string, width: f32, lines: int) -> string {
+	st := ui.top_style()
+	if len(ui.wrap_lines(st.font, st.font_size, name, width)) <= lines { return name }
+	// (the starts of its letters: it is cut between them)
+	starts := make([dynamic]int, 0, len(name), context.temp_allocator)
+	for _, i in name { append(&starts, i) }
+	n := len(starts)
+	if n < 4 { return name }
+	// the end kept: the extension, its dot and three letters before it
+	ext := 0
+	for _ in fs.extension(name) { ext += 1 }
+	tail := min(ext + 4, n / 2)
+	tail_at := starts[n - tail]
+	// the most letters of the start that fit before it (found by halves)
+	lo, hi := 0, n - tail
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		s := strings.concatenate({name[:starts[mid]], "…", name[tail_at:]}, context.temp_allocator)
+		if len(ui.wrap_lines(st.font, st.font_size, s, width)) <= lines { lo = mid } else { hi = mid - 1 }
+	}
+	return strings.concatenate({name[:starts[lo]], "…", name[tail_at:]}, context.temp_allocator)
 }
 
 // The icon of an entry, `size` large.

@@ -22,6 +22,7 @@ Tab :: struct {
 	back:        [dynamic]string,    // owned paths
 	forward:     [dynamic]string,
 	reveal_name: string,             // owned: the row to put the cursor on when the read comes (going up: where we came from)
+	select_names: [dynamic]string,   // owned: the rows selected when the read comes (what a paste made here), the cursor on the first
 	vl:          ui.Virtual_List,
 	filter:      ui.Text_Field,
 	filter_open: bool,
@@ -105,6 +106,8 @@ tab_destroy :: proc(t: ^Tab) {
 	for p in t.forward { delete(p) }
 	delete(t.forward)
 	delete(t.reveal_name)
+	tab_select_forget(t)
+	delete(t.select_names)
 	ui.vlist_destroy(&t.vl)
 	ui.field_destroy(&t.filter)
 	ui.field_destroy(&t.address)
@@ -145,6 +148,7 @@ tab_go :: proc(app: ^App, t: ^Tab, path: string, history := true) {
 	// going up: the cursor goes to the folder we came from
 	delete(t.reveal_name)
 	t.reveal_name = ""
+	tab_select_forget(t)   // (the rows a paste made: of the folder left)
 	old := history ? t.back[len(t.back) - 1] : ""
 	if old != "" && fs.parent(old) == clean { t.reveal_name = strings.clone(fs.base(old)) }
 	t.path = clean
@@ -351,7 +355,33 @@ load_done :: proc(data: rawptr, word: u64) {
 	if revealed || !same_place { ui.list_select(&t.vl, t.folder.cursor) }
 	delete(t.reveal_name)
 	t.reveal_name = ""
+	if len(t.select_names) > 0 {
+		if tab_select_apply(t) { ui.list_select(&t.vl, t.folder.cursor / tab_row_items(t)) }
+		tab_select_forget(t)
+	}
 	app_frames(job.app)
+}
+
+// The rows of `select_names` selected alone, the cursor on the first of them found. False: none is here.
+tab_select_apply :: proc(t: ^Tab) -> bool {
+	f := &t.folder
+	first, first_at := -1, len(t.select_names)
+	for i, row in f.shown {
+		at := -1
+		for name, k in t.select_names { if f.listing.entries[i].name == name { at = k; break } }
+		if at < 0 { continue }
+		if first < 0 { folder_select_none(f) }
+		folder_set_row(f, row, true)
+		if at < first_at { first, first_at = row, at }
+	}
+	if first < 0 { return false }
+	f.cursor, f.anchor = first, first
+	return true
+}
+
+tab_select_forget :: proc(t: ^Tab) {
+	for s in t.select_names { delete(s) }
+	clear(&t.select_names)
 }
 
 find_tab :: proc(app: ^App, id: u64) -> ^Tab {
