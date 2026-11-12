@@ -3,6 +3,14 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.16.2] - 2026-11-12
+
+### Fixed
+- **A tab torn off no longer holds the window**: its new window starts in the background, and the tab leaves once that window has started; if it cannot start, this is said and the tab stays. The Setup's check at the start no longer delays the first frame.
+- **Large folders stay fluid with a large selection**: the inspector's summary of several items, the types' popup and the grid no longer go through every entry at each frame, and dragging many files no longer checks each of them at each frame. The inspector's preview of a folder lists its first 200 entries and counts the others.
+- **A paste no longer freezes the window**: Paste, Paste into folder and the batch rename's "Names from the clipboard" ask for the clipboard and go on; the copy, the move or the names start when the other program answers. A program that holds the clipboard and does not answer is given up after 2 seconds, and the window never stops meanwhile.
+- **The window no longer waits for a slow desktop or disk** when it opens a file with its application or with Open with, opens a terminal, or saves the settings, the layouts and the Setup's answer: these run in the background, and a program that cannot start is still reported.
+
 ## [0.16.1] - 2026-11-12
 
 ### Fixed
@@ -365,6 +373,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.16.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.2
 [0.16.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.1
 [0.16.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.0
 [0.15.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.15.2
