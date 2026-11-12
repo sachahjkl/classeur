@@ -104,10 +104,17 @@ glyph :: proc(app: ^App, g: string, width: f32, fg: Maybe(ui.Color) = nil) {
 	ui.build_box({.Draw_Text, .No_Text_Trunc}, fmt.tprintf("%s###g%d", g, ui.parent_box().child_count))
 }
 
+// The corners of the small controls in the bars and the rows (the icon buttons, the crumbs, the address and rename
+// fields): CONTROL_RADIUS_EM at look.rounding's default, as the rows' pill, square at 0. Fixed_Radius: the toolkit
+// would scale it by the rounding a second time, and square a corner this small at the default.
+CONTROL_RADIUS_EM :: 0.15
+control_look :: proc(em: f32) -> ui.Style_Mod { return {radius = em * CONTROL_RADIUS_EM * corner_k(), flags = {.Fixed_Radius}} }
+
 // A small flat button with a Lucide icon; its tooltip says what it does. `on`: lit in the accent (a toggle that is on).
 icon_action :: proc(app: ^App, id, g, tip: string, em: f32, enabled := true, on := false) -> bool {
 	side := em * 2.0
-	ui.next({width = ui.px(side), height = ui.px(side), font = app.icons, radius = em * 0.15, text_pad = 0, fg = on ? ui.color("accent") : nil})
+	ui.next({width = ui.px(side), height = ui.px(side), font = app.icons, text_pad = 0, fg = on ? ui.color("accent") : nil})
+	ui.next_merge(control_look(em))
 	sig: ui.Signal
 	if ui.disabled(!enabled) {
 		if ui.tags("ghost_button") { sig = ui.button(fmt.tprintf("%s###%s", g, id)) }
@@ -212,7 +219,9 @@ build_top :: proc(app: ^App, em: f32) {
 
 Tab_Paint :: struct { base, edge, line: ui.Color, radius: f32 }
 
-// The shown tab: its surface, a line at its left, top and right; none at its bottom, where the toolbar goes on.
+// The shown tab: its surface, a line at its left, top and right; none at its bottom, where the toolbar goes on. With a
+// `line` (the panel that has the keyboard, among several), its top edge is that colour, tab_line_px() thick: in place
+// of the edge there, one line and not two side by side.
 tab_paint :: proc(b: ^ui.Box, base, edge, line: ui.Color, radius: f32) {
 	d := ui.frame_new(Tab_Paint)
 	d^ = {base, edge, line, radius}
@@ -220,20 +229,28 @@ tab_paint :: proc(b: ^ui.Box, base, edge, line: ui.Color, radius: f32) {
 		d := (^Tab_Paint)(user)
 		r := b.rect
 		w := max(1, ui.scale())
-		top := [4]f32{d.radius, 0, d.radius, 0}   // (its top corners: its foot is the toolbar's top, one surface)
-		draw.rect_corners(dc, r, {d.edge, d.edge, d.edge, d.edge}, top)
-		inner := ui.Rect{{r.min.x + w, r.min.y + w}, {r.max.x - w, r.max.y}}
-		inner_top := [4]f32{max(d.radius - w, 0), 0, max(d.radius - w, 0), 0}
+		// (its top corners: its foot is the toolbar's top, one surface)
+		corners :: proc(radius: f32) -> [4]f32 { return {max(radius, 0), 0, max(radius, 0), 0} }
+		lw := w
 		if d.line.a > 0 {
-			// the accent along its top, following its corners
-			draw.rect_corners(dc, inner, {d.line, d.line, d.line, d.line}, inner_top)
-			lw := max(2, ui.scale() * 2)
-			inner.min.y += lw - w
+			// the accent over the whole shape, then the edge below it: the accent shows along its top and caps its
+			// corners
+			lw = tab_line_px()
+			draw.rect_corners(dc, r, {d.line, d.line, d.line, d.line}, corners(d.radius))
+			below := ui.Rect{{r.min.x, r.min.y + lw}, r.max}
+			draw.rect_corners(dc, below, {d.edge, d.edge, d.edge, d.edge}, corners(d.radius - lw))
+		} else {
+			draw.rect_corners(dc, r, {d.edge, d.edge, d.edge, d.edge}, corners(d.radius))
 		}
-		draw.rect_corners(dc, inner, {d.base, d.base, d.base, d.base}, inner_top)
+		inner := ui.Rect{{r.min.x + w, r.min.y + lw}, {r.max.x - w, r.max.y}}
+		draw.rect_corners(dc, inner, {d.base, d.base, d.base, d.base}, corners(d.radius - lw))
 	}
 	b.custom_user = d
 }
+
+// The thickness of the accent along the top of the focused panel's shown tab: two lines' worth, so that it reads at a
+// glance which panel has the keyboard.
+tab_line_px :: proc() -> f32 { return max(1, ui.scale()) * 2 }
 
 // A tab's top corners: TAB_RADIUS_EM at a rounding of 1 (look.rounding), square at 0.
 TAB_RADIUS_EM :: 0.6
@@ -307,7 +324,8 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 						ui.label(fmt.tprintf("%s###title", shown_text(tab_title(app, t))))
 						if !on { ui.pop_tags() }
 						if on || ui.hot_within(tab.key) {
-							ui.next({width = ui.px(em * 1.6), height = ui.px(em * 1.6), font = app.icons, radius = em * 0.15, font_size = em * 0.85, text_pad = 0})
+							ui.next({width = ui.px(em * 1.6), height = ui.px(em * 1.6), font = app.icons, font_size = em * 0.85, text_pad = 0})
+							ui.next_merge(control_look(em))
 							if ui.tags("ghost_button") {
 								if ui.button(fmt.tprintf("%s###close", lucide.X)).clicked { close = i }
 							}

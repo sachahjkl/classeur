@@ -469,6 +469,7 @@ Bar_Draw :: struct { used: f32, bar, track: ui.Color }
 bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Bar_Draw)(user)
 	r := b.rect
+	// (square at every rounding: a bar three pixels thick has no corner to round, as the Size column's bar)
 	draw.rect(dc, r, d.track)
 	draw.rect(dc, {r.min, {r.min.x + (r.max.x - r.min.x) * d.used, r.max.y}}, d.bar)
 }

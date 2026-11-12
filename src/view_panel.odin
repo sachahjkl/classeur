@@ -134,6 +134,13 @@ header_sort_apply :: proc(app: ^App, l: ^ui.Table_Layout, f: ^Folder) {
 // The filter's width in the footer, in ems.
 FILTER_EM :: 18
 
+// How much the contents of panel `index` are dimmed: nothing in the panel that has the keyboard or in a panel alone,
+// else what look.inactive_opacity takes away.
+panel_dim :: proc(app: ^App, index: int) -> f32 {
+	if index == app.focus || len(app.panels) == 1 { return 0 }
+	return 1 - app.settings.inactive_opacity
+}
+
 panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 	focused := index == app.focus
 	box := ui.build_box({.Clip}, fmt.tprintf("###panel%d", index))
@@ -164,24 +171,24 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 		// the list, and beside it the inspector in the panel that has the keyboard
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.row(.Start, {}, "###body") {
-			ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
+			// (the contents of a panel without the keyboard, its column titles with its rows, dimmed: the one that has it
+			// stands out)
+			ui.next({width = ui.fill(), height = ui.fill(), axis = .Y, transparency = panel_dim(app, index)})
 			if ui.column(.Start, {}, "###content") {
-				// (the contents of a panel without the keyboard, dimmed: the one that has it stands out)
-				dim := focused || len(app.panels) == 1 ? 0 : 1 - app.settings.inactive_opacity
 				switch tab_mode(t) {
 				case .Details:
 					head := header(app, t, em)
 					// (the rows as wide as the columns at least: past the panel's edge they scroll sideways, the titles too)
-					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim, flags = {.View_Scroll_X, .Allow_Overflow_X}})
+					ui.next({width = ui.fill(), height = ui.fill(), flags = {.View_Scroll_X, .Allow_Overflow_X}})
 					folder_list(app, t, focused, false, em, head)
 				case .List:
-					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
+					ui.next({width = ui.fill(), height = ui.fill()})
 					folder_list(app, t, focused, true, em)
 				case .Columns:
-					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
+					ui.next({width = ui.fill(), height = ui.fill()})
 					columns_list(app, t, focused, em)
 				case .Grid:
-					ui.next({width = ui.fill(), height = ui.fill(), transparency = dim})
+					ui.next({width = ui.fill(), height = ui.fill()})
 					grid_list(app, t, focused, em)
 				}
 			}
@@ -260,7 +267,8 @@ crumbs :: proc(app: ^App, t: ^Tab, em: f32) {
 				if ui.tags("weak") { glyph(app, lucide.CHEVRON_RIGHT, em * 1.1) }
 			}
 			last := at == len(parts) - 1
-			ui.next({width = ui.text_size(em * 0.35), height = ui.px(ui.dense(em * 1.7)), radius = em * 0.15})
+			ui.next({width = ui.text_size(em * 0.35), height = ui.px(ui.dense(em * 1.7))})
+			ui.next_merge(control_look(em))
 			sig: ui.Signal
 			if !last { ui.push_tags("weak") }
 			if ui.tags("ghost_button") { sig = ui.button(fmt.tprintf("%s###crumb%d", shown_text(c.name), at)) }
@@ -292,7 +300,7 @@ address_field :: proc(app: ^App, t: ^Tab, em: f32) {
 		m := ui.mouse_pos()
 		over_suggestions = m.x >= r.min.x && m.x < r.max.x && m.y >= r.min.y && m.y < r.max.y
 	}
-	ui.next_merge({radius = em * 0.15})
+	ui.next_merge(control_look(em))
 	if ui.field_frame("###address") {
 		frame = ui.parent_box().rect
 		if ui.tags("weak") { glyph(app, lucide.FOLDER_SEARCH, em * 1.7) }
@@ -466,6 +474,7 @@ size_bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	w := (right - left) * clamp(d.share, 0, 1)
 	if w < 1 { return }
 	y := r.max.y - d.em * 0.45
+	// (square at every rounding: a bar two pixels thick has no corner to round, as the toolkit squares one under 3 px)
 	draw.rect(dc, {{right - w, y - h}, {right, y}}, d.color)
 }
 
@@ -917,7 +926,8 @@ entry_name :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, em: f32) {
 	r := &app.rename
 	if r.active && r.tab == t.id && r.name == e.name {
 		key := ui.key_from_string(ui.parent_box().key, "###rename")
-		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.7)), radius = em * 0.15})
+		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.7))})
+		ui.next_merge(control_look(em))
 		// Tab, Shift+Tab: the name kept, then the next row's or the previous one's in the field (Explorer's); taken before
 		// the field and the toolkit, which would move the keyboard to the next field
 		step := 0
@@ -1069,6 +1079,11 @@ cell_rule :: proc() {
 	ui.build_box({.Draw_Background}, fmt.tprintf("###cell_rule%d", ui.parent_box().child_count))
 }
 
+// The corners of the zoom's bar and its slider's parts, `thick` across: the settings' rounding (`round`: corner_k()),
+// square at 0, as every box; never past a half of it (a pill).
+@(private = "file")
+zoom_radius :: proc(thick, round: f32) -> f32 { return min(thick * 0.22 * round, thick * 0.5) }
+
 @(private = "file")
 Zoom_Draw :: struct { t: f32, fill, track: ui.Color, round: f32 }   // round: corner_k(), read in the build
 
@@ -1076,8 +1091,7 @@ Zoom_Draw :: struct { t: f32, fill, track: ui.Color, round: f32 }   // round: co
 zoom_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Zoom_Draw)(user)
 	r := b.rect
-	// (the settings' rounding: square at 0, as every box)
-	rad := min((r.max.y - r.min.y) * 0.22 * d.round, (r.max.y - r.min.y) * 0.5)
+	rad := zoom_radius(r.max.y - r.min.y, d.round)
 	draw.rect(dc, r, d.track, radius = rad)
 	w := max((r.max.x - r.min.x) * d.t, (r.max.y - r.min.y) * 0.3)
 	draw.rect(dc, {r.min, {r.min.x + w, r.max.y}}, d.fill, radius = rad)
@@ -1110,10 +1124,11 @@ zoom_pill :: proc(app: ^App, t: ^Tab, em: f32) {
 }
 
 @(private = "file")
-Slider_Draw :: struct { at: f32, steps: int, step_h: f32, track, fill, tick, knob: ui.Color }
+Slider_Draw :: struct { at: f32, steps: int, step_h: f32, track, fill, tick, knob: ui.Color, round: f32 }   // round: corner_k()
 
 // The slider's track: from the middle of the top step's row to the middle of the bottom one's, a tick at each, the
-// part below the zoom in the accent, the knob where it is (moving smoothly).
+// part below the zoom in the accent, the knob where it is (moving smoothly). The track and the knob are rounded as the
+// zoom's bar (zoom_radius); the ticks, a pixel thick, stay square.
 @(private = "file")
 slider_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Slider_Draw)(user)
@@ -1121,16 +1136,16 @@ slider_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	cx := (r.min.x + r.max.x) * 0.5
 	w := max(3, (r.max.x - r.min.x) * 0.14)
 	top, bottom := r.min.y + d.step_h * 0.5, r.max.y - d.step_h * 0.5
-	draw.rect(dc, {{cx - w * 0.5, top}, {cx + w * 0.5, bottom}}, d.track)
+	draw.rect(dc, {{cx - w * 0.5, top}, {cx + w * 0.5, bottom}}, d.track, radius = zoom_radius(w, d.round))
 	y := bottom - (bottom - top) * d.at
-	draw.rect(dc, {{cx - w * 0.5, y}, {cx + w * 0.5, bottom}}, d.fill)
+	draw.rect(dc, {{cx - w * 0.5, y}, {cx + w * 0.5, bottom}}, d.fill, radius = zoom_radius(w, d.round))
 	for i in 0 ..< d.steps {
 		ty := bottom - (bottom - top) * f32(i) / f32(max(d.steps - 1, 1))
 		draw.rect(dc, {{cx - w * 1.6, ty - 0.5}, {cx - w, ty + 0.5}}, d.tick)
 		draw.rect(dc, {{cx + w, ty - 0.5}, {cx + w * 1.6, ty + 0.5}}, d.tick)
 	}
 	k := w * 2.2
-	draw.rect(dc, {{cx - k, y - k * 0.4}, {cx + k, y + k * 0.4}}, d.knob)
+	draw.rect(dc, {{cx - k, y - k * 0.4}, {cx + k, y + k * 0.4}}, d.knob, radius = zoom_radius(k * 0.8, d.round))
 }
 
 // What each step of the zoom is called, and its icon.
@@ -1159,7 +1174,7 @@ zoom_slider_build :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.px(w), height = ui.px(step_h * f32(n))})
 		if ui.row(.Start, {}, "###zoom_steps") {
 			d := ui.frame_new(Slider_Draw)
-			d^ = {ui.anim(ui.key_from_string(0, "classeur_slider_at"), f32(t.zoom) / f32(n - 1), 22), n, step_h, ui.color("border"), selection_color(app), ui.color("weak text"), ui.color("text")}
+			d^ = {ui.anim(ui.key_from_string(0, "classeur_slider_at"), f32(t.zoom) / f32(n - 1), 22), n, step_h, ui.color("border"), selection_color(app), ui.color("weak text"), ui.color("text"), corner_k()}
 			ui.next({width = ui.px(em * 2.6), height = ui.pct(1)})
 			b := ui.custom("###slider", slider_draw, d, {.Clickable})
 			sig := ui.signal(b)
@@ -1333,16 +1348,17 @@ tab_flat_line :: proc(b: ^ui.Box) {
 	}
 }
 
-// A ring of the accent around the box a drop would go into.
+// A ring of the accent around the box a drop would go into, in the box's own corners (a crumb's, a tab's).
 drop_mark :: proc(b: ^ui.Box) {
 	prev, prev_user := b.custom, b.custom_user
-	Mark :: struct { prev: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context), user: rawptr }
+	// (the radius worked out in the build: the drawing has no state of the toolkit to ask)
+	Mark :: struct { prev: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context), user: rawptr, radius, width: f32, color: ui.Color }
 	m := ui.frame_new(Mark)
-	m^ = {prev, prev_user}
+	m^ = {prev, prev_user, ui.box_drawn_radius(ui.current_state(), b), max(2, ui.scale() * 2), ui.color("accent")}
 	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 		m := (^Mark)(user)
 		if m.prev != nil { m.prev(b, m.user, dc) }
-		draw.rect(dc, b.rect, ui.color("accent"), border = max(2, ui.scale() * 2))
+		draw.rect(dc, b.rect, m.color, radius = m.radius, border = m.width)
 	}
 	b.custom_user = m
 }

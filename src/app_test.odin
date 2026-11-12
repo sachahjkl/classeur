@@ -448,7 +448,7 @@ test_shots :: proc(t: ^testing.T) {
 		session.save_png(s, "panels.png")
 
 		session.key(s, .P, {.Ctrl, .Shift})
-		session.type_text(s, "tab")
+		session.type_text(s, "open")
 		session.frames(s, 2)
 		session.save_png(s, "palette.png")
 		session.key(s, .Escape)
