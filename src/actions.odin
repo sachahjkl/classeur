@@ -754,19 +754,39 @@ act_paste_into :: proc(app: ^App) {
 	paste_to(app, t, fs.join(t.path, e.name, context.temp_allocator))
 }
 
-// What the clipboard holds goes into `dir`, a folder of tab `t`.
+// A paste whose files are asked of the clipboard (paste_to): where they go when they come.
+Paste_Asked :: struct {
+	id:  u64,      // the request (platform.clipboard_request); 0: none
+	dir: string,   // owned
+}
+
+// What the clipboard holds goes into `dir`, a folder of tab `t`. The files are asked for: the clipboard's owner may be
+// another program, slow or hung, and the window does not wait for it. The job starts when they come (paste_answer).
 @(private = "file")
 paste_to :: proc(app: ^App, t: ^Tab, dir: string) {
 	if read_only_here(app, t) { return }
-	paths, ok := platform.clipboard_get_files(app.main.win, context.temp_allocator)
-	if !ok || len(paths) == 0 {
+	delete(app.paste.dir)   // (a paste asked again: the last one's answer is not waited for)
+	app.paste = {id = platform.clipboard_request(app.main.win, .Files), dir = strings.clone(dir)}
+}
+
+// An answer of the clipboard (app_input): the files of a paste, or the batch rename's names.
+clipboard_answer :: proc(app: ^App, r: platform.Clipboard_Reply) {
+	if r.id != 0 && r.id == app.paste.id { paste_answer(app, r) } else { batch_names_answer(app, r) }
+}
+
+// The clipboard's files came for the paste asked: a copy, or a move after a cut.
+@(private = "file")
+paste_answer :: proc(app: ^App, r: platform.Clipboard_Reply) {
+	dir := app.paste.dir
+	defer delete(dir)
+	app.paste = {}
+	if !r.ok || len(r.files) == 0 {
 		say(app, "The clipboard holds no files.")
 		return
 	}
 	// (a cut, here or in another file manager, moves; once moved, the files are no longer where the clipboard says)
-	cut := platform.clipboard_files_cut(app.main.win)
-	job_add(app, cut ? .Move : .Copy, paths, dir)
-	if cut { platform.clipboard_set(app.main.win, {}) }
+	job_add(app, r.cut ? .Move : .Copy, r.files, dir)
+	if r.cut { platform.clipboard_set(app.main.win, {}) }
 	cut_forget(app)
 }
 

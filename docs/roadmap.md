@@ -40,8 +40,10 @@ with one line on how it is made, and update [architecture.md](architecture.md).
 - A name taken asks (`src/dialogs.odin`): replace, skip, keep both ("name 2.ext"), the same for the next ones; the job
   waits on a semaphore for the answer. Pasted into the folder it comes from, a copy keeps both without asking.
 - The clipboard of files: Ctrl+C, Ctrl+X, Ctrl+V; a cut is a move for every file manager (gui_toolkit's
-  `files_cut` / `clipboard_files_cut`: `x-special/gnome-copied-files`, `application/x-kde-cutselection`, Windows'
-  `Preferred DropEffect`). Copy and move to the other panel (palette).
+  `files_cut`: `x-special/gnome-copied-files`, `application/x-kde-cutselection`, Windows' `Preferred DropEffect`).
+  A paste asks with `platform.clipboard_request` and starts its job when the files come (a `Clipboard_Data` event,
+  `app_input`): a program that holds the clipboard and does not answer never freezes the window. Copy and move to the
+  other panel (palette).
 - The trash: Delete. Linux: the freedesktop.org specification (home trash on its volume, else `<top>/.Trash-<uid>`,
   a `.trashinfo` taken with O_EXCL); Windows: the Recycle Bin. Shift+Delete deletes for good after a confirmation.
 - The folders of every tab are watched (`fs.Watch`: inotify, change notifications on Windows; changes close together

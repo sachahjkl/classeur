@@ -515,6 +515,7 @@ test_shots :: proc(t: ^testing.T) {
 wait_jobs :: proc(s: ^session.Session, loc := #caller_location) {
 	session.wait_until(s, proc(s: ^session.Session) -> bool {
 		app := (^App)(s.user)
+		if app.paste.id != 0 { return false }   // (a paste's files not come yet: its job is not made)
 		for job in app.jobs.list { if job.ended_ms == 0 { return false } }
 		return true
 	}, "the jobs ended", loc = loc)

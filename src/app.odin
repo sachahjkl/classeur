@@ -123,6 +123,7 @@ App :: struct {
 	rename:      Rename,            // the rename in place (actions.odin)
 	cut:         map[string]bool,   // owned keys: the paths cut, drawn dimmed until the paste or another copy or cut (a
 	                                // set: each row shown asks it at each frame)
+	paste:       Paste_Asked,       // the paste waiting for the clipboard's files (actions.odin)
 	status:      string,            // a message for the status bar (owned), until status_until (ui clock, ms)
 	status_until: f64,
 	room:        f32,               // the window's width at this build, logical pixels
@@ -438,6 +439,7 @@ app_free :: proc(app: ^App) {
 	rename_free(&app.rename)
 	cut_forget(app)
 	delete(app.cut)
+	delete(app.paste.dir)
 	confirm_free(&app.confirm)
 	options_free(&app.options)
 	prefs_close(app)
@@ -530,7 +532,7 @@ shown_text :: proc(text: string, allocator := context.temp_allocator) -> string 
 }
 
 // The window's input before the interface: Ctrl+wheel over a panel zooms its view (File Pilot's), and the list under it
-// does not scroll.
+// does not scroll. The clipboard's answers go to what asked for them.
 @(private = "file")
 app_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Event {
 	app := (^App)(h.user)
@@ -541,6 +543,9 @@ app_input :: proc(h: ^host.Host, events: []platform.Event) -> []platform.Event {
 		case .Drop_Enter, .Drop_Over, .Drop_Leave, .Drop:
 			platform.drop_set_effect(h.win, drop_answer(app, e.kind, e.pos, e.mods, e.drop_allowed))
 			if e.kind == .Drop || e.kind == .Drop_Leave { platform.drop_data_release(h.win) }
+			continue
+		case .Clipboard_Data:   // (a paste's files, the batch rename's names: asked, they come here)
+			clipboard_answer(app, e.clipboard)
 			continue
 		}
 		if e.kind == .Scroll && .Ctrl in e.mods {

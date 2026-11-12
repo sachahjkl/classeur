@@ -36,6 +36,7 @@ Batch :: struct {
 	ids:       [dynamic]string,    // owned: each item's {id}, made once
 	taken:     map[string]bool,    // owned keys: the names of the folder that are not of the batch (read at the opening)
 	list:      [dynamic]string,    // owned: the names from the clipboard (empty: the pattern)
+	list_asked: u64,               // the clipboard's text asked for these names (platform.clipboard_request; 0: none)
 	pattern:   ui.Text_Field,
 	find:      ui.Text_Field,
 	replace:   ui.Text_Field,
@@ -71,6 +72,18 @@ batch_clear :: proc(b: ^Batch) {
 	clear(&b.mtimes)
 	clear(&b.ids)
 	clear(&b.list)
+	b.list_asked = 0
+}
+
+// The clipboard's text came (clipboard_answer): a name per line, when the batch that asked is still open.
+batch_names_answer :: proc(app: ^App, r: platform.Clipboard_Reply) {
+	b := &app.batch
+	if r.id == 0 || r.id != b.list_asked { return }
+	b.list_asked = 0
+	if !b.open { return }
+	for s in b.list { delete(s) }
+	clear(&b.list)
+	for line in strings.split_lines(strings.trim_right_space(r.text), context.temp_allocator) { append(&b.list, strings.clone(strings.trim_space(line))) }
 }
 
 batch_open :: proc(app: ^App, t: ^Tab) {
@@ -277,8 +290,8 @@ batch_build :: proc(app: ^App, em: f32) {
 						for s in b.list { delete(s) }
 						clear(&b.list)
 					} else {
-						text := platform.get_clipboard(app.main.win, context.temp_allocator)
-						for line in strings.split_lines(strings.trim_right_space(text), context.temp_allocator) { append(&b.list, strings.clone(strings.trim_space(line))) }
+						// (the clipboard's owner may be another program, slow or hung: the names come in a later frame)
+						b.list_asked = platform.clipboard_request(app.main.win, .Text)
 					}
 				}
 				ui.spacer(ui.px(em * 0.9))
