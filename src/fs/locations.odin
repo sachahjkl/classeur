@@ -2,7 +2,8 @@
 //
 //   /home/a/b, C:\a\b, \\server\share\b    a path: as it is
 //   file:///home/a%20b, file://server/share   a file's URI: its path (a server's: \\server\share on Windows)
-//   trash:///, trash:///folder              the trash (freedesktop.org's on Linux: ~/.local/share/Trash/files)
+//   trash:///, trash:///folder              the trash (freedesktop.org's on Linux: ~/.local/share/Trash/files; the
+//                                           Recycle Bin of every drive on Windows: RECYCLE_BIN)
 //   smb://host/share/b, sftp://user@host/b, ftp://host/b, dav://host/b, davs://host/b, nfs://host/export/b, afp://host/v/b
 //                                           a share of the network: on Linux the folder gvfs mounts it at (FUSE, under
 //                                           $XDG_RUNTIME_DIR/gvfs), or a mount of the kernel's (/proc/self/mountinfo: nfs,
@@ -32,7 +33,7 @@ Location_Error :: enum u8 {
 	None,
 	Not_A_Location,   // neither a path nor a URI of a scheme known here
 	Not_Mounted,      // a share not mounted now: share_mount(uri) first
-	Unsupported,      // a scheme this system does not reach (sftp:// on Windows, the trash's folder on Windows)
+	Unsupported,      // a scheme this system does not reach (sftp:// on Windows)
 }
 
 Location :: struct {

@@ -14,24 +14,35 @@ CONFLICT_WIDTH_EM :: 38   // its four choices on one line
 Confirm :: struct {
 	open:  bool,
 	paths: [dynamic]string,   // owned: what Delete for good deletes
-	trash: bool,              // they are every item of the trash: emptied, each one's record with it
+	names: [dynamic]string,   // owned: each one as the question names it
+	trash: bool,              // they are every item of the trash: emptied
+	records: bool,            // they are items of the trash: each one's record goes with it
 }
 
 confirm_free :: proc(c: ^Confirm) {
 	for p in c.paths { delete(p) }
 	delete(c.paths)
+	for n in c.names { delete(n) }
+	delete(c.names)
 	c^ = {}
 }
 
-confirm_delete :: proc(app: ^App, paths: []string, trash := false) {
+// `names`: what the question lists, one per path (nil: each path's last part; an item of the Recycle Bin of Windows
+// is named by its original name, not by its $R file's).
+confirm_delete :: proc(app: ^App, paths: []string, trash := false, names: []string = nil, records := false) {
 	c := &app.confirm
 	for p in c.paths { delete(p) }
 	clear(&c.paths)
-	for p in paths { append(&c.paths, strings.clone(p)) }
-	c.open, c.trash = true, trash
+	for n in c.names { delete(n) }
+	clear(&c.names)
+	for p, i in paths {
+		append(&c.paths, strings.clone(p))
+		append(&c.names, strings.clone(names != nil && i < len(names) ? names[i] : fs.base(p)))
+	}
+	c.open, c.trash, c.records = true, trash, trash || records
 }
 
-confirm_empty_trash :: proc(app: ^App, paths: []string) { confirm_delete(app, paths, trash = true) }
+confirm_empty_trash :: proc(app: ^App, paths: []string, names: []string = nil) { confirm_delete(app, paths, trash = true, names = names) }
 
 dialogs_build :: proc(app: ^App, em: f32) {
 	confirm_build(app, em)
@@ -44,8 +55,7 @@ confirm_build :: proc(app: ^App, em: f32) {
 	c := &app.confirm
 	if !c.open || len(c.paths) == 0 { c.open = false; return }
 	n := len(c.paths)
-	names := make([]string, n, context.temp_allocator)
-	for p, i in c.paths { names[i] = fs.base(p) }
+	names := c.names[:]
 	title := n == 1 ? fmt.tprintf("Delete %s for good?", names[0]) : fmt.tprintf("Delete %d items for good?", n)
 	note := n == 1 ? "It does not go to the trash: this cannot be undone." : "They do not go to the trash: this cannot be undone."
 	act := "Delete"
@@ -57,7 +67,7 @@ confirm_build :: proc(app: ^App, em: f32) {
 		job_add(app, .Delete, c.paths[:])
 		// (then their records, by a job after it: the jobs run one after the other; a record's path is made from the
 		// item's, with no disk read)
-		if c.trash {
+		if c.records {
 			records := make([dynamic]string, context.temp_allocator)
 			for p in c.paths { if r := fs.trash_record(p); r != "" { append(&records, r) } }
 			if len(records) > 0 { job_add(app, .Delete, records[:]) }
@@ -102,7 +112,7 @@ conflict_build :: proc(app: ^App, em: f32) {
 				sync.mutex_unlock(&job.mutex)
 				ui.spacer(ui.px(em * 0.4))
 				conflict_file_line(app, "There", there, coming, em, "###there")
-				conflict_file_line(app, job.kind == .Move ? "Moved" : "Copied", coming, there, em, "###coming")
+				conflict_file_line(app, job.kind == .Move ? "Moved" : job.kind == .Restore ? "Put back" : "Copied", coming, there, em, "###coming")
 				ui.spacer(ui.px(em * 0.4))
 				if ui.tags("weak") {
 					ui.next({width = ui.fill()})

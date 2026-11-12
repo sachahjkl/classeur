@@ -57,24 +57,45 @@ trash_native :: proc(path: string, allocator := context.allocator) -> (in_trash:
 	return to, .None
 }
 
-// Puts back what trash moved to `in_trash` (<trash>/files/<name>): to the path its .trashinfo names, which must be free
-// (fs.rename never goes over a name). `original`: where it is again.
-untrash :: proc(in_trash: string, allocator := context.allocator) -> (original: string, e: Error) {
-	dir := parent(parent(in_trash))
-	info_path := join(join(dir, "info", context.temp_allocator), strings.concatenate({base(in_trash), ".trashinfo"}, context.temp_allocator), context.temp_allocator)
+// Puts back what trash moved to `in_trash` (<trash>/files/<name>): to the path its .trashinfo names (or to `to`, a name
+// of its own beside it), which must be free (fs.rename never goes over a name). `original`: where it is again.
+untrash :: proc(in_trash: string, allocator := context.allocator, to := "") -> (original: string, e: Error) {
+	info_path := trash_record(in_trash)
 	data, err := os.read_entire_file(info_path, context.temp_allocator)
 	if err != nil { return "", .Not_Found }
-	text := string(data)
+	target := to != "" ? to : info_origin(string(data))
+	if target == "" { return "", .Other }
+	_ = os.make_directory_all(parent(target))
+	if re := rename(in_trash, target); re != .None { return "", re }
+	linux.unlink(cpath_t(info_path))
+	return strings.clone(target, allocator), .None
+}
+
+// Where untrash puts `in_trash` back, as its .trashinfo says.
+trash_origin :: proc(in_trash: string, allocator := context.temp_allocator) -> (original: string, ok: bool) {
+	data, err := os.read_entire_file(trash_record(in_trash), context.temp_allocator)
+	if err != nil { return }
+	from := info_origin(string(data))
+	if from == "" { return }
+	return strings.clone(from, allocator), true
+}
+
+// The path a .trashinfo's Path= names ("" none; temp memory).
+@(private = "file")
+info_origin :: proc(text: string) -> string {
+	text := text
 	to := ""
 	for line in strings.split_lines_iterator(&text) {
 		if strings.has_prefix(line, "Path=") { to = percent_decode(strings.trim_space(line[len("Path="):])) }
 	}
-	if to == "" { return "", .Other }
-	_ = os.make_directory_all(parent(to))
-	if re := rename(in_trash, to); re != .None { return "", re }
-	linux.unlink(cpath_t(info_path))
-	return strings.clone(to, allocator), .None
+	return to
 }
+
+// The trash of Linux is a folder: read as any other.
+list_trash :: proc(l: ^Listing, path: string) -> (e: Error, done: bool) { return .None, false }
+
+// The trash's folder is named as a folder is.
+trash_title :: proc(path: string) -> string { return "" }
 
 // The record beside an item of the trash (<trash>/files/<name>): its info/<name>.trashinfo, which goes with the item
 // when the trash is emptied.

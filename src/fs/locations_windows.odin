@@ -3,7 +3,8 @@ package fs
 
 // Windows: an SMB share is read where it is, by its UNC path (\\host\share\b): smb:// and file://host/ give it; the
 // shares mounted are the network's drives (Z:, its \\host\share). WebDAV over HTTPS is \\host@SSL\DavWWWRoot\b. The
-// Recycle Bin is no folder (Unsupported), nor are sftp, ftp and nfs, which Windows does not reach by a path.
+// trash is the Recycle Bin of every drive (RECYCLE_BIN). sftp, ftp and nfs are Unsupported: Windows does not reach
+// them by a path.
 
 import "core:strings"
 import win "core:sys/windows"
@@ -46,14 +47,14 @@ location_resolve :: proc(text: string, allocator := context.allocator) -> (r: Lo
 	case "dav":
 		return {path = strings.concatenate({"\\\\", u.host, "\\DavWWWRoot", back}, allocator), kind = .Network, uri = strings.clone(t, allocator)}, .None
 	case "trash":
-		return {kind = .Trash}, .Unsupported
+		return {path = strings.clone(RECYCLE_BIN, allocator), kind = .Trash}, .None
 	}
 	if is_network_scheme(u.scheme) { return {kind = .Network, uri = strings.clone(t, allocator)}, .Unsupported }
 	return {}, .Not_A_Location
 }
 
-// The Recycle Bin is no folder: no tab shows it, its items are put back by an undo only.
-trash_files_dir :: proc(allocator := context.temp_allocator) -> string { return "" }
+// The Recycle Bin, read from every drive (trash_windows.odin).
+trash_files_dir :: proc(allocator := context.temp_allocator) -> string { return RECYCLE_BIN }
 
 // Nothing to mount: a share is read by its UNC path (Windows asks for a password itself when it wants one).
 share_mount :: proc(uri: string, allocator := context.temp_allocator) -> (ok: bool, why: string) { return true, "" }

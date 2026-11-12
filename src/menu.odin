@@ -73,7 +73,7 @@ entry_menu_open :: proc(app: ^App, t: ^Tab, pos: ui.Vec2, from_keyboard := false
 	if m.key == 0 { m.key = ui.key_from_string(0, "classeur_entry_menu") }
 	m.tab, m.on_entry = t.id, on_entry
 	if on_entry {
-		if e := folder_cursor_entry(&t.folder); e != nil && e.kind != .Directory { handlers_ask(app, fs.join(t.path, e.name, context.temp_allocator)) }
+		if e := folder_cursor_entry(&t.folder); e != nil && e.kind != .Directory { handlers_ask(app, entry_path(t, e)) }
 	}
 	ui.ctx_menu_open(m.key, pos, from_keyboard = from_keyboard, search = true)
 }
@@ -102,7 +102,7 @@ entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 	if m.on_entry {
 		e := folder_cursor_entry(&t.folder)
 		folder := e != nil && e.kind == .Directory
-		full := e != nil ? fs.join(t.path, e.name, context.temp_allocator) : t.path
+		full := e != nil ? entry_path(t, e) : t.path
 		other := len(app.panels) > 1
 		menu_command(app, "open")
 		menu_command(app, "open_new_tab", enabled = folder)

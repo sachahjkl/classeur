@@ -74,7 +74,8 @@ The interface (`src/*.odin`) never says which system it runs on. What differs be
 
 - `src/fs`: the file system (reading folders, statx or FindFirstFileExW, copies, renames that never replace, the trash,
   the volumes, watching, the places of the system, how names compare, what a typed path looks like), one file per
-  system (`*_linux.odin`, `*_windows.odin`);
+  system (`*_linux.odin`, `*_windows.odin`). The Recycle Bin of Windows is no folder: `fs.list` reads every drive's
+  `$I` records into a listing whose entries carry their real paths (`Listing.trashed`; `entry_path` in the program);
 - gui_toolkit: the window, the input, the clipboard, drag and drop (`platform`), the icons of files, Open with, the
   terminal, the install (`desktop`, `setup`), one window per person (`instance`);
 - a constant of the program's own in `src/system_<os>.odin` (`SETUP_AT_START`).

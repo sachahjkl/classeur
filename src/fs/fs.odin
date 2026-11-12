@@ -84,6 +84,15 @@ Listing :: struct {
 	entries: [dynamic]Entry,
 	arena:   virtual.Arena,     // the path and the names
 	error:   Error,
+	// per entry, when the entries are not in `path`: the Recycle Bin of Windows, whose items are listed by their
+	// original names (an entry past its end, or none: in `path`)
+	trashed: [dynamic]Trashed,
+}
+
+// An item of a trash listed by its original name: where it is, and the folder it was in (both in the listing's arena).
+Trashed :: struct {
+	item: string,
+	from: string,
 }
 
 // Reads the folder at `path` into `l` (made empty first). The entries come in the system's order.
@@ -92,12 +101,18 @@ list :: proc(l: ^Listing, path: string) -> Error {
 	if file, inner, ok := archive_split(path); ok { return archive_list(l, path, file, inner) }
 	listing_reset(l)
 	l.path = strings.clone(path, virtual.arena_allocator(&l.arena))
+	// (a trash that is no folder: its items, from wherever the system keeps them)
+	if e, done := list_trash(l, path); done {
+		l.error = e
+		return e
+	}
 	l.error = list_native(l, path)
 	return l.error
 }
 
 listing_reset :: proc(l: ^Listing) {
 	clear(&l.entries)
+	clear(&l.trashed)
 	virtual.arena_destroy(&l.arena)
 	l.arena = {}
 	l.path = ""
@@ -106,8 +121,20 @@ listing_reset :: proc(l: ^Listing) {
 
 listing_destroy :: proc(l: ^Listing) {
 	delete(l.entries)
+	delete(l.trashed)
 	virtual.arena_destroy(&l.arena)
 	l^ = {}
+}
+
+// Where an entry of `l` (a pointer into its entries) is when it is not in the listing's folder, and where it came
+// from; ok = false: it is in it (join(l.path, e.name)).
+entry_trashed :: proc(l: ^Listing, e: ^Entry) -> (t: Trashed, ok: bool) {
+	if len(l.trashed) == 0 || len(l.entries) == 0 || e == nil { return }
+	first, at := uintptr(rawptr(&l.entries[0])), uintptr(rawptr(e))
+	if at < first { return }
+	i := int((at - first) / size_of(Entry))
+	if i >= len(l.trashed) || i >= len(l.entries) { return }
+	return l.trashed[i], true
 }
 
 // A name kept in the listing's arena (a listing made of several: the tree's).

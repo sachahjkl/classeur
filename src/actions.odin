@@ -22,7 +22,7 @@ act_open :: proc(app: ^App) {
 	folders := 0
 	for e in targets { if opens_as_folder(t, e^) { folders += 1 } }
 	for e in targets {
-		path := fs.join(t.path, e.name, context.temp_allocator)
+		path := entry_path(t, e)
 		switch {
 		case !opens_as_folder(t, e^):
 			open_system(app, path, t.in_archive)
@@ -88,7 +88,7 @@ open_other_panel_at :: proc(app: ^App, path: string) {
 act_open_system :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
-	for e in folder_targets(&t.folder) { open_system(app, fs.join(t.path, e.name, context.temp_allocator), t.in_archive) }
+	for e in folder_targets(&t.folder) { open_system(app, entry_path(t, e), t.in_archive) }
 }
 
 // The system's application for the file, started on a worker (launch). `in_archive`: the file is in an archive (its tab's
@@ -705,8 +705,15 @@ act_folders_mixed :: proc(app: ^App) { pref_set_bool(app, "files.folders_first",
 target_paths :: proc(t: ^Tab, allocator := context.temp_allocator) -> []string {
 	targets := folder_targets(&t.folder)
 	out := make([]string, len(targets), allocator)
-	for e, i in targets { out[i] = fs.join(t.path, e.name, allocator) }
+	for e, i in targets { out[i] = entry_path(t, e, allocator) }
 	return out
+}
+
+// The path of an entry of the tab's folder (a pointer into its listing): in the folder, or where the listing says it is
+// (an item of the Recycle Bin of Windows, listed by its original name).
+entry_path :: proc(t: ^Tab, e: ^fs.Entry, allocator := context.temp_allocator) -> string {
+	if x, ok := fs.entry_trashed(&t.folder.listing, e); ok { return strings.clone(x.item, allocator) }
+	return fs.join(t.path, e.name, allocator)
 }
 
 @(private = "file")
@@ -806,6 +813,11 @@ act_trash :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
 	if read_only_here(app, t) { return }
+	// (an item of the trash goes nowhere else: deleted for good, after the question, as a file manager's trash does)
+	if shows_trash(t) {
+		act_delete(app)
+		return
+	}
 	paths := target_paths(t)
 	if len(paths) == 0 { return }
 	job_add(app, .Trash, paths)
@@ -818,7 +830,11 @@ act_delete :: proc(app: ^App) {
 	if read_only_here(app, t) { return }
 	paths := target_paths(t)
 	if len(paths) == 0 { return }
-	confirm_delete(app, paths)
+	// (named as the rows are: an item of the Recycle Bin by its original name, not its $R file's)
+	targets := folder_targets(&t.folder)
+	names := make([]string, len(targets), context.temp_allocator)
+	for e, i in targets { names[i] = e.name }
+	confirm_delete(app, paths, names = names, records = shows_trash(t))
 }
 
 // Whether the tab shows the trash itself (not a folder in it, nor its search): its items can be put back.
@@ -845,8 +861,12 @@ act_empty_trash :: proc(app: ^App) {
 	entries := t.folder.listing.entries
 	if len(entries) == 0 { say(app, "The trash is empty."); return }
 	paths := make([]string, len(entries), context.temp_allocator)
-	for e, i in entries { paths[i] = fs.join(t.path, e.name, context.temp_allocator) }
-	confirm_empty_trash(app, paths)
+	names := make([]string, len(entries), context.temp_allocator)
+	for i in 0 ..< len(entries) {
+		paths[i] = entry_path(t, &t.folder.listing.entries[i])
+		names[i] = entries[i].name
+	}
+	confirm_empty_trash(app, paths, names)
 }
 
 act_jobs_cancel :: proc(app: ^App) {

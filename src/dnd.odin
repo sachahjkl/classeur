@@ -186,7 +186,7 @@ drag_maybe :: proc(app: ^App, t: ^Tab, sig: ui.Signal) {
 	for p in app.drag_paths { delete(p) }
 	clear(&app.drag_paths)
 	targets := folder_targets(&t.folder)
-	for e in targets { append(&app.drag_paths, fs.join(t.path, e.name)) }
+	for e in targets { append(&app.drag_paths, entry_path(t, e, context.allocator)) }
 	// (the first one's kind, for the ghost's icon: known from the listing, no disk read at each frame)
 	app.drag_first_folder = len(targets) > 0 && targets[0].kind == .Directory
 	app.drag_check_valid = false   // (other files: checked again against their target)

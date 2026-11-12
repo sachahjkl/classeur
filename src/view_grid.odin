@@ -173,7 +173,7 @@ card_body :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, width, heigh
 	ui.next({width = ui.fill(), height = ui.px(pic)})
 	if ui.row(.Center) {
 		ui.spacer(ui.px(em * 0.5))
-		path := fs.join(t.path, e.name, context.temp_allocator)
+		path := entry_path(t, e)
 		if e.kind == .File && thumb_mime(e.name) != "" {
 			if th, ready := thumb_get(app, path, e.size, e.mtime); ready {
 				d := ui.frame_new(Picture_Draw)

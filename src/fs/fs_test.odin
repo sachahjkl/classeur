@@ -267,8 +267,8 @@ test_locations :: proc(t: ^testing.T) {
 		f, _ := location_resolve("file://nas/docs/x", context.temp_allocator)
 		testing.expect_value(t, f.path, "\\\\nas\\docs\\x")
 		testing.expect_value(t, location_display("\\\\nas\\docs\\a b", context.temp_allocator), "smb://nas/docs/a%20b")
-		_, te := location_resolve("trash:///", context.temp_allocator)
-		testing.expect_value(t, te, Location_Error.Unsupported)
+		tr, te := location_resolve("trash:///", context.temp_allocator)
+		testing.expect(t, te == .None && tr.kind == .Trash && tr.path == RECYCLE_BIN, "the Recycle Bin")
 		_, fe := location_resolve("sftp://box/srv", context.temp_allocator)
 		testing.expect_value(t, fe, Location_Error.Unsupported)
 	} else {

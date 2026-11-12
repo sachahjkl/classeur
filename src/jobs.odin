@@ -303,8 +303,7 @@ job_run :: proc(job: ^Job) {
 		for s in job.sources {
 			if cancelled(job) { break }
 			set_current(job, fs.base(s))
-			original, e := fs.untrash(s, context.temp_allocator)
-			if e != .None { job_error(job, s, e) } else { job_did(job, s, original) }
+			restore_one(job, s)
 			sync.atomic_add(&job.files_done, 1)
 		}
 	case .Trash, .Delete:
@@ -503,6 +502,30 @@ move_one :: proc(job: ^Job, from, target: string) -> (at: string, ok: bool) {
 	return
 }
 
+// Puts an item of the trash back where it was. A name taken there now is asked about, as a copy's is: replaced, skipped
+// or kept beside it under a free name.
+@(private = "file")
+restore_one :: proc(job: ^Job, s: string) {
+	original, e := fs.untrash(s, context.temp_allocator)
+	if e == .Exists {
+		if to, ok := fs.trash_origin(s); ok {
+			there, _ := fs.stat(to)
+			coming, _ := fs.stat(s)
+			switch resolve(job, to, there, coming) {
+			case .Skip, .Ask:
+				return
+			case .Keep_Both:
+				dir := fs.parent(to)
+				original, e = fs.untrash(s, context.temp_allocator, fs.join(dir, fs.free_name(dir, fs.base(to), context.temp_allocator), context.temp_allocator))
+			case .Replace:
+				if !fsx.remove_tree(to) { job_error(job, to, .Denied); return }
+				original, e = fs.untrash(s, context.temp_allocator)
+			}
+		}
+	}
+	if e != .None { job_error(job, s, e) } else { job_did(job, s, original) }
+}
+
 @(private = "file")
 append_line :: proc(job: ^Job, line: string) {
 	sync.mutex_lock(&job.mutex)
@@ -530,6 +553,8 @@ job_ended :: proc(data: rawptr, word: u64) {
 	for s in job.sources { append(&touched, fs.parent(s)) }
 	for s in job.targets { append(&touched, fs.parent(s)) }
 	for d in job.done { append(&touched, fs.parent(d[1])) }   // (a restore: where the items came back)
+	// (the trash's tab: on Windows its items are not in its folder, which is no folder of the disk)
+	if job.kind == .Trash || job.kind == .Restore || job.kind == .Delete { append(&touched, fs.trash_files_dir()) }
 	if !job.undoing { undo_push_job(app, job) }
 	if job.redo_step.pairs != nil && sync.atomic_load(&job.state) == .Done {
 		append(&app.redo, job.redo_step)

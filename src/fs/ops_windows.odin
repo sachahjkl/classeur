@@ -199,18 +199,28 @@ trash_native :: proc(path: string, allocator := context.allocator) -> (in_trash:
 	return recycle_find(long, since, allocator), .None
 }
 
-// Puts back an item of the Recycle Bin (its $R path, as trash gave it): renamed to where its $I record says it was, the
-// record removed. Exists: something is there now.
-untrash :: proc(in_trash: string, allocator := context.allocator) -> (original: string, e: Error) {
-	name := base(in_trash)
-	if !strings.has_prefix(name, "$R") { return "", .Other }
-	record := join(parent(in_trash), strings.concatenate({"$I", name[2:]}, context.temp_allocator), context.temp_allocator)
+// Puts back an item of the Recycle Bin (its $R path, as trash gave it): renamed to where its $I record says it was (or
+// to `to`, a name of its own beside it), the record removed. Exists: something is there now.
+untrash :: proc(in_trash: string, allocator := context.allocator, to := "") -> (original: string, e: Error) {
+	record := trash_record(in_trash)
+	if record == "" { return "", .Other }
 	from, _, ok := recycle_record(record)
 	if !ok { return "", .Not_Found }
-	if exists(from) { return "", .Exists }
-	if err := rename_native(in_trash, from); err != .None { return "", err }
+	target := to != "" ? to : from
+	if exists(target) { return "", .Exists }
+	_ = os.make_directory_all(parent(target))   // (its folder may have gone since)
+	if err := rename_native(in_trash, target); err != .None { return "", err }
 	_ = remove_native(record)
-	return strings.clone(from, allocator), .None
+	return strings.clone(target, allocator), .None
+}
+
+// Where untrash puts an item of the Recycle Bin back, as its $I record says.
+trash_origin :: proc(in_trash: string, allocator := context.temp_allocator) -> (original: string, ok: bool) {
+	record := trash_record(in_trash)
+	if record == "" { return }
+	from, _, rok := recycle_record(record)
+	if !rok { return }
+	return strings.clone(from, allocator), true
 }
 
 // The $I record beside an item of the Recycle Bin (its $R path); "": not one.
@@ -258,31 +268,14 @@ recycle_find :: proc(path: string, since: i64, allocator := context.allocator) -
 	return best == "" ? "" : strings.clone(best, allocator)
 }
 
-// What a $I record of the Recycle Bin says: the item's path before, and when it was trashed (ns since 1970). Version 1:
-// the path in 260 UTF-16 units at 24; version 2: its length at 24 (u32, units), the path after.
-@(private = "file")
+// What a $I record of the Recycle Bin says (recycle.odin): the item's path before, and when it was trashed (ns since
+// 1970). Temp memory.
+@(private)
 recycle_record :: proc(record: string) -> (from: string, at: i64, ok: bool) {
 	data, err := os.read_entire_file(record, context.temp_allocator)
-	if err != nil || len(data) < 28 { return }
-	u64le :: proc(b: []u8, i: int) -> u64 { v: u64; for k in 0 ..< 8 { v |= u64(b[i + k]) << (8 * u32(k)) }; return v }
-	version := u64le(data, 0)
-	ft := u64le(data, 16)
-	at = filetime_ns(win.FILETIME{dwLowDateTime = u32(ft), dwHighDateTime = u32(ft >> 32)})
-	units: []u16
-	switch version {
-	case 1:
-		if len(data) < 24 + 520 { return }
-		units = ([^]u16)(raw_data(data[24:]))[:260]
-	case 2:
-		n := int(u32(data[24]) | u32(data[25]) << 8 | u32(data[26]) << 16 | u32(data[27]) << 24)
-		if n <= 0 || len(data) < 28 + n * 2 { return }
-		units = ([^]u16)(raw_data(data[28:]))[:n]
-	case:
-		return
-	}
-	for i, k in units { if i == 0 { units = units[:k]; break } }
-	from, _ = win.utf16_to_utf8(units, context.temp_allocator)
-	return from, at, from != ""
+	if err != nil { return }
+	r, rok := recycle_record_parse(data)
+	return r.from, r.at, rok
 }
 
 // Whether `a` and `b` are on one volume (their drive or share is the same).

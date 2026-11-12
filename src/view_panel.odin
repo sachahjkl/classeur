@@ -951,6 +951,25 @@ entry_name :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, em: f32) {
 	}
 	hidden := .Hidden in e.flags && !selected
 	needle := t.folder.filter
+	// an item of the Recycle Bin of Windows: its name, then the folder it was deleted from (as a search's result shows
+	// where it is)
+	if x, ok := fs.entry_trashed(&t.folder.listing, e); ok {
+		ui.next({width = ui.fill(), height = ui.pct(1)})
+		if ui.row(.Center, {.Clip}, "###n") {
+			ranges: []ui.Fuzzy_Range
+			if needle != "" { ranges, _ = ui.fuzzy_find(needle, e.name) }
+			if hidden { ui.push_tags("weak") }
+			match_text(e.name, ranges, 0, selected)
+			if hidden { ui.pop_tags() }
+			if x.from != "" {
+				if ui.tags("weak") { glyph(app, lucide.CHEVRON_RIGHT, em * 1.3) }
+				if !selected { ui.push_tags("weak") }
+				match_text(home_path(app, x.from), nil, len(e.name), selected)
+				if !selected { ui.pop_tags() }
+			}
+		}
+		return
+	}
 	if t.folder.tree && needle == "" {
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		if hidden { ui.push_tags("weak") }
@@ -1310,6 +1329,11 @@ filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 // The crumbs of a tab's path; under the home folder they start at it, named "Home".
 home_crumbs :: proc(app: ^App, t: ^Tab) -> []fs.Crumb {
 	parts := fs.crumbs(t.path)
+	// (the Recycle Bin of Windows: one crumb, named as its tab is)
+	if n := fs.trash_title(t.path); n != "" && len(parts) == 1 {
+		parts[0].name = n
+		return parts
+	}
 	// (under a share: from its root, named by its URI, "smb://nas/docs"; both read with the folder, on the worker)
 	if t.share_root != "" {
 		for c, i in parts {
@@ -1364,6 +1388,7 @@ entry_tip :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, sig: ui.Signal) {
 	name := fs.base(e.name)
 	where_ := ""
 	if t.folder.flat && fs.parent(e.name) != "" { where_ = fmt.tprintf("In %s", home_path(app, fs.join(t.path, fs.parent(e.name), context.temp_allocator))) }
+	if x, ok := fs.entry_trashed(&t.folder.listing, e); ok && x.from != "" { where_ = fmt.tprintf("Deleted from %s", home_path(app, x.from)) }
 	facts := e.kind == .Directory ? fmt.tprintf("%s · %s", type_text(app, e^), date_text(app, e.mtime)) : fmt.tprintf("%s · %s · %s", type_text(app, e^), size_text(e.size), date_text(app, e.mtime))
 	hover_tip(sig, name, facts, where_)
 }
