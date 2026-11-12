@@ -71,7 +71,11 @@ test_system_thumbnails :: proc(t: ^testing.T) {
 			delete(before[i], runtime.heap_allocator())
 		}
 		os.set_env("XDG_DATA_HOME", data)
-		os.set_env("XDG_DATA_DIRS", data)
+		// (the test's folder first, the system's after it: the graphics drivers' files are found there, the renderer needs
+		// them; replaced, the window opened with no adapter and every later test with it)
+		dirs := os.get_env("XDG_DATA_DIRS", context.temp_allocator)
+		if dirs == "" { dirs = "/usr/local/share:/usr/share" }
+		os.set_env("XDG_DATA_DIRS", strings.concatenate({data, ":", dirs}, context.temp_allocator))
 		os.set_env("XDG_CACHE_HOME", cache)
 
 		s, app := start(t, {dir})
