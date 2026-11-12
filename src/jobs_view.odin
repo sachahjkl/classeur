@@ -27,6 +27,7 @@ act_jobs :: proc(app: ^App) { app.jobs_view.open = !app.jobs_view.open }
 jobs_view_follow :: proc(app: ^App) {
 	v := &app.jobs_view
 	now := ui.now_ms()
+	for job in app.jobs.list { if job.ended_ms == 0 { job_rate_update(app, job, now) } }
 	for job in app.jobs.list {
 		if job.ended_ms != 0 || job.id <= v.shown_for { continue }
 		if job.started_ms == 0 { job.started_ms = now }
@@ -107,7 +108,7 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 						switch st {
 						case .Waiting:   state = "waiting"
 						case .Counting:  state = "counting…"
-						case .Running:   state = fmt.tprintf("%d of %d", sync.atomic_load(&job.files_done), sync.atomic_load(&job.files_total))
+						case .Running:   state = fmt.tprintf("%d of %d%s", sync.atomic_load(&job.files_done), sync.atomic_load(&job.files_total), job_rate_fields(job, ui.now_ms()))
 						case .Asking:    state = "asks"
 						case .Done:      state = "done"
 						case .Failed:    state = fmt.tprintf("%d failed", len(job.errors))

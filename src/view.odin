@@ -488,9 +488,8 @@ job_status :: proc(app: ^App, em: f32) {
 		total, done := sync.atomic_load(&job.bytes_total), sync.atomic_load(&job.bytes_done)
 		files, files_done := sync.atomic_load(&job.files_total), sync.atomic_load(&job.files_done)
 		t := total > 0 ? f32(f64(done) / f64(total)) : files > 0 ? f32(files_done) / f32(files) : 0
-		text := st == .Counting ? fmt.tprintf("%s: counting…", JOB_VERB[job.kind]) : fmt.tprintf("%s %d of %d · %s", JOB_VERB[job.kind], min(files_done + 1, files), files, shown_text(job_current(job)))
 		ui.next({width = ui.text_size(em * 0.4), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###job%d", text, job.id))
+		ui.label(fmt.tprintf("%s###job%d", job_status_text(job, ui.now_ms()), job.id))
 		ui.next({width = ui.px(em * 7), height = ui.px(em * 0.45)})
 		ui.progress(fmt.tprintf("###jobbar%d", job.id), clamp(t, 0, 1), st == .Counting)
 		ui.spacer(ui.px(em * 0.2))

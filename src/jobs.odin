@@ -7,6 +7,7 @@ package classeur
 // interface when it has ended and is no longer shown.
 
 import "core:fmt"
+import "core:math"
 import "core:strings"
 import "core:sync"
 import "core:thread"
@@ -56,6 +57,12 @@ Job :: struct {
 
 	ended_ms:   f64,          // the interface's clock when job_ended ran (0: not yet: the job is not freed before)
 	started_ms: f64,          // the interface's clock when the jobs' view first saw it (jobs_view.odin)
+
+	// the interface's: the speed, from bytes_done read every JOB_RATE_STEP_MS (job_rate_update)
+	rate:         f64,        // bytes per second, smoothed (0: not known)
+	rate_ms:      f64,        // when it last stepped (0: not sampling: the job does not run)
+	rate_bytes:   i64,        // bytes_done then
+	rate_from_ms: f64,        // the first sample: no speed is shown in the first second
 	app:        ^App,
 }
 
@@ -154,6 +161,73 @@ job_asking :: proc(app: ^App) -> ^Job {
 job_answer :: proc(job: ^Job, answer: Conflict, all: bool) {
 	job.answer, job.answer_all = answer, all
 	sync.sema_post(&job.answered)
+}
+
+// How often the speed steps, how slowly it follows (seconds: a burst of small files moves it a little), and how long it
+// is kept to itself at the start (the first reads are cached or slow).
+JOB_RATE_STEP_MS :: 400
+JOB_RATE_TAU :: 3.0
+JOB_RATE_AFTER_MS :: 1000
+
+// The speed after `seconds` that did `bytes`: an average that forgets at the same pace whatever the steps.
+rate_step :: proc(prev: f64, bytes: i64, seconds: f64) -> f64 {
+	if seconds <= 0 { return prev }
+	now := f64(max(bytes, 0)) / seconds
+	if prev <= 0 { return now }
+	k := 1 - math.exp(-seconds / JOB_RATE_TAU)
+	return prev + (now - prev) * k
+}
+
+// "42 MB/s".
+rate_text :: proc(bytes_per_second: f64, allocator := context.temp_allocator) -> string {
+	return fmt.aprintf("%s/s", size_text(i64(bytes_per_second)), allocator = allocator)
+}
+
+// "12 s left", "2 min left", "1 h 5 min left" (rounded up: a minute left is not "0 min").
+eta_text :: proc(seconds: f64, allocator := context.temp_allocator) -> string {
+	s := int(math.ceil(max(seconds, 0)))
+	if s < 60 { return fmt.aprintf("%d s left", s, allocator = allocator) }
+	if s < 3600 { return fmt.aprintf("%d min left", (s + 59) / 60, allocator = allocator) }
+	h, m := s / 3600, (s % 3600 + 59) / 60
+	if m == 60 { h, m = h + 1, 0 }
+	if m == 0 { return fmt.aprintf("%d h left", h, allocator = allocator) }
+	return fmt.aprintf("%d h %d min left", h, m, allocator = allocator)
+}
+
+// Each frame, on the interface's thread: the speed steps from the bytes done (atomics: no lock, no disk). While the job
+// waits (an answer, its turn) the sampling stops, so the time it waits does not read as slowness.
+job_rate_update :: proc(app: ^App, job: ^Job, now: f64) {
+	if sync.atomic_load(&job.state) != .Running {
+		job.rate_ms = 0
+		return
+	}
+	done := sync.atomic_load(&job.bytes_done)
+	if job.rate_ms == 0 {
+		job.rate_ms, job.rate_bytes = now, done
+		if job.rate_from_ms == 0 { job.rate_from_ms = now }
+	} else if now - job.rate_ms >= JOB_RATE_STEP_MS {
+		job.rate = rate_step(job.rate, done - job.rate_bytes, (now - job.rate_ms) / 1000)
+		job.rate_ms, job.rate_bytes = now, done
+	}
+	ui.wake_within(&app.main.state, int(JOB_RATE_STEP_MS - (now - job.rate_ms)) + 1)
+}
+
+// " · 42 MB/s · 2 min left" for a job that runs, "" while its speed is not known (the first second, nothing moved);
+// the time left only with a total to go by.
+job_rate_fields :: proc(job: ^Job, now: f64) -> string {
+	if job.rate <= 0 || job.rate_from_ms == 0 || now - job.rate_from_ms < JOB_RATE_AFTER_MS { return "" }
+	text := fmt.tprintf(" · %s", rate_text(job.rate))
+	total, done := sync.atomic_load(&job.bytes_total), sync.atomic_load(&job.bytes_done)
+	if total > 0 && job.rate >= 1 { text = fmt.tprintf("%s · %s", text, eta_text(f64(max(total - done, 0)) / job.rate)) }
+	return text
+}
+
+// The footer's line for a job that runs: "Copying 3 of 40 · name · 42 MB/s · 2 min left".
+job_status_text :: proc(job: ^Job, now: f64) -> string {
+	st := sync.atomic_load(&job.state)
+	if st == .Counting { return fmt.tprintf("%s: counting…", JOB_VERB[job.kind]) }
+	files, files_done := sync.atomic_load(&job.files_total), sync.atomic_load(&job.files_done)
+	return fmt.tprintf("%s %d of %d · %s%s", JOB_VERB[job.kind], min(files_done + 1, files), files, shown_text(job_current(job)), job_rate_fields(job, now))
 }
 
 job_current :: proc(job: ^Job, allocator := context.temp_allocator) -> string {
