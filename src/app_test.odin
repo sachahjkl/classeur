@@ -58,11 +58,13 @@ start :: proc(t: ^testing.T, folders: []string, size := [2]int{}, home := "", lo
 	return
 }
 
-// Frames until every tab has its folder.
+// Frames until every tab has its folder, and the workers have answered every change to files asked of them (a rename,
+// a new folder, an undo, the places: answers_due).
 // (shared by the tests of the package: each file of tests uses it)
 wait_read :: proc(s: ^session.Session, loc := #caller_location) {
 	session.wait_until(s, proc(s: ^session.Session) -> bool {
 		app := (^App)(s.user)
+		if app.answers_due > 0 { return false }
 		for p in app.panels { for t in p.tabs { if t.loading { return false } } }
 		return true
 	}, "the folders read", loc = loc)
@@ -2676,7 +2678,7 @@ test_locations_in_tabs :: proc(t: ^testing.T) {
 		session.frames(s, 3)
 		testing.expect_value(t, tab.path, share)
 		testing.expect_value(t, tab_title(app, tab), "docs on nas")
-		crumbs := home_crumbs(app, tab.path)
+		crumbs := home_crumbs(app, tab)
 		testing.expect(t, len(crumbs) > 0 && crumbs[0].name == "smb://nas/docs", "the first crumb, the share's URI")
 		testing.expect(t, session.find_text(s, "Reports") != nil, "its folders")
 		testing.expect(t, session.find_text(s, "Network") != nil && session.find_text(s, "docs on nas") != nil, "the sidebar's Network section")
@@ -2789,7 +2791,7 @@ test_palette_slip :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		testing.expect_value(t, COMMANDS[palette_first(app)].id, "new_folder")
 		session.key(s, .Return)
-		session.frames(s, 2)
+		wait_read(s)   // (made by the edits' worker)
 		_, made := fs.stat(fs.join(dir, "New folder", context.temp_allocator))
 		testing.expect(t, made, "Enter on the slip made the folder")
 	})

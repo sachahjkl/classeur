@@ -23,7 +23,7 @@ is immediate-mode); the data changes only on the interface's thread.
 | `src/sidebar.odin` | The sidebar: its filter, its sections (Recents, Bookmarks, Storage, Places). |
 | `src/icons.odin` | The entries' icons: drawn folders and pages, Lucide icons coloured by kind. |
 | `src/measure.odin` | Folder measures (folders, files, bytes all the way down) on a pool of their own. |
-| `src/places.odin` | The sidebar's places (the person's folders) and volumes. |
+| `src/places.odin` | The sidebar's places (the person's folders) and volumes, read on a worker. |
 | `src/format.odin` | Sizes, dates (local time zone), types and icons of entries. |
 | `src/app.odin` | The App, its window (`app_open`, `app_frame`, `app_close`: the tests drive the same procedures), the theme. |
 
@@ -35,6 +35,11 @@ is immediate-mode); the data changes only on the interface's thread.
   interface's thread, and frees the task.
 - A read that is no longer wanted (the tab went elsewhere) still runs; its result is dropped because its `serial` is
   old.
+- The changes to files the interface makes itself (a rename, a new folder or file, a batch rename, the undo and redo of
+  these) go to a worker of their own (`app.edit_pool`, one thread: `edit_submit`), so they are done in the order asked.
+  The interface keeps what it shows until the answer (the rename's field stays open). The places of the sidebar, a
+  share's folder and the share a tab's folder is under (its title, its first crumb) are read on the workers too.
+- The tests wait for the answers with `wait_read` (`app.answers_due`).
 
 ## The keyboard
 

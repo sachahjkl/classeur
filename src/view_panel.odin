@@ -244,7 +244,7 @@ crumbs :: proc(app: ^App, t: ^Tab, em: f32) {
 	ui.next_merge({radius = 0})
 	if ui.row(.Center, {.Clickable, .Clip}, "###crumbs") {
 		frame := ui.parent_box()
-		parts := home_crumbs(app, t.path)
+		parts := home_crumbs(app, t)
 		// (a long path shows its end: the first crumbs go when the room is short)
 		room := frame.size.x - em * 2
 		first := 0
@@ -1313,15 +1313,15 @@ filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	}
 }
 
-// The crumbs of a path; under the home folder they start at it, named "Home".
-home_crumbs :: proc(app: ^App, path: string) -> []fs.Crumb {
-	parts := fs.crumbs(path)
-	// (under a share: from its root, named by its URI, "smb://nas/docs")
-	if root, uri, ok := fs.share_root(path, context.temp_allocator); ok {
+// The crumbs of a tab's path; under the home folder they start at it, named "Home".
+home_crumbs :: proc(app: ^App, t: ^Tab) -> []fs.Crumb {
+	parts := fs.crumbs(t.path)
+	// (under a share: from its root, named by its URI, "smb://nas/docs"; both read with the folder, on the worker)
+	if t.share_root != "" {
 		for c, i in parts {
-			if c.path != root { continue }
+			if c.path != t.share_root { continue }
 			out := parts[i:]
-			out[0].name = uri
+			out[0].name = t.share_uri
 			return out
 		}
 	}

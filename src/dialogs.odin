@@ -55,7 +55,8 @@ confirm_build :: proc(app: ^App, em: f32) {
 	}
 	if ui.confirm("confirm_delete", &c.open, {title = title, note = note, lines = names, act = act}) == .Confirmed {
 		job_add(app, .Delete, c.paths[:])
-		// (then their records, by a job after it: the jobs run one after the other)
+		// (then their records, by a job after it: the jobs run one after the other; a record's path is made from the
+		// item's, with no disk read)
 		if c.trash {
 			records := make([dynamic]string, context.temp_allocator)
 			for p in c.paths { if r := fs.trash_record(p); r != "" { append(&records, r) } }

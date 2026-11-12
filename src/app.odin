@@ -36,6 +36,11 @@ App :: struct {
 	pool:        Pool,
 	measure_pool: Pool,
 	thumb_pool:  Pool,              // the thumbnails of the grid (thumbs.odin)
+	edit_pool:   Pool,              // the changes to files the interface asks for (a rename, a new folder, an undo): one
+	                                // worker, so that they are done in the order they were asked (edit_submit)
+	answers_due: int,               // the tasks of edit_submit and places_load whose answer has not come back
+	steps_due:   int,               // the changes on the edits' worker whose step of the undo is not there yet
+	places_asked: u64,              // the last read of the places asked (an older answer is dropped)
 	thumbs:      map[string]Thumb,  // by path, size and date (thumb_key; the keys owned)
 	icons_cache: map[string]Sys_Icon,   // the system's icons by key and size (icons.odin)
 	icon_keys:   map[string]string,     // a file's name -> its icon's key (both owned)
@@ -159,7 +164,7 @@ App :: struct {
 	tab_coming_at: [2]f32,          // ... the pointer there
 	tab_coming_path: string,        // owned: ... its folder, "" until the system gives it (Linux: at the drop)
 	session_writer: Session_Writer,
-	mounting:     [dynamic]string,  // owned: the shares being mounted on a worker (locations.odin)
+	mounting:     [dynamic]string,  // owned: the shares being found or mounted on a worker (locations.odin)
 	shares:       []fs.Share,       // the shares of the network mounted now (the sidebar's Network section)  // the session's writes on a worker, one at a time (session_save)
 	session_seen:    string,        // owned: the session's text at its last change (session_autosave waits for it to settle)
 	session_changed_ms: f64,        // when it changed
@@ -304,6 +309,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	pool_start(&app.pool, POOL_THREADS, POOL_GROW)
 	pool_start(&app.measure_pool, MEASURE_THREADS)
 	pool_start(&app.thumb_pool, THUMB_THREADS, THUMB_THREADS, newest_first = true)
+	pool_start(&app.edit_pool, 1)
 	app.palette.recording = -1   // (no command's keys recorded: the recorder is shut)
 	app.side_open = {.Recents = false, .Bookmarks = true, .Storage = true, .Network = true, .Places = true}
 	jobs_start(app)
@@ -373,6 +379,7 @@ app_close :: proc(app: ^App) {
 	// QUIT_WAIT_MS, then one still in its task is left to the process's end. It still reads the App: then it is not freed.
 	until := time.tick_add(time.tick_now(), QUIT_WAIT_MS * time.Millisecond)
 	reads_ended := pool_stop(&app.pool, proc(data: rawptr) {}, until)   // (a read left waiting: its memory goes with the process)
+	edits_ended := pool_stop(&app.edit_pool, proc(data: rawptr) {}, until)
 	session_save(app)   // (after the workers: a bookmark's write on one of them never comes after this one)
 	measures_ended := pool_stop(&app.measure_pool, proc(data: rawptr) {}, until)
 	thumbs_ended := pool_stop(&app.thumb_pool, proc(data: rawptr) {}, until)
@@ -385,7 +392,7 @@ app_close :: proc(app: ^App) {
 	devtools.stop(app.devtools)
 	if global_app == app { global_app = nil }
 	host.host_close(&app.main)
-	if !reads_ended || !measures_ended || !thumbs_ended { return }
+	if !reads_ended || !edits_ended || !measures_ended || !thumbs_ended { return }
 	app_free(app)
 	free(app)
 }

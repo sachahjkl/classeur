@@ -3,7 +3,6 @@ package classeur
 // What the commands do (commands.odin). Each works on the current tab: the active tab of the focused panel.
 
 import "core:fmt"
-import "core:os"
 import "core:strings"
 import "gt:desktop"
 import "gt:platform"
@@ -276,6 +275,18 @@ act_select_invert :: proc(app: ^App) { if t := current_tab(app); t != nil { fold
 ////////////////////////////////
 // Changing files
 
+// A change to files for the edits' worker (app.edit_pool: one thread, the changes done in the order they were asked).
+// The task posts its answer with ui.post; the procedure the answer runs calls answer_came.
+edit_submit :: proc(app: ^App, run: proc(data: rawptr), data: rawptr) {
+	app.answers_due += 1
+	pool_submit(&app.edit_pool, run, data)
+}
+
+answer_came :: proc(app: ^App) {
+	app.answers_due -= 1
+	app_frames(app)
+}
+
 // The rename in place: a field over the name of the row being renamed.
 Rename :: struct {
 	active:    bool,
@@ -284,6 +295,8 @@ Rename :: struct {
 	field:     ui.Text_Field,
 	focus_due: bool,
 	refused:   bool,            // the name typed was refused (said why): the field in the colour of an error until it changes
+	waiting:   u64,             // the rename the worker does (rename_done): the field stays until its answer; 0: none
+	asked:     u64,             // the renames asked so far (each one's number)
 }
 
 rename_free :: proc(r: ^Rename) {
@@ -314,7 +327,7 @@ act_rename :: proc(app: ^App) {
 rename_begin :: proc(app: ^App, t: ^Tab, name: string) {
 	r := &app.rename
 	delete(r.name)
-	r.active, r.tab, r.name, r.focus_due, r.refused = true, t.id, strings.clone(name), true, false
+	r.active, r.tab, r.name, r.focus_due, r.refused, r.waiting = true, t.id, strings.clone(name), true, false, 0
 	base := fs.base(name)
 	ui.field_set(&r.field, base)
 	// the name without its extension selected, as the systems' file managers do
@@ -324,14 +337,16 @@ rename_begin :: proc(app: ^App, t: ^Tab, name: string) {
 }
 
 rename_end :: proc(app: ^App) {
-	app.rename.active = false
+	app.rename.active, app.rename.waiting = false, 0
 	if t := find_tab(app, app.rename.tab); t != nil { t.focus_due = .List }
 }
 
 // Renames the entry to what the field holds. `step`: then the row after it (1) or before it (-1) is renamed, Tab and
-// Shift+Tab as in Explorer. A name refused leaves the field open, what was typed selected to type another.
+// Shift+Tab as in Explorer. A name refused leaves the field open, what was typed selected to type another. The rename
+// itself is the edits' worker's: the field stays open until its answer (rename_done).
 rename_commit :: proc(app: ^App, step := 0) {
 	r := &app.rename
+	if r.waiting != 0 { return }   // (the worker has the name typed: its answer decides)
 	t := find_tab(app, r.tab)
 	if t == nil { rename_end(app); return }
 	f := &t.folder
@@ -345,17 +360,25 @@ rename_commit :: proc(app: ^App, step := 0) {
 		}
 	}
 	to := strings.trim_space(ui.field_string(&r.field))
-	renamed := false
 	if to != fs.base(r.name) && to != "" {
-		if !rename_to(app, t, to) {
+		if strings.contains_any(to, fs.SEPARATOR_STRING) || to == "." || to == ".." {
+			say(app, "A name cannot hold %s.", fs.SEPARATOR_STRING)
 			ui.field_select_all(&r.field)
 			r.refused, r.focus_due = true, true
 			return
 		}
-		renamed = true
+		rename_ask(app, t, to, next)
+		return
 	}
+	rename_next(app, t, next, renamed = false)
+}
+
+// After a rename: the next row (Tab, Shift+Tab) has the cursor (and keeps it when the read comes) and the field; none,
+// the field closes.
+@(private = "file")
+rename_next :: proc(app: ^App, t: ^Tab, next: string, renamed: bool) {
 	if next == "" { rename_end(app); return }
-	// the next row has the cursor (and keeps it when the read comes) and the field
+	f := &t.folder
 	if renamed {
 		delete(t.reveal_name)
 		t.reveal_name = strings.clone(next)
@@ -367,99 +390,191 @@ rename_commit :: proc(app: ^App, step := 0) {
 	rename_begin(app, t, next)
 }
 
-// The entry being renamed named `to`; false when it cannot be (said why).
+// A rename on its way to the edits' worker and back.
 @(private = "file")
-rename_to :: proc(app: ^App, t: ^Tab, to: string) -> bool {
+Rename_Ask :: struct {
+	app:       ^App,
+	tab:       u64,
+	serial:    u64,      // Rename.asked when it was asked
+	name:      string,   // owned: the entry renamed (in the tree: its path from the tab's folder)
+	to:        string,   // owned: the name typed
+	next:      string,   // owned: the row Tab or Shift+Tab goes to after it ("": none)
+	from_path: string,   // owned
+	to_path:   string,   // owned
+	listed:    bool,     // the folder lists an entry of the very name typed (then not a change of case alone)
+	taken:     bool,     // the answer: a name already there
+	err:       fs.Error, // the answer: why the rename failed
+}
+
+// The entry being renamed named `to`, by the edits' worker; rename_done says how it went.
+@(private = "file")
+rename_ask :: proc(app: ^App, t: ^Tab, to, next: string) {
 	r := &app.rename
-	if strings.contains_any(to, fs.SEPARATOR_STRING) || to == "." || to == ".." {
-		say(app, "A name cannot hold %s.", fs.SEPARATOR_STRING)
-		return false
-	}
+	r.asked += 1
+	r.waiting = r.asked
 	// (in the tree the entry's name is a path from the tab's folder: renamed in its own folder)
 	from_path := fs.join(t.path, r.name, context.temp_allocator)
-	dir := fs.parent(from_path)
-	to_path := fs.join(dir, to, context.temp_allocator)
+	a := new(Rename_Ask)
+	a^ = {
+		app = app, tab = t.id, serial = r.asked, name = strings.clone(r.name), to = strings.clone(to), next = strings.clone(next),
+		from_path = strings.clone(from_path), to_path = fs.join(fs.parent(from_path), to),
+		listed = folder_find_name(&t.folder, fs.join(fs.parent(r.name), to, context.temp_allocator)) >= 0,
+	}
+	app.steps_due += 1
+	edit_submit(app, rename_run, a)
+}
+
+@(private = "file")
+rename_ask_free :: proc(a: ^Rename_Ask) {
+	delete(a.name)
+	delete(a.to)
+	delete(a.next)
+	delete(a.from_path)
+	delete(a.to_path)
+	free(a)
+}
+
+// On the edits' worker: the rename, never over a name.
+@(private = "file")
+rename_run :: proc(data: rawptr) {
+	a := (^Rename_Ask)(data)
+	dir := fs.parent(a.from_path)
 	// a change of case alone, on a system whose names ignore it (Windows): the name "there" is the entry itself. It is
 	// when the folder has no entry of that very name and the two are alike.
 	case_only := false
-	if there, exists := fs.stat(to_path); exists {
-		from, _ := fs.stat(from_path)
-		rel := fs.join(fs.parent(r.name), to, context.temp_allocator)
-		case_only = strings.equal_fold(to, fs.base(r.name)) && folder_find_name(&t.folder, rel) < 0 && there == from
-		if !case_only {
-			say(app, "%s is already there.", to)
-			return false
-		}
+	if there, exists := fs.stat(a.to_path); exists {
+		from, _ := fs.stat(a.from_path)
+		case_only = strings.equal_fold(a.to, fs.base(a.name)) && !a.listed && there == from
+		a.taken = !case_only
 	}
-	err: fs.Error
-	if case_only {
+	switch {
+	case a.taken:   // (said on the interface's thread)
+	case case_only:
 		// (through a free name: renamed straight, a system may see the new name taken by the entry itself)
-		aside := fs.join(dir, fs.free_name(dir, fmt.tprintf("%s.renaming", to), context.temp_allocator), context.temp_allocator)
-		err = fs.rename(from_path, aside)
-		if err == .None {
-			err = fs.rename(aside, to_path)
-			if err != .None { _ = fs.rename(aside, from_path) }   // (its name back)
+		aside := fs.join(dir, fs.free_name(dir, fmt.tprintf("%s.renaming", a.to), context.temp_allocator), context.temp_allocator)
+		a.err = fs.rename(a.from_path, aside)
+		if a.err == .None {
+			a.err = fs.rename(aside, a.to_path)
+			if a.err != .None { _ = fs.rename(aside, a.from_path) }   // (its name back)
 		}
-	} else {
-		err = fs.rename(from_path, to_path)
+	case:
+		a.err = fs.rename(a.from_path, a.to_path)
 	}
-	if err != .None {
-		say(app, "%s cannot be renamed: %s.", fs.base(r.name), fs.ERROR_REASON[err])
-		return false
+	if !ui.post(&a.app.main.state, rename_done, a) { rename_ask_free(a) }
+}
+
+// On the interface's thread: the rename done (its step of the undo, the folder read again, the cursor on the new name,
+// the next row in the field after Tab) or refused (said why; the field stays, what was typed selected).
+@(private = "file")
+rename_done :: proc(data: rawptr, word: u64) {
+	a := (^Rename_Ask)(data)
+	app := a.app
+	defer rename_ask_free(a)
+	answer_came(app)
+	app.steps_due -= 1
+	r := &app.rename
+	// (the field still waits for this answer: not closed, nor given to another row meanwhile)
+	waits := r.active && r.waiting == a.serial
+	if waits { r.waiting = 0 }
+	if a.taken || a.err != .None {
+		if a.taken {
+			say(app, "%s is already there.", a.to)
+		} else {
+			say(app, "%s cannot be renamed: %s.", fs.base(a.name), fs.ERROR_REASON[a.err])
+		}
+		if waits {
+			ui.field_select_all(&r.field)
+			r.refused, r.focus_due = true, true
+		}
+		return
 	}
 	// (a folder or a file just made and named: its step says where it is now)
-	if n := len(app.undo); n > 0 && (app.undo[n - 1].kind == .New_Folder || app.undo[n - 1].kind == .New_File) && app.undo[n - 1].pairs[0][1] == from_path {
+	if n := len(app.undo); n > 0 && (app.undo[n - 1].kind == .New_Folder || app.undo[n - 1].kind == .New_File) && app.undo[n - 1].pairs[0][1] == a.from_path {
 		delete(app.undo[n - 1].pairs[0][1])
-		app.undo[n - 1].pairs[0][1] = strings.clone(to_path)
+		app.undo[n - 1].pairs[0][1] = strings.clone(a.to_path)
 	} else {
-		undo_push(app, .Rename, {{from_path, to_path}})
+		undo_push(app, .Rename, {{a.from_path, a.to_path}})
 	}
-	delete(t.reveal_name)
-	t.reveal_name = strings.clone(to)
-	tab_load(app, t)
-	return true
-}
-
-act_new_folder :: proc(app: ^App) {
-	t := current_tab(app)
-	if t == nil { return }
-	if read_only_here(app, t) { return }
-	name := "New folder"
-	for n := 2; ; n += 1 {
-		if _, exists := fs.stat(fs.join(t.path, name, context.temp_allocator)); !exists { break }
-		name = fmt.tprintf("New folder %d", n)
-	}
-	if err := os.make_directory(fs.join(t.path, name, context.temp_allocator)); err != nil {
-		say(app, "The folder cannot be made here: %v.", err)
+	t := find_tab(app, a.tab)
+	if t == nil {
+		if waits { rename_end(app) }
 		return
 	}
-	undo_push(app, .New_Folder, {{"", fs.join(t.path, name, context.temp_allocator)}})
 	delete(t.reveal_name)
-	t.reveal_name = strings.clone(name)
+	t.reveal_name = strings.clone(a.to)
 	tab_load(app, t)
-	rename_begin(app, t, name)
+	if waits { rename_next(app, t, a.next, renamed = true) }
 }
+
+// A new folder (or an empty file) made by the edits' worker under a free name, then named in place (made_done).
+@(private = "file")
+Make_Ask :: struct {
+	app:    ^App,
+	tab:    u64,
+	dir:    string,   // owned: the folder it goes in
+	folder: bool,     // a folder, else an empty file
+	name:   string,   // owned: the answer: the name it was made with
+	err:    fs.Error, // the answer: why it was not made
+}
+
+act_new_folder :: proc(app: ^App) { make_ask(app, folder = true) }
 
 // An empty file, then named in place.
-act_new_file :: proc(app: ^App) {
+act_new_file :: proc(app: ^App) { make_ask(app, folder = false) }
+
+@(private = "file")
+make_ask :: proc(app: ^App, folder: bool) {
 	t := current_tab(app)
 	if t == nil { return }
 	if read_only_here(app, t) { return }
-	name := "New file.txt"
-	for n := 2; ; n += 1 {
-		if !fs.exists(fs.join(t.path, name, context.temp_allocator)) { break }
-		name = fmt.tprintf("New file %d.txt", n)
+	a := new(Make_Ask)
+	a^ = {app = app, tab = t.id, dir = strings.clone(t.path), folder = folder}
+	app.steps_due += 1
+	edit_submit(app, make_run, a)
+}
+
+@(private = "file")
+make_ask_free :: proc(a: ^Make_Ask) {
+	delete(a.dir)
+	delete(a.name)
+	free(a)
+}
+
+// On the edits' worker: the first free name of "New folder", "New folder 2"... (or "New file.txt"...), made.
+@(private = "file")
+make_run :: proc(data: rawptr) {
+	a := (^Make_Ask)(data)
+	name := a.folder ? "New folder" : "New file.txt"
+	for n := 2; fs.exists(fs.join(a.dir, name, context.temp_allocator)); n += 1 {
+		name = a.folder ? fmt.tprintf("New folder %d", n) : fmt.tprintf("New file %d.txt", n)
 	}
-	path := fs.join(t.path, name, context.temp_allocator)
-	if e := fs.make_file(path); e != .None {
-		say(app, "The file cannot be made here: %s.", fs.ERROR_REASON[e])
+	path := fs.join(a.dir, name, context.temp_allocator)
+	a.err = a.folder ? fs.make_folder(path) : fs.make_file(path)
+	a.name = strings.clone(name)
+	if !ui.post(&a.app.main.state, made_done, a) { make_ask_free(a) }
+}
+
+// On the interface's thread: its step of the undo; in its tab (still on its folder), the cursor on it and its name in
+// the field once the read comes.
+@(private = "file")
+made_done :: proc(data: rawptr, word: u64) {
+	a := (^Make_Ask)(data)
+	app := a.app
+	defer make_ask_free(a)
+	answer_came(app)
+	app.steps_due -= 1
+	if a.err != .None {
+		say(app, a.folder ? "The folder cannot be made here: %s." : "The file cannot be made here: %s.", fs.ERROR_REASON[a.err])
 		return
 	}
-	undo_push(app, .New_File, {{"", path}})
+	path := fs.join(a.dir, a.name, context.temp_allocator)
+	undo_push(app, a.folder ? Undo_Kind.New_Folder : Undo_Kind.New_File, {{"", path}})
+	t := find_tab(app, a.tab)
+	if t == nil || t.path != a.dir { return }
 	delete(t.reveal_name)
-	t.reveal_name = strings.clone(name)
+	t.reveal_name = strings.clone(a.name)
 	tab_load(app, t)
-	rename_begin(app, t, name)
+	rename_begin(app, t, a.name)
 }
 
 act_terminal :: proc(app: ^App) {

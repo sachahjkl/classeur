@@ -177,24 +177,62 @@ batch_problems :: proc(b: ^Batch, news: []string) -> []string {
 	return out
 }
 
-// The renames, all or nothing (undo.odin's renames_swap: through free names, never over a name); one step of the undo.
+// The renames on their way to the edits' worker and back.
+@(private = "file")
+Batch_Ask :: struct {
+	app:   ^App,
+	tab:   u64,
+	pairs: [][2]string,   // owned: (before, after)
+	done:  bool,          // the answer: every name given
+}
+
+// The renames, all or nothing (undo.odin's renames_swap: through free names, never over a name), by the edits' worker;
+// one step of the undo.
 @(private = "file")
 batch_apply :: proc(app: ^App, news: []string) {
 	b := &app.batch
-	pairs := make([dynamic][2]string, context.temp_allocator)
+	pairs := make([dynamic][2]string)
 	for n, i in news {
 		if n == b.names[i] { continue }
-		append(&pairs, [2]string{fs.join(b.dir, b.names[i], context.temp_allocator), fs.join(b.dir, n, context.temp_allocator)})
+		append(&pairs, [2]string{fs.join(b.dir, b.names[i]), fs.join(b.dir, n)})
 	}
-	// (read again after the renames, whatever came of them)
-	defer if t := find_tab(app, b.tab); t != nil { tab_load(app, t) }
-	if len(pairs) == 0 { return }
-	if !renames_swap(pairs[:], back = false) {
+	if len(pairs) == 0 {
+		delete(pairs)
+		if t := find_tab(app, b.tab); t != nil { tab_load(app, t) }
+		return
+	}
+	a := new(Batch_Ask)
+	a^ = {app = app, tab = b.tab, pairs = pairs[:]}
+	app.steps_due += 1
+	edit_submit(app, proc(data: rawptr) {
+		a := (^Batch_Ask)(data)
+		a.done = renames_swap(a.pairs, back = false)
+		if !ui.post(&a.app.main.state, batch_done, a) { batch_ask_free(a) }
+	}, a)
+}
+
+@(private = "file")
+batch_ask_free :: proc(a: ^Batch_Ask) {
+	for p in a.pairs { delete(p[0]); delete(p[1]) }
+	delete(a.pairs)
+	free(a)
+}
+
+// On the interface's thread: the step of the undo, said; the folder read again, whatever came of the renames.
+@(private = "file")
+batch_done :: proc(data: rawptr, word: u64) {
+	a := (^Batch_Ask)(data)
+	app := a.app
+	defer batch_ask_free(a)
+	answer_came(app)
+	app.steps_due -= 1
+	if t := find_tab(app, a.tab); t != nil { tab_load(app, t) }
+	if !a.done {
 		say(app, "The names could not all be given: nothing was renamed.")
 		return
 	}
-	undo_push(app, .Rename, pairs[:])
-	say(app, "%d item%s renamed.", len(pairs), len(pairs) == 1 ? "" : "s")
+	undo_push(app, .Rename, a.pairs)
+	say(app, "%d item%s renamed.", len(a.pairs), len(a.pairs) == 1 ? "" : "s")
 }
 
 batch_build :: proc(app: ^App, em: f32) {

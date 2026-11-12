@@ -73,7 +73,7 @@ test_rename_refused_and_tab :: proc(t: ^testing.T) {
 		session.key(s, .A, {.Ctrl})
 		session.type_text(s, "b.txt")
 		session.key(s, .Return)
-		session.frames(s, 2)
+		wait_read(s)   // (the rename is the edits' worker's: its refusal comes back)
 		testing.expect(t, app.rename.active, "the field stays open")
 		testing.expect(t, app.rename.refused, "the field says the name was refused")
 		testing.expect_value(t, ui.field_string(&app.rename.field), "b.txt")

@@ -8,11 +8,13 @@ package classeur
 //   - a move: each item moved back to where it was (a job: a move across volumes copies);
 //   - the trash: each item put back from the trash (Linux's, or the Recycle Bin of Windows, its $I records read).
 // Deleting for good cannot be undone. What an undo does is not undone in turn; it can be done again (redo, Ctrl+Y,
-// Ctrl+Shift+Z) until something else is done to files.
+// Ctrl+Shift+Z) until something else is done to files. The renames and the new folders are put back by the edits' worker
+// (edit_submit: in the order asked), the others by a job.
 
 import "core:fmt"
 import "core:slice"
 import "core:strings"
+import "gt:ui"
 import "fs"
 
 Undo_Kind :: enum u8 { Rename, New_Folder, New_File, Copy, Move, Trash }
@@ -52,13 +54,6 @@ undo_push_job :: proc(app: ^App, job: ^Job) {
 	undo_push(app, kind, job.done[:], job.redoing)
 }
 
-// Whether a job keeps `step` to hand it to the redo stack when it ends.
-@(private = "file")
-job_owns :: proc(app: ^App, step: Undo_Step) -> bool {
-	for job in app.jobs.list { if job.redo_step.pairs != nil && raw_data(job.redo_step.pairs) == raw_data(step.pairs) { return true } }
-	return false
-}
-
 redo_clear :: proc(app: ^App) {
 	for &s in app.redo { undo_step_free(&s) }
 	clear(&app.redo)
@@ -89,56 +84,39 @@ act_undo :: proc(app: ^App) {
 		say(app, "A copy or a move is running: undo once it has ended.")
 		return
 	}
+	// (a rename or a new folder on the edits' worker: its step comes with its answer; an undo now would take the one
+	// before it)
+	if app.steps_due > 0 {
+		say(app, "A change to files is being made: undo once it is done.")
+		return
+	}
 	if len(app.undo) == 0 {
 		say(app, "Nothing to undo.")
 		return
 	}
 	step := pop(&app.undo)
 	n := len(step.pairs)
-	done := true
-	defer if done { append(&app.redo, step) } else if !job_owns(app, step) { undo_step_free(&step) }
 	switch step.kind {
-	case .Rename:
-		// (a batch: every name back, the last renamed first)
-		for p in step.pairs {
-			if fs.exists(p[0]) && !slice.contains(afters_of(step.pairs), p[0]) {
-				say(app, "%s is there again: the rename cannot be undone.", fs.base(p[0]))
-				done = false
-				return
-			}
-		}
-		if !renames_swap(step.pairs, back = true) {
-			say(app, "The rename cannot be undone.")
-			done = false
-			return
-		}
-		undo_reveal(app, step.pairs[0][0])
-	case .New_Folder, .New_File:
-		path := step.pairs[0][1]
-		info, _ := fs.stat(path)
-		if (step.kind == .New_File && info.size > 0) || fs.remove(path) != .None {
-			say(app, "%s is not empty now: it stays.", fs.base(path))
-			done = false
-			return
-		}
-		undo_reveal(app, path)
+	case .Rename, .New_Folder, .New_File:
+		undo_ask(app, step, redo = false)   // (the files are the edits' worker's: undo_done says how it went)
+		return
 	// (a job's undo: the step can be done again once its job has ended well: job_ended hands it to the redo stack)
 	case .Copy:
 		copies := make([]string, n, context.temp_allocator)
 		for p, i in step.pairs { copies[i] = p[1] }
 		job := job_add(app, .Trash, copies, undoing = true)
-		job.redo_step, done = step, false
+		job.redo_step = step
 	case .Move:
 		sources := make([]string, n, context.temp_allocator)
 		targets := make([]string, n, context.temp_allocator)
 		for p, i in step.pairs { sources[i], targets[i] = p[1], p[0] }
 		job := job_add(app, .Move, sources, targets = targets, undoing = true)
-		job.redo_step, done = step, false
+		job.redo_step = step
 	case .Trash:
 		in_trash := make([]string, n, context.temp_allocator)
 		for p, i in step.pairs { in_trash[i] = p[1] }
 		job := job_add(app, .Restore, in_trash, undoing = true)
-		job.redo_step, done = step, false
+		job.redo_step = step
 	}
 	say(app, "Undone: the %s%s.", UNDO_SAID[step.kind], n > 1 ? " of several items" : "")
 }
@@ -153,27 +131,16 @@ act_redo :: proc(app: ^App) {
 		return
 	}
 	step := pop(&app.redo)
+	if step.kind == .Rename || step.kind == .New_Folder || step.kind == .New_File {
+		undo_ask(app, step, redo = true)   // (the edits' worker's: undo_done says how it went)
+		return
+	}
 	defer undo_step_free(&step)
 	n := len(step.pairs)
 	befores := make([]string, n, context.temp_allocator)
 	afters := make([]string, n, context.temp_allocator)
 	for p, i in step.pairs { befores[i], afters[i] = p[0], p[1] }
-	switch step.kind {
-	case .Rename:
-		if !renames_swap(step.pairs, back = false) {
-			say(app, "The rename cannot be done again.")
-			return
-		}
-		undo_push(app, .Rename, step.pairs, redoing = true)
-		undo_reveal(app, afters[0])
-	case .New_Folder, .New_File:
-		e := step.kind == .New_Folder ? fs.make_folder(afters[0]) : fs.make_file(afters[0])
-		if e != .None {
-			say(app, "%s cannot be made again.", fs.base(afters[0]))
-			return
-		}
-		undo_push(app, step.kind, step.pairs, redoing = true)
-		undo_reveal(app, afters[0])
+	#partial switch step.kind {
 	case .Copy:
 		job := job_add(app, .Copy, befores, targets = afters)
 		job.redoing = true
@@ -185,6 +152,84 @@ act_redo :: proc(app: ^App) {
 		job.redoing = true
 	}
 	say(app, "Done again: the %s%s.", UNDO_SAID[step.kind], n > 1 ? " of several items" : "")
+}
+
+// An undo or a redo of a rename, a new folder or a new file, on its way to the edits' worker and back.
+@(private = "file")
+Undo_Ask :: struct {
+	app:  ^App,
+	step: Undo_Step,   // owned: when it lands, to the other stack (done) or freed
+	redo: bool,
+	why:  string,      // owned: the answer: what went wrong, said ("": done)
+}
+
+@(private = "file")
+undo_ask :: proc(app: ^App, step: Undo_Step, redo: bool) {
+	a := new(Undo_Ask)
+	a^ = {app = app, step = step, redo = redo}
+	edit_submit(app, undo_run, a)
+}
+
+@(private = "file")
+undo_ask_free :: proc(a: ^Undo_Ask) {
+	undo_step_free(&a.step)
+	delete(a.why)
+	free(a)
+}
+
+// On the edits' worker: the files as they were (undo) or as the step made them (redo).
+@(private = "file")
+undo_run :: proc(data: rawptr) {
+	a := (^Undo_Ask)(data)
+	pairs := a.step.pairs
+	switch {
+	case a.redo && a.step.kind == .Rename:
+		if !renames_swap(pairs, back = false) { a.why = strings.clone("The rename cannot be done again.") }
+	case a.redo:
+		e := a.step.kind == .New_Folder ? fs.make_folder(pairs[0][1]) : fs.make_file(pairs[0][1])
+		if e != .None { a.why = fmt.aprintf("%s cannot be made again.", fs.base(pairs[0][1])) }
+	case a.step.kind == .Rename:
+		// (a batch: every name back, the last renamed first)
+		for p in pairs {
+			if fs.exists(p[0]) && !slice.contains(afters_of(pairs), p[0]) {
+				a.why = fmt.aprintf("%s is there again: the rename cannot be undone.", fs.base(p[0]))
+				break
+			}
+		}
+		if a.why == "" && !renames_swap(pairs, back = true) { a.why = strings.clone("The rename cannot be undone.") }
+	case:
+		path := pairs[0][1]
+		info, _ := fs.stat(path)
+		if (a.step.kind == .New_File && info.size > 0) || fs.remove(path) != .None {
+			a.why = fmt.aprintf("%s is not empty now: it stays.", fs.base(path))
+		}
+	}
+	if !ui.post(&a.app.main.state, undo_done, a) { undo_ask_free(a) }
+}
+
+// On the interface's thread: done, the step goes to the other stack and the tabs of its folder show the entry; or
+// what went wrong is said and the step is forgotten.
+@(private = "file")
+undo_done :: proc(data: rawptr, word: u64) {
+	a := (^Undo_Ask)(data)
+	app := a.app
+	defer undo_ask_free(a)
+	answer_came(app)
+	if a.why != "" {
+		say(app, "%s", a.why)
+		return
+	}
+	kind, n := a.step.kind, len(a.step.pairs)
+	if a.redo {
+		undo_push(app, kind, a.step.pairs, redoing = true)
+		undo_reveal(app, a.step.pairs[0][1])
+		say(app, "Done again: the %s%s.", UNDO_SAID[kind], n > 1 ? " of several items" : "")
+		return
+	}
+	undo_reveal(app, kind == .Rename ? a.step.pairs[0][0] : a.step.pairs[0][1])
+	append(&app.redo, a.step)
+	a.step = {}   // (the redo stack's now)
+	say(app, "Undone: the %s%s.", UNDO_SAID[kind], n > 1 ? " of several items" : "")
 }
 
 @(private = "file")

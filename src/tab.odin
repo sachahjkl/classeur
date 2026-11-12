@@ -35,6 +35,9 @@ Tab :: struct {
 	focus_due:    Focus_Due,         // a field to give the keyboard at the next build
 	space:        fs.Space,          // the volume's free and total bytes, read with the folder
 	has_space:    bool,
+	share_root:   string,            // owned: the folder of the share the path is under ("": none), read with the folder
+	share_uri:    string,            // owned: its URI (the first crumb)
+	share_label:  string,            // owned: its name ("docs on nas": the title of a tab on its root)
 	measured:     u64,               // the read whose folders were given to the measures
 	locked:       bool,
 	flat:         bool,              // the search of File Pilot: every entry under the folder, flattened
@@ -135,6 +138,9 @@ tab_destroy :: proc(t: ^Tab) {
 	for v in t.forward { visit_delete(v) }
 	delete(t.forward)
 	delete(t.reveal_name)
+	delete(t.share_root)
+	delete(t.share_uri)
+	delete(t.share_label)
 	tab_select_forget(t)
 	delete(t.select_names)
 	ui.vlist_destroy(&t.vl)
@@ -147,7 +153,8 @@ tab_destroy :: proc(t: ^Tab) {
 
 tab_title :: proc(app: ^App, t: ^Tab) -> string {
 	if t.path == app.home { return "Home" }
-	if s := share_title(t.path); s != "" { return s }
+	// (a share's root is named by its URI's label, asked with the folder's read: never here, each frame)
+	if t.share_root != "" && t.share_root == t.path { return t.share_label }
 	b := fs.base(t.path)
 	return b != "" ? b : t.path
 }
@@ -246,6 +253,7 @@ Load_Job :: struct {
 	ms:      f64,
 	space:   fs.Space,
 	has_space: bool,
+	share_root, share_uri, share_label: string,   // owned: the share the path is under (fs.share_root reads the mounts)
 }
 
 // Asks the workers to read the tab's folder again.
@@ -291,6 +299,9 @@ load_run :: proc(data: rawptr) {
 	}
 	job.ms = time.duration_milliseconds(time.tick_since(start))
 	job.space, job.has_space = fs.space(job.path)
+	if root, uri, ok := fs.share_root(job.path); ok {
+		job.share_root, job.share_uri, job.share_label = root, uri, fs.share_label(uri)
+	}
 	// (refused once the app closes, which let go of every walk first: no tab points to the job freed here)
 	if !ui.post(&job.app.main.state, load_done, job) { load_free(job) }
 }
@@ -343,6 +354,9 @@ load_free :: proc(data: rawptr) {
 	job := (^Load_Job)(data)
 	fs.listing_destroy(&job.listing)
 	delete(job.path)
+	delete(job.share_root)
+	delete(job.share_uri)
+	delete(job.share_label)
 	for p in job.tree { delete(p) }
 	delete(job.tree)
 	free(job)
@@ -376,6 +390,9 @@ load_done :: proc(data: rawptr, word: u64) {
 	t.loading = false
 	t.load_ms = job.ms
 	t.space, t.has_space = job.space, job.has_space
+	delete(t.share_root); delete(t.share_uri); delete(t.share_label)
+	t.share_root, t.share_uri, t.share_label = job.share_root, job.share_uri, job.share_label
+	job.share_root, job.share_uri, job.share_label = "", "", ""
 	same_place := t.folder.loaded && t.folder.listing.path == job.listing.path && t.folder.flat == job.flat
 	t.folder.flat = job.flat
 	t.folder.tree = t.tree && !job.flat
