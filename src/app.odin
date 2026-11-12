@@ -62,6 +62,13 @@ App :: struct {
 	side_menu_key: ui.Key,              // a heading's menu: Move up, Move down...
 	side_menu_of:  Side_Section,
 	side_touched:  bool,
+	side_row_key:  ui.Key,              // a row's menu: Open, Copy the path... (sidebar.odin)
+	side_row_path: string,              // owned: the place it was opened on
+	side_row_kind: Side_Row_Kind,
+	bm_drag:       int,                 // the bookmark dragged ...
+	bm_dragging:   bool,                // ... while it is
+	bm_held:       bool,                // ... and its button is still down (let go: it lands)
+	bm_line:       ui.Rect,             // where it lands, as shown ({}: none)
 	no_dialog:     bool,                // this build: no dialog takes the keys (typing goes to the filter)                // a heading was clicked or dragged: the section the commands move is known
 	side_filter: ui.Text_Field,
 	volume_space: [dynamic]fs.Space,   // of each volume, read with the places
@@ -122,6 +129,8 @@ App :: struct {
 	dragging:    []string,          // the files of the drag that runs now (drag_paths'), nil between drags
 	drag_started: bool,             // the press that is held has started its drag
 	file_drag:   bool,              // drag_paths are dragged in the window (file_drag_frame) ...
+	spring_target: string,          // owned: what the dragged files rest on ("": nothing to open), its timer set when it changed
+	spring_done:   bool,            // ... and it was opened: not again till the target changes
 	drag_out:    bool,              // ... or left it: the system's drag takes them after this frame (drag_run)
 	setup:       setup.Dialog,      // the Setup (integration.odin)
 	logo:        render.Texture,    // its logo, made at its first show
@@ -401,6 +410,7 @@ app_free :: proc(app: ^App) {
 	for u in app.mounting { delete(u) }
 	delete(app.mounting)
 	ui.field_destroy(&app.side_filter)
+	delete(app.side_row_path)
 	delete(app.volume_space)
 	delete(app.panel_rects)
 	delete(app.text_keys_before)

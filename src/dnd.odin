@@ -13,6 +13,8 @@ package classeur
 //     the system's drag takes it (drag_run), to another program, the desktop or another window; it blocks in
 //     drag_start: the window answers at once (drop_sync_set) and a drop back on it is a job before drag_start returns.
 //     A drag of another program's comes as events (app_input).
+//   - Spring-open: the files held still on a folder's row for SPRING_MS open it in its tab, on a tab show that tab
+//     (Finder's): the drag goes on there.
 
 import "core:fmt"
 import "core:slice"
@@ -177,6 +179,8 @@ drag_maybe :: proc(app: ^App, t: ^Tab, sig: ui.Signal) {
 	for e in targets { append(&app.drag_paths, fs.join(t.path, e.name)) }
 	// (the first one's kind, for the ghost's icon: known from the listing, no disk read at each frame)
 	app.drag_first_folder = len(targets) > 0 && targets[0].kind == .Directory
+	delete(app.spring_target)
+	app.spring_target = ""
 	app.file_drag = len(app.drag_paths) > 0
 	app_frames(app)
 }
@@ -195,6 +199,7 @@ file_drag_frame :: proc(app: ^App, em: f32) {
 	effect := drop_effect(app, app.drag_paths[:], dir, {.Copy, .Move}, mods)
 	delete(app.drop_hover)
 	app.drop_hover = effect != nil ? strings.clone(dir) : ""
+	spring(app, m, dir)
 	// (let go: the press's box has no longer the pointer's)
 	if ui.active_key() == 0 {
 		if e, ok := effect.?; ok { job_add(app, e == .Move ? .Move : .Copy, app.drag_paths[:], dir) }
@@ -213,6 +218,45 @@ file_drag_frame :: proc(app: ^App, em: f32) {
 	}
 	app_frames(app)
 	file_ghost(app, m, effect, dir, em)
+}
+
+SPRING_MS :: 700
+
+// One timer for the target under the pointer (a tab, else a folder's row in a panel's list), set again when the
+// target changes; due, the folder opens in that panel's tab or the tab is shown, once.
+@(private = "file")
+spring :: proc(app: ^App, m: [2]f32, dir: string) {
+	inside :: proc(m: [2]f32, r: ui.Rect) -> bool { return m.x >= r.min.x && m.x < r.max.x && m.y >= r.min.y && m.y < r.max.y }
+	target := ""
+	tab_at: Tab_Rect
+	for tr in app.tab_rects_last {
+		if tr.panel < len(app.panels) && tr.index < len(app.panels[tr.panel].tabs) && inside(m, tr.rect) {
+			tab_at, target = tr, fmt.tprintf("tab %d %d", tr.panel, tr.index)
+		}
+	}
+	into: ^Tab
+	if target == "" && dir != "" {
+		for r, i in app.panel_rects {
+			if i >= len(app.panels) || !inside(m, r) { continue }
+			// (a row of its list: a folder under the one shown; a crumb is above it, the list itself is it)
+			if t := panel_tab(app.panels[i]); t != nil && dir != t.path && under_or_at(dir, t.path) { into, target = t, dir }
+		}
+	}
+	key := ui.key_from_string(0, "classeur_spring")
+	if target != app.spring_target {
+		delete(app.spring_target)
+		app.spring_target, app.spring_done = strings.clone(target), false
+		if target != "" { ui.timer_set(key, SPRING_MS) }
+		return
+	}
+	if target == "" || app.spring_done || !ui.timer_due(key) { return }
+	app.spring_done = true
+	if into != nil {
+		tab_go(app, into, dir)
+	} else {
+		app.panels[tab_at.panel].active = tab_at.index
+	}
+	app_frames(app)
 }
 
 // The files dragged, beside the pointer: the first one's icon, its name or how many they are, what a release does.
@@ -241,6 +285,8 @@ file_ghost :: proc(app: ^App, m: [2]f32, effect: Maybe(platform.Drop_Effect), di
 
 file_drag_end :: proc(app: ^App) {
 	app.file_drag = false
+	delete(app.spring_target)
+	app.spring_target = ""
 	for p in app.drag_paths { delete(p) }
 	clear(&app.drag_paths)
 	delete(app.drop_hover)
@@ -282,6 +328,7 @@ dnd_free :: proc(app: ^App) {
 	for p in app.drag_paths { delete(p) }
 	delete(app.drag_paths)
 	delete(app.drop_hover)
+	delete(app.spring_target)
 }
 
 // The tests' way to ask drop_effect.

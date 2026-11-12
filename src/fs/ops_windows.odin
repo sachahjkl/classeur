@@ -213,6 +213,13 @@ untrash :: proc(in_trash: string, allocator := context.allocator) -> (original: 
 	return strings.clone(from, allocator), .None
 }
 
+// The $I record beside an item of the Recycle Bin (its $R path); "": not one.
+trash_record :: proc(in_trash: string, allocator := context.temp_allocator) -> string {
+	name := base(in_trash)
+	if !strings.has_prefix(name, "$R") { return "" }
+	return join(parent(in_trash), strings.concatenate({"$I", name[2:]}, context.temp_allocator), allocator)
+}
+
 // The full form of a path (its 8.3 parts made long: C:\Users\RUNNER~1 is C:\Users\runneradmin): what a $I record says.
 @(private = "file")
 long_path :: proc(path: string) -> string {

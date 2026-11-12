@@ -71,7 +71,11 @@ act_open_other_panel :: proc(app: ^App) {
 	if t == nil { return }
 	e := folder_cursor_entry(&t.folder)
 	if e == nil || e.kind != .Directory { return }
-	path := fs.join(t.path, e.name, context.temp_allocator)
+	open_other_panel_at(app, fs.join(t.path, e.name, context.temp_allocator))
+}
+
+// The folder `path` in the other panel (none: a new panel), which gets the keyboard.
+open_other_panel_at :: proc(app: ^App, path: string) {
 	if len(app.panels) < 2 {
 		panel_open(app, path)
 		return
@@ -410,8 +414,7 @@ act_new_file :: proc(app: ^App) {
 act_terminal :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
-	if app.headless { append(&app.opened, strings.concatenate({"terminal:", t.path})); return }
-	if !desktop.open_terminal(t.path) { say(app, "No terminal was found: set $TERMINAL.") }
+	terminal_at(app, t.path)
 }
 
 // A terminal in the folder under the cursor (the folder shown when the cursor is on a file).
@@ -420,6 +423,11 @@ act_terminal_in :: proc(app: ^App) {
 	if t == nil { return }
 	dir := t.path
 	if e := folder_cursor_entry(&t.folder); e != nil && e.kind == .Directory { dir = fs.join(t.path, e.name, context.temp_allocator) }
+	terminal_at(app, dir)
+}
+
+// The system's terminal in `dir`. Headless (the tests), nothing starts: it is noted in `app.opened`.
+terminal_at :: proc(app: ^App, dir: string) {
 	if app.headless { append(&app.opened, strings.concatenate({"terminal:", dir})); return }
 	if !desktop.open_terminal(dir) { say(app, "No terminal was found: set $TERMINAL.") }
 }
@@ -511,8 +519,21 @@ act_cut :: proc(app: ^App) { clipboard_put(app, true) }
 // What the clipboard holds goes into the current folder: a copy, or a move after a cut. Copied into the folder it
 // comes from, a file keeps both ("name 2.ext").
 act_paste :: proc(app: ^App) {
+	if t := current_tab(app); t != nil { paste_to(app, t, t.path) }
+}
+
+// The same into the folder at the cursor (a folder row's menu), not the one shown.
+act_paste_into :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
+	e := folder_cursor_entry(&t.folder)
+	if e == nil || e.kind != .Directory { return }
+	paste_to(app, t, fs.join(t.path, e.name, context.temp_allocator))
+}
+
+// What the clipboard holds goes into `dir`, a folder of tab `t`.
+@(private = "file")
+paste_to :: proc(app: ^App, t: ^Tab, dir: string) {
 	if read_only_here(app, t) { return }
 	paths, ok := platform.clipboard_get_files(app.main.win, context.temp_allocator)
 	if !ok || len(paths) == 0 {
@@ -521,7 +542,7 @@ act_paste :: proc(app: ^App) {
 	}
 	// (a cut, here or in another file manager, moves; once moved, the files are no longer where the clipboard says)
 	cut := platform.clipboard_files_cut(app.main.win)
-	job_add(app, cut ? .Move : .Copy, paths, t.path)
+	job_add(app, cut ? .Move : .Copy, paths, dir)
 	if cut { platform.clipboard_set(app.main.win, {}) }
 	cut_forget(app)
 }
@@ -557,6 +578,34 @@ act_delete :: proc(app: ^App) {
 	confirm_delete(app, paths)
 }
 
+// Whether the tab shows the trash itself (not a folder in it, nor its search): its items can be put back.
+shows_trash :: proc(t: ^Tab) -> bool {
+	dir := fs.trash_files_dir()
+	return dir != "" && t.path == dir && !t.folder.flat
+}
+
+// The items of the trash selected go back where they were (each one's record says where), on the jobs' thread.
+act_put_back :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	if !shows_trash(t) { say(app, "Put back works in the trash (trash:///)."); return }
+	paths := target_paths(t)
+	if len(paths) == 0 { return }
+	job_add(app, .Restore, paths)
+}
+
+// Every item of the trash deleted for good, after the question (dialogs.odin). Its items are the ones the tab read.
+act_empty_trash :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	if !shows_trash(t) { say(app, "Open the trash (trash:///) to empty it."); return }
+	entries := t.folder.listing.entries
+	if len(entries) == 0 { say(app, "The trash is empty."); return }
+	paths := make([]string, len(entries), context.temp_allocator)
+	for e, i in entries { paths[i] = fs.join(t.path, e.name, context.temp_allocator) }
+	confirm_empty_trash(app, paths)
+}
+
 act_jobs_cancel :: proc(app: ^App) {
 	for job in app.jobs.list { job_cancel(job) }
 }
@@ -578,6 +627,31 @@ bookmark_toggle :: proc(app: ^App, path: string) {
 }
 
 act_bookmark :: proc(app: ^App) { if t := current_tab(app); t != nil { bookmark_toggle(app, t.path) } }
+
+// The folder at the cursor bookmarked (or its bookmark removed); on a file, the folder shown.
+act_bookmark_folder :: proc(app: ^App) {
+	t := current_tab(app)
+	if t == nil { return }
+	path := t.path
+	if e := folder_cursor_entry(&t.folder); e != nil && e.kind == .Directory { path = fs.join(t.path, e.name, context.temp_allocator) }
+	bookmark_toggle(app, path)
+}
+
+bookmarked :: proc(app: ^App, path: string) -> bool {
+	for p in app.bookmarks { if p == path { return true } }
+	return false
+}
+
+act_recents_clear :: proc(app: ^App) {
+	for p in app.recents { delete(p) }
+	clear(&app.recents)
+}
+
+// `path` on the clipboard, as text (a place of the sidebar).
+path_to_clipboard :: proc(app: ^App, path: string) {
+	platform.set_clipboard(app.main.win, path)
+	say(app, "The path is copied.")
+}
 act_lock :: proc(app: ^App) { if t := current_tab(app); t != nil { t.locked = !t.locked } }
 
 act_view_details :: proc(app: ^App) { if t := current_tab(app); t != nil { tab_set_zoom(app, t, 0) } }

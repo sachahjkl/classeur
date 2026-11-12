@@ -52,6 +52,9 @@ location_resolve :: proc(text: string, allocator := context.allocator) -> (r: Lo
 	return {}, .Not_A_Location
 }
 
+// The Recycle Bin is no folder: no tab shows it, its items are put back by an undo only.
+trash_files_dir :: proc(allocator := context.temp_allocator) -> string { return "" }
+
 // Nothing to mount: a share is read by its UNC path (Windows asks for a password itself when it wants one).
 share_mount :: proc(uri: string, allocator := context.temp_allocator) -> (ok: bool, why: string) { return true, "" }
 

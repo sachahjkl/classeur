@@ -76,6 +76,13 @@ untrash :: proc(in_trash: string, allocator := context.allocator) -> (original: 
 	return strings.clone(to, allocator), .None
 }
 
+// The record beside an item of the trash (<trash>/files/<name>): its info/<name>.trashinfo, which goes with the item
+// when the trash is emptied.
+trash_record :: proc(in_trash: string, allocator := context.temp_allocator) -> string {
+	dir := parent(parent(in_trash))
+	return join(join(dir, "info", context.temp_allocator), strings.concatenate({base(in_trash), ".trashinfo"}, context.temp_allocator), allocator)
+}
+
 @(private = "file")
 cpath_t :: proc(path: string) -> cstring { return strings.clone_to_cstring(path, context.temp_allocator) }
 

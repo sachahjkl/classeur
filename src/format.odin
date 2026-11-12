@@ -46,16 +46,6 @@ type_text :: proc(e: fs.Entry, allocator := context.temp_allocator) -> string {
 }
 
 
-// The text cut after `max_runes` characters, with an ellipsis.
-cut_text :: proc(text: string, max_runes: int, allocator := context.temp_allocator) -> string {
-	n := 0
-	for _, i in text {
-		if n == max_runes { return strings.concatenate({text[:i], "…"}, allocator) }
-		n += 1
-	}
-	return text
-}
-
 // "984", "7.3K", "12K", "1.2M": a count in a narrow column.
 count_text :: proc(n: i64, allocator := context.temp_allocator) -> string {
 	switch {

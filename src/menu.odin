@@ -78,11 +78,13 @@ entry_menu_open :: proc(app: ^App, t: ^Tab, pos: ui.Vec2, from_keyboard := false
 	ui.ctx_menu_open(m.key, pos, from_keyboard = from_keyboard, search = true)
 }
 
-// An item that runs a command, with its first key.
-menu_command :: proc(app: ^App, id: string, enabled := true, checked := false) {
+// An item that runs a command, with its first key. `title`: what the item says in place of the command's title (what
+// it acts on: "Rename 3 items…").
+menu_command :: proc(app: ^App, id: string, enabled := true, checked := false, title := "") {
 	c := command_find(id)
 	if c == nil { return }
-	if ui.menu_item(c.title, command_keys(app, c), checked = checked, icon = c.icon, enabled = enabled).clicked { c.run(app) }
+	text := title != "" ? fmt.tprintf("%s###%s", title, c.id) : c.title
+	if ui.menu_item(text, command_keys(app, c), checked = checked, icon = c.icon, enabled = enabled).clicked { c.run(app) }
 }
 
 entry_menu_build :: proc(app: ^App, em: f32) {
@@ -96,28 +98,51 @@ entry_menu_build :: proc(app: ^App, em: f32) {
 entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 	t := find_tab(app, m.tab)
 	if t == nil { ui.ctx_menu_close(); return }
+	trash := shows_trash(t)
 	if m.on_entry {
 		e := folder_cursor_entry(&t.folder)
 		folder := e != nil && e.kind == .Directory
+		full := e != nil ? fs.join(t.path, e.name, context.temp_allocator) : t.path
+		other := len(app.panels) > 1
 		menu_command(app, "open")
 		menu_command(app, "open_new_tab", enabled = folder)
 		menu_command(app, "open_other_panel", enabled = folder)
 		menu_command(app, "open_system")
-		if e != nil && !folder { open_with_menu(app, fs.join(t.path, e.name, context.temp_allocator)) }
+		if e != nil && !folder { open_with_menu(app, full) }
+		// (in a search the item's folder is not the one shown)
+		menu_command(app, "open_folder", enabled = e != nil && fs.parent(full) != t.path, title = "Go to its folder")
 		if folder { menu_command(app, "terminal_in") }
 		ui.menu_separator()
 		menu_command(app, "cut")
 		menu_command(app, "copy")
+		menu_command(app, "paste_into", enabled = folder, title = "Paste into this folder")
 		menu_command(app, "copy_path")
+		menu_command(app, "copy_name")
+		menu_command(app, "copy_to_other", enabled = other)
+		menu_command(app, "move_to_other", enabled = other)
 		ui.menu_separator()
-		menu_command(app, "trash")
+		if trash {
+			menu_command(app, "put_back", title = "Put back")
+			menu_command(app, "empty_trash")
+		} else {
+			menu_command(app, "trash")
+		}
 		menu_command(app, "delete")
-		menu_command(app, "rename", enabled = t.folder.count <= 1)
+		// (several: the batch rename, as F2 opens it)
+		n := t.folder.count
+		menu_command(app, "rename", title = n > 1 ? fmt.tprintf("Rename %d items…", n) : "")
+		ui.menu_separator()
+		menu_command(app, "bookmark_folder", enabled = folder, title = folder && bookmarked(app, full) ? "Remove the bookmark" : "Bookmark this folder")
+		menu_command(app, "inspector", checked = app.inspector.open)
 		ui.menu_separator()
 	} else {
 		menu_command(app, "paste")
 		menu_command(app, "undo", enabled = len(app.undo) > 0)
 		menu_command(app, "redo", enabled = len(app.redo) > 0)
+		if trash {
+			menu_command(app, "put_back", enabled = t.folder.count > 0, title = "Put back")
+			menu_command(app, "empty_trash", enabled = len(t.folder.listing.entries) > 0)
+		}
 		ui.menu_separator()
 	}
 	menu_command(app, "new_folder")

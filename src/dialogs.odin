@@ -1,7 +1,7 @@
 package classeur
 
 // The questions the program asks: a name already taken where a job copies or moves (replace, skip, keep both, for the
-// next ones too), and the confirmation before deleting for good.
+// next ones too), and the confirmation before deleting for good (some items, or the trash emptied).
 
 import "core:fmt"
 import "core:strings"
@@ -13,6 +13,7 @@ CONFLICT_WIDTH_EM :: 38   // its four choices on one line
 Confirm :: struct {
 	open:  bool,
 	paths: [dynamic]string,   // owned: what Delete for good deletes
+	trash: bool,              // they are every item of the trash: emptied, each one's record with it
 }
 
 confirm_free :: proc(c: ^Confirm) {
@@ -21,13 +22,15 @@ confirm_free :: proc(c: ^Confirm) {
 	c^ = {}
 }
 
-confirm_delete :: proc(app: ^App, paths: []string) {
+confirm_delete :: proc(app: ^App, paths: []string, trash := false) {
 	c := &app.confirm
 	for p in c.paths { delete(p) }
 	clear(&c.paths)
 	for p in paths { append(&c.paths, strings.clone(p)) }
-	c.open = true
+	c.open, c.trash = true, trash
 }
+
+confirm_empty_trash :: proc(app: ^App, paths: []string) { confirm_delete(app, paths, trash = true) }
 
 dialogs_build :: proc(app: ^App, em: f32) {
 	confirm_build(app, em)
@@ -44,8 +47,19 @@ confirm_build :: proc(app: ^App, em: f32) {
 	for p, i in c.paths { names[i] = fs.base(p) }
 	title := n == 1 ? fmt.tprintf("Delete %s for good?", names[0]) : fmt.tprintf("Delete %d items for good?", n)
 	note := n == 1 ? "It does not go to the trash: this cannot be undone." : "They do not go to the trash: this cannot be undone."
-	if ui.confirm("confirm_delete", &c.open, {title = title, note = note, lines = names, act = "Delete"}) == .Confirmed {
+	act := "Delete"
+	if c.trash {
+		title, act = "Empty the trash?", "Empty the trash"
+		note = n == 1 ? "Its item is deleted for good: this cannot be undone." : fmt.tprintf("Its %d items are deleted for good: this cannot be undone.", n)
+	}
+	if ui.confirm("confirm_delete", &c.open, {title = title, note = note, lines = names, act = act}) == .Confirmed {
 		job_add(app, .Delete, c.paths[:])
+		// (then their records, by a job after it: the jobs run one after the other)
+		if c.trash {
+			records := make([dynamic]string, context.temp_allocator)
+			for p in c.paths { if r := fs.trash_record(p); r != "" { append(&records, r) } }
+			if len(records) > 0 { job_add(app, .Delete, records[:]) }
+		}
 	}
 }
 

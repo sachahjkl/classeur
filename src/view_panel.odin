@@ -265,6 +265,9 @@ crumbs :: proc(app: ^App, t: ^Tab, em: f32) {
 			if !last { ui.push_tags("weak") }
 			if ui.tags("ghost_button") { sig = ui.button(fmt.tprintf("%s###crumb%d", shown_text(c.name), at)) }
 			if !last { ui.pop_tags() }
+			// (files dropped on a crumb go into its folder, as on a row)
+			drop_zone(app, sig.box.rect, c.path)
+			if app.drop_hover == c.path { drop_mark(sig.box) }
 			if sig.clicked && !last { tab_go(app, t, c.path) }
 			hover_tip(sig, home_path(app, c.path), last ? "" : "A middle click opens it in a new tab")
 			if sig.middle_clicked { tab_open(app, current_panel(app), c.path, current_panel(app).active + 1) }

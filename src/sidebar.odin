@@ -2,7 +2,7 @@ package classeur
 
 // The sidebar, File Pilot's: a filter at the top, then sections that open and close: the recent folders, the
 // bookmarks, the storage (each volume with a bar of how full it is), the places. A click goes there in the tab that has
-// the keyboard; a middle click opens a new tab.
+// the keyboard; a middle click opens a new tab; a right click, the row's menu. A bookmark dragged up or down moves.
 
 import "core:fmt"
 import "core:strings"
@@ -13,6 +13,9 @@ import "gt:ui"
 import "fs"
 
 Side_Section :: enum u8 { Recents, Bookmarks, Storage, Network, Places }
+
+// What a row of the sidebar is, for its menu: a recent and a bookmark have one more line.
+Side_Row_Kind :: enum u8 { Place, Recent, Bookmark }
 
 @(private = "file", rodata)
 SECTION_TITLES := [Side_Section]string{.Recents = "Recents", .Bookmarks = "Bookmarks", .Storage = "Storage", .Network = "Network", .Places = "Places"}
@@ -41,15 +44,16 @@ sidebar_build :: proc(app: ^App, em: f32) {
 				if section(app, .Recents, em) {
 						for p, i in app.recents {
 							if !keeps(query, fs.base(p)) { continue }
-							side_folder(app, t, fmt.tprintf("###recent%d", i), p, cut_text(home_path(app, p), 40), here, em)
+							// (its name, then where it is in the weak colour: the name stays when the sidebar is narrow)
+							name := fs.base(p)
+							if name == "" { name = p }
+							sig := side_folder(app, fmt.tprintf("###recent%d", i), p, name, p != name ? home_path(app, fs.parent(p)) : "", here, em)
+							go_from(app, t, sig, p, .Recent)
 						}
 					}
 				case .Bookmarks:
 				if section(app, .Bookmarks, em) {
-						for p, i in app.bookmarks {
-							if !keeps(query, fs.base(p)) { continue }
-							side_folder(app, t, fmt.tprintf("###bookmark%d", i), p, fs.base(p), here, em)
-						}
+						side_bookmarks(app, t, query, here, em)
 						if len(app.bookmarks) == 0 && query == "" {
 							if ui.tags("weak") {
 								ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.8)), font_size = em * 0.85})
@@ -65,7 +69,7 @@ sidebar_build :: proc(app: ^App, em: f32) {
 						for v, i in app.volumes {
 							if !keeps(query, v.label) { continue }
 							sp := i < len(app.volume_space) ? app.volume_space[i] : fs.Space{}
-							if side_volume(app, i, v, sp, v.path == here, em) && t != nil { tab_go(app, t, v.path) }
+							go_from(app, t, side_volume(app, i, v, sp, v.path == here, em), v.path)
 						}
 					}
 				case .Network:
@@ -93,6 +97,7 @@ sidebar_build :: proc(app: ^App, em: f32) {
 		}
 		// (out of the scrolled list: the line and the tint are placed on the screen)
 		side_drag_end(app, em)
+		bookmark_line(app)
 	}
 }
 
@@ -102,9 +107,95 @@ keeps :: proc(query, name: string) -> bool {
 }
 
 @(private = "file")
-go_from :: proc(app: ^App, t: ^Tab, sig: ui.Signal, path: string) {
+go_from :: proc(app: ^App, t: ^Tab, sig: ui.Signal, path: string, kind := Side_Row_Kind.Place) {
 	if sig.clicked && t != nil { tab_go(app, t, path) }
 	if sig.middle_clicked { tab_open(app, current_panel(app), path, current_panel(app).active + 1) }
+	if sig.right_clicked { side_row_menu_open(app, path, kind) }
+}
+
+// The bookmarks. One dragged past a few pixels lands where it is let go: before the first row whose middle is under
+// the pointer (the line shows where while it is held). A filtered list has gaps: it does not reorder.
+@(private = "file")
+side_bookmarks :: proc(app: ^App, t: ^Tab, query, here: string, em: f32) {
+	rects := make([dynamic]ui.Rect, context.temp_allocator)
+	for p, i in app.bookmarks {
+		if !keeps(query, fs.base(p)) { continue }
+		sig := side_folder(app, fmt.tprintf("###bookmark%d", i), p, fs.base(p), "", here, em)
+		append(&rects, sig.box.rect)
+		// (the release of a drag is no click)
+		moved := app.bm_dragging && app.bm_drag == i
+		if query == "" && !moved && sig.dragging && abs(sig.drag_delta.y) > em * 0.5 { app.bm_drag, app.bm_dragging, moved = i, true, true }
+		if moved { app.bm_held = sig.dragging } else { go_from(app, t, sig, p, .Bookmark) }
+	}
+	app.bm_line = {}
+	if !app.bm_dragging { return }
+	if len(rects) != len(app.bookmarks) || app.bm_drag >= len(app.bookmarks) { app.bm_dragging = false; return }
+	y := ui.mouse_pos().y
+	slot := 0
+	for r, i in rects { if y > (r.min.y + r.max.y) * 0.5 { slot = i + 1 } }
+	if app.bm_held {
+		line_y := slot < len(rects) ? rects[slot].min.y : rects[len(rects) - 1].max.y
+		app.bm_line = {{rects[0].min.x, line_y}, {rects[0].max.x, line_y}}
+		app_frames(app)
+		return
+	}
+	app.bm_dragging = false
+	to := slot > app.bm_drag ? slot - 1 : slot
+	ui.list_move(app.bookmarks[:], app.bm_drag, to, 0)
+}
+
+// Where a dragged bookmark lands: a line of the accent, placed on the screen (out of the scrolled list).
+@(private = "file")
+bookmark_line :: proc(app: ^App) {
+	if app.bm_line == {} { return }
+	parent := ui.parent_box()
+	w := max(2, ui.scale() * 2)
+	ui.next({width = ui.px(app.bm_line.max.x - app.bm_line.min.x), height = ui.px(w), bg = ui.color("accent"), radius = 0})
+	line := ui.build_box({.Floating_X, .Floating_Y, .Draw_Background}, "###bookmark_line")
+	line.fixed_pos = ui.Vec2{app.bm_line.min.x, app.bm_line.min.y - w * 0.5} - parent.rect.min
+}
+
+// A row's menu: its place opened, its path, a terminal there; for a bookmark its removal, for a recent the recents
+// cleared.
+@(private = "file")
+side_row_menu_open :: proc(app: ^App, path: string, kind: Side_Row_Kind) {
+	if app.side_row_key == 0 { app.side_row_key = ui.key_from_string(0, "classeur_side_row_menu") }
+	delete(app.side_row_path)
+	app.side_row_path, app.side_row_kind = strings.clone(path), kind
+	ui.ctx_menu_open(app.side_row_key, ui.mouse_pos())
+}
+
+@(private = "file")
+side_row_menu_build :: proc(app: ^App) {
+	if app.side_row_key == 0 { return }
+	if ui.ctx_menu(app.side_row_key) {
+		path := app.side_row_path
+		if side_item("open") {
+			if t := current_tab(app); t != nil { tab_go(app, t, path) }
+		}
+		if side_item("open_new_tab") { tab_open(app, current_panel(app), path, current_panel(app).active + 1) }
+		if side_item("open_other_panel") { open_other_panel_at(app, path) }
+		ui.menu_separator()
+		if side_item("copy_path") { path_to_clipboard(app, path) }
+		if side_item("terminal") { terminal_at(app, path) }
+		switch app.side_row_kind {
+		case .Bookmark:
+			ui.menu_separator()
+			if ui.menu_item("Remove the bookmark###bm_remove", icon = lucide.BOOKMARK).clicked { bookmark_toggle(app, path) }
+		case .Recent:
+			ui.menu_separator()
+			menu_command(app, "recents_clear")
+		case .Place:
+		}
+	}
+}
+
+// An item with a command's title and icon that acts on the row's place, not on the list: no keys shown (they are the
+// list's).
+@(private = "file")
+side_item :: proc(id: string) -> bool {
+	c := command_find(id)
+	return c != nil && ui.menu_item(fmt.tprintf("%s###%s", c.title, c.id), icon = c.icon).clicked
 }
 
 @(private = "file")
@@ -231,6 +322,7 @@ side_menu_open :: proc(app: ^App, s: Side_Section) {
 }
 
 side_menu_build :: proc(app: ^App, em: f32) {
+	side_row_menu_build(app)
 	if app.side_menu_key == 0 { return }
 	if ui.ctx_menu(app.side_menu_key) {
 		s := app.side_menu_of
@@ -247,26 +339,33 @@ side_menu_build :: proc(app: ^App, em: f32) {
 	}
 }
 
+// A folder's row: its name, and `under` (where it is) after it in the weak colour.
 @(private = "file")
-side_folder :: proc(app: ^App, t: ^Tab, id, path, name: string, here: string, em: f32) {
+side_folder :: proc(app: ^App, id, path, name, under: string, here: string, em: f32) -> (sig: ui.Signal) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.2)), radius = 0})
 	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Hot_Within, .Middle_Click}
 	on := path == here
 	if on { flags += {.Draw_Background} }
 	ui.next_merge({bg = on ? ui.color("border") : nil})
-	sig: ui.Signal
 	if ui.row(.Center, flags, id) {
 		sig = ui.signal(ui.parent_box())
 		ui.spacer(ui.px(em * 2.4))
 		path_icon(app, path, true, em * 1.7)
 		ui.spacer(ui.px(em * 0.5))
-		ui.next({width = ui.fill(), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###n", shown_text(name)))
+		if under == "" {
+			ui.next({width = ui.fill(), height = ui.pct(1)})
+			ui.label(fmt.tprintf("%s###n", shown_text(name)))
+		} else {
+			ui.next({width = ui.text_size(em * 0.2), height = ui.pct(1)})
+			ui.label(fmt.tprintf("%s###n", shown_text(name)))
+			ui.next({width = ui.fill(), height = ui.pct(1)})
+			if ui.tags("weak") { ui.label(fmt.tprintf("%s###under", shown_text(under))) }
+		}
 		drop_zone(app, ui.parent_box().rect, path)
 		if app.drop_hover == path { drop_mark(ui.parent_box()) }
 	}
-	go_from(app, t, sig, path)
 	hover_tip(sig, home_path(app, path))
+	return
 }
 
 @(private = "file")
@@ -301,12 +400,11 @@ bar_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 
 // A volume: its icon, its name, and under the name a bar of how full it is.
 @(private = "file")
-side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, em: f32) -> bool {
+side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, em: f32) -> (sig: ui.Signal) {
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.5)), radius = 0})
-	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Hot_Within}
+	flags := ui.Box_Flags{.Clickable, .Draw_Hot_Effects, .Hot_Within, .Middle_Click}
 	if here { flags += {.Draw_Background} }
 	ui.next_merge({bg = here ? ui.color("border") : nil})
-	sig: ui.Signal
 	if ui.row(.Center, flags, fmt.tprintf("###vol%d", i)) {
 		sig = ui.signal(ui.parent_box())
 		drop_zone(app, ui.parent_box().rect, v.path)
@@ -332,7 +430,7 @@ side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, e
 		ui.spacer(ui.px(em * 0.8))
 	}
 	hover_tip(sig, v.path, sp.total > 0 ? fmt.tprintf("%s free of %s", size_text(sp.free), size_text(sp.total)) : "")
-	return sig.clicked
+	return
 }
 
 // The section last touched (a click or a right click on its heading) a place up or down (its keys, its menu's lines).
