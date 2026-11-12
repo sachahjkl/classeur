@@ -6,7 +6,7 @@ import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 
-APP_VERSION :: "0.15.2"
+APP_VERSION :: "0.16.0"
 APP_NAME    :: "classeur"
 
 USAGE :: `classeur: a file manager

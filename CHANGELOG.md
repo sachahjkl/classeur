@@ -3,6 +3,47 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.16.0] - 2026-11-12
+
+### Added
+- **The name-taken question compares the two files**: it shows the size and the date of the file there and of the one copied or moved, and marks the newer one.
+- **A copy says its speed and the time left**: the footer's line of a job that runs and its row in the jobs' view read "Copying 3 of 40 · name · 42 MB/s · 2 min left". The speed is smoothed over the last seconds and shows after the first second; the time left shows when the total is known.
+- **The sidebar and the inspector by the keyboard**: F6 goes from the sidebar to each panel's list, then to the inspector, and back to the sidebar; Ctrl+Shift+F6 goes the other way. In the sidebar, Up and Down move a cursor over its places, Enter opens the place, Ctrl+Enter opens it in a new tab. In the inspector, Page Up, Page Down, Home, End, Up and Down scroll the text or the folder shown. Escape gives the keyboard back to the list, whose cursor stays where it was.
+- **The inspector's folder rows open**: a double click on an item of the folder shown goes to it if it is a folder, or opens it with its application if it is a file, as in the list.
+- **The inspector says when a text is cut**: a text longer than 64 KB ends with "The first 64 KB are shown."
+- **The inspector says a picture's pixels**: its head shows the picture's own width and height (1920 × 1080), not those of the copy it shows.
+- **The inspector sums up a selection**: with several items selected, it says how many there are, how many folders and files, and their size (the folders' when they are measured), then lists them.
+- **Keyboard shortcuts on F1**: a sheet lists every command with its keys, your own keys included, under the palette's groups. It is in the panel's "…" menu too; Escape closes it.
+- **Dates in your format**: the setting Date format (Files) shows the dates as before (2026-11-09 21:40), relative ("Today 21:40", "Yesterday 21:40", the weekday in the last week, then "9 Nov 2026"), or day, month and year ("9 Nov 2026 21:40").
+- **Drops on the path, and folders that spring open**: files dragged onto a part of the path go into that folder, marked as a row is. Held still on a folder's row for 0.7 s while dragged, the folder opens in its tab; on a tab, that tab is shown, and the drag goes on there.
+- **Put back and Empty the trash**: in the trash (trash:///), Put back (Ctrl+Alt+R) returns the items selected to where they were, and Empty the trash (Ctrl+Shift+Delete) deletes every item for good after a question; both are in the menus of the trash. On Windows the Recycle Bin is no folder: its items come back by an undo.
+- **The sidebar's rows have a menu, and the bookmarks move**: a right click on a place, a bookmark, a recent or a volume opens it here, in a new tab or in the other panel, copies its path or opens a terminal there; a bookmark is removed from it, the recents cleared (Ctrl+Shift+Alt+H). A bookmark dragged up or down lands where the line shows. A middle click on a volume opens it in a new tab, as on the other rows. A recent shows its folder's name, then where it is in the weak colour.
+- **What is cut looks cut, what is pasted is selected**: after a cut, its rows, lines and cards are dimmed until they are pasted or something else is copied or cut. After a copy or a move into the folder of a tab, the items it made there are selected and the cursor is on the first.
+- **The row's menu holds what can be done with an item**: a folder's row pastes into that folder (Ctrl+Shift+V) and bookmarks it (Ctrl+Shift+B); every row copies its names, copies or moves it to the other panel, goes to its folder in a search and opens the Inspector. Rename stays on with several items selected and says "Rename 3 items…": it opens the batch rename, as F2 does.
+
+### Changed
+- **The dialogs share one look**: batch rename, the naming of a layout and the key recorder have a title, a weak note and buttons laid out as the question before Delete for good; the button that Enter presses says "(Enter)", and the case of batch rename is a segmented control.
+- **An empty view says what to do**: an empty folder, a filter or the columns' funnels that leave no row, a folder of hidden files only, a folder that cannot be read: the middle of the view says so, with an icon, and offers its way out (New folder, Paste, Clear the filter, Show every row, Show hidden files, Go up, Try again). It was one grey line at the top.
+- **The panel that has the keyboard stands out**: with two panels, its shown tab has a line of the accent two pixels thick as its top edge, and the other panel's column titles are dimmed with its rows.
+- **The inspector's picture sits under the properties**: it is at the top of its room, fitted to the pane's width, not centred under a large empty gap.
+- **Commands have short names and their own icons**: the menus, the tooltips and the palette say "Inspector", "Jobs", "Delete permanently", "Move tab to window" instead of a sentence with a colon, and the palette still finds a command by the words its old name had ("beside the list" finds the inspector). Each command has an icon of its own: Zoom out no longer shows a cross, the hidden files and the inspector no longer share the eye, each sort and each group has its sign. Tab 1 to Last tab leave the palette's lines until "tab" is typed.
+- **Types named by the system**: the Type column, the footer, the tooltips and the inspector say what the system calls a file's type ("Plain text document", "PNG image"); a folder is a "Folder". A type the system does not know still reads "TXT File".
+- **A card shows more of a long name**: the name goes on two lines, centred, where the card has room for them; still too long, it is cut in its middle so that its end and its extension stay visible ("a very long na…ame.txt").
+- **The footer reads plainly**: the counts of folders and files show the number alone ("7"), and "3/7" in the accent's colour only while a filter leaves rows out; the zoom shows the view's icon before its percent. The empty part of the footer says the cursor's item: its name, type and size.
+- **A rename that fails keeps what you typed, and Tab renames the next item**: when the name is taken or not allowed, or the system refuses, the field stays open with the name selected and in the colour of an error, and the reason shows; Tab and Shift+Tab keep the name and rename the next or the previous item, as in Explorer. A change of case alone ("File.txt" to "file.txt") renames on Windows too.
+- **Back and Forward come back to where you were**: the cursor is on the item it was on when you left the folder, and the list is scrolled as it was; before, the cursor went to the first row and the list to its top.
+
+### Fixed
+- **A long text scrolls in the inspector**: its box was one row tall whatever the text, so the text ran past it and neither the wheel nor the keys could scroll it.
+- **The small controls follow the rounding**: the toolbar's buttons, the crumbs, the address and rename fields, a tab's close button and the zoom's slider are rounded as the rows' selection, and square when the rounding setting is 0; the ring a drop shows takes the corners of what it is around.
+- **The inspector of an empty folder**: it was blank, with no close button; it now shows the folder in its head, its close button, and "This folder is empty." (or "Nothing selected.").
+- **Typing filters after a click too**: once the list had the keyboard (a click in it), the letters typed jumped to a name instead of going to the filter; they go to the filter now, as before any click.
+- **The arrows work as soon as classeur opens**: the list has the keyboard from the start; Up, Down, End and the others did nothing until a first click in it.
+- **Every tab stays in reach when a panel has many**: a row with more tabs than it holds scrolls with the wheel, the tab shown is brought into view, the new tab's button stays at the row's end, and a chevron before it lists every tab of the panel to show one.
+- **The Size column draws no stray dots**: a file under 2 % of the largest row's size has no bar under its size, and each bar ends under the right edge of its size. The Folders and Files cells of a file are empty; a folder shows "--" only until it is measured, then its counts.
+- **A menu's search edits as a field and the menu holds still**: in the right-click menu and the layouts' menu, what is typed takes Ctrl+A, Backspace on a selection, Ctrl+Backspace for a word, the arrows and a paste; while it filters, the menu keeps its corner and its width (gui_toolkit at 59f97b3).
+- **The questions are clear and fit their dialog**: Delete for good is the toolkit's question, as inspecteur asks it: its title, a note, each item it deletes by name, Cancel (Enter: nothing is deleted) and Delete; the note no longer runs under the buttons. The question of a name already taken has the same look, its four choices fit on one line, and Enter keeps both files.
+
 ## [0.15.2] - 2026-11-11
 
 ### Added
@@ -312,6 +353,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.16.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.0
 [0.15.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.15.2
 [0.15.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.15.1
 [0.15.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.15.0
