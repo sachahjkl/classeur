@@ -38,6 +38,7 @@ Tab :: struct {
 	share_root:   string,            // owned: the folder of the share the path is under ("": none), read with the folder
 	share_uri:    string,            // owned: its URI (the first crumb)
 	share_label:  string,            // owned: its name ("docs on nas": the title of a tab on its root)
+	in_archive:   bool,              // the folder is an archive entered or a folder of one (read only), read with the folder
 	measured:     u64,               // the read whose folders were given to the measures
 	locked:       bool,
 	flat:         bool,              // the search of File Pilot: every entry under the folder, flattened
@@ -260,6 +261,7 @@ Load_Job :: struct {
 	space:   fs.Space,
 	has_space: bool,
 	share_root, share_uri, share_label: string,   // owned: the share the path is under (fs.share_root reads the mounts)
+	in_archive: bool,   // the path is in an archive (fs.archive_holds stats the parts named like one)
 }
 
 // Asks the workers to read the tab's folder again.
@@ -313,6 +315,8 @@ load_run :: proc(data: rawptr) {
 	if root, uri, ok := fs.share_root(job.path); ok {
 		job.share_root, job.share_uri, job.share_label = root, uri, fs.share_label(uri)
 	}
+	// (an entry of the folder is in the archive when the folder is one or in one)
+	job.in_archive = fs.archive_holds(fs.join(job.path, "x", context.temp_allocator))
 	// (refused once the app closes, which let go of every walk first: no tab points to the job freed here)
 	if !ui.post(&job.app.main.state, load_done, job) { load_free(job) }
 }
@@ -406,6 +410,7 @@ load_done :: proc(data: rawptr, word: u64) {
 	delete(t.share_root); delete(t.share_uri); delete(t.share_label)
 	t.share_root, t.share_uri, t.share_label = job.share_root, job.share_uri, job.share_label
 	job.share_root, job.share_uri, job.share_label = "", "", ""
+	t.in_archive = job.in_archive
 	same_place := t.folder.loaded && t.folder.listing.path == l.path && t.folder.flat == job.flat
 	t.folder.flat = job.flat
 	t.folder.tree = t.tree && !job.flat

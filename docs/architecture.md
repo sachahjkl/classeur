@@ -11,6 +11,7 @@ is immediate-mode); the data changes only on the interface's thread.
 | `src/folder.odin` | A folder as a panel shows it: the listing, its order, the rows shown (filter, hidden files), the selection (a flag per entry, so that it survives a sort or a filter), the cursor and the anchor of Shift ranges. No interface. |
 | `src/tab.odin` | Tabs (a path, its history, a `Folder`, the fields of the toolbar) and panels (tabs, one active). Reading a folder: `tab_load` gives a task to the workers; `load_done` (through `ui.post`) gives the listing to the tab only if it is the read the tab waits for (`serial`). The worker also sorts and filters the listing with a copy of the tab's settings (`folder_view_copy`, `folder_prepare`); `load_done` swaps the prepared arrays in (`folder_take`) and only puts the selection and the cursor back by name. |
 | `src/pool.odin` | The workers: three threads, a queue of tasks. |
+| `src/file_writer.odin` | The files written while the window runs (the session, the preferences, the layouts, the Setup's answer): on a worker, one write at a time per file, the latest text wins; what is pending is written when the window closes. |
 | `src/jobs.odin` | Copy, move, trash, delete: one thread, one job at a time, progress in atomics, a question through `ui.post` and a semaphore. |
 | `src/dialogs.odin` | The name-taken question and the delete-for-good confirmation. |
 | `src/watcher.odin` | The folders of the tabs, watched on a thread (`fs.Watch`); a change reads the tab again. |
@@ -38,7 +39,11 @@ is immediate-mode); the data changes only on the interface's thread.
 - The changes to files the interface makes itself (a rename, a new folder or file, a batch rename, the undo and redo of
   these) go to a worker of their own (`app.edit_pool`, one thread: `edit_submit`), so they are done in the order asked.
   The interface keeps what it shows until the answer (the rename's field stays open). The places of the sidebar, a
-  share's folder and the share a tab's folder is under (its title, its first crumb) are read on the workers too.
+  share's folder and the share a tab's folder is under (its title, its first crumb) are read on the workers too, and so
+  is whether the folder is in an archive (`Tab.in_archive`: what writes is refused at once, what opens as a folder).
+- A program started (the system's application for a file, Open with, a terminal) is a task of the workers (`launch`):
+  a failure comes back to be said. The settings' files are written by `File_Writer`s. Only the reads of the start
+  (the preferences, the session, the layouts) run on the interface's thread, before the first frame.
 - The tests wait for the answers with `wait_read` (`app.answers_due`).
 
 ## The keyboard

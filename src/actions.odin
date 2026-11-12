@@ -4,6 +4,7 @@ package classeur
 
 import "core:fmt"
 import "core:strings"
+import "core:sync"
 import "gt:desktop"
 import "gt:platform"
 import "gt:ui"
@@ -19,12 +20,12 @@ act_open :: proc(app: ^App) {
 	if t == nil { return }
 	targets := folder_targets(&t.folder)
 	folders := 0
-	for e in targets { if opens_as_folder(t.path, e^) { folders += 1 } }
+	for e in targets { if opens_as_folder(t, e^) { folders += 1 } }
 	for e in targets {
 		path := fs.join(t.path, e.name, context.temp_allocator)
 		switch {
-		case !opens_as_folder(t.path, e^):
-			open_system(app, path)
+		case !opens_as_folder(t, e^):
+			open_system(app, path, t.in_archive)
 		case folders == 1 && !t.locked:
 			tab_go(app, t, path)
 			return
@@ -34,21 +35,21 @@ act_open :: proc(app: ^App) {
 	}
 }
 
-// Whether `e` of the folder `dir` opens as a folder. An archive does, File Pilot's: "Open with the system's application"
-// gives it to its program. An archive in an archive is taken out and opened: it is not entered.
-opens_as_folder :: proc(dir: string, e: fs.Entry) -> bool {
-	in_archive := fs.archive_holds(fs.join(dir, "x", context.temp_allocator))
-	return e.kind == .Directory || !in_archive && e.kind == .File && fs.is_archive_name(e.name)
+// Whether `e`, of the tab's folder or of a folder in it, opens as a folder. An archive does, File Pilot's: "Open with the
+// system's application" gives it to its program. An archive in an archive is taken out and opened: it is not entered.
+// (Whether the folder is in an archive is the read's answer: no stat on this thread.)
+opens_as_folder :: proc(t: ^Tab, e: fs.Entry) -> bool {
+	return e.kind == .Directory || !t.in_archive && e.kind == .File && fs.is_archive_name(e.name)
 }
 
-// Opens one entry of the folder `dir`: a folder in the tab `t` (in a new tab when `t` is locked), a file with the
-// system's application.
+// Opens one entry of the folder `dir` (the tab's or a folder in it): a folder in the tab `t` (in a new tab when `t` is
+// locked), a file with the system's application.
 open_entry :: proc(app: ^App, t: ^Tab, dir: string, e: fs.Entry) {
 	path := fs.join(dir, e.name, context.temp_allocator)
 	switch {
-	case !opens_as_folder(dir, e): open_system(app, path)
-	case t.locked:                 tab_open(app, current_panel(app), path, current_panel(app).active + 1)
-	case:                          tab_go(app, t, path)
+	case !opens_as_folder(t, e): open_system(app, path, t.in_archive)
+	case t.locked:               tab_open(app, current_panel(app), path, current_panel(app).active + 1)
+	case:                        tab_go(app, t, path)
 	}
 }
 
@@ -87,13 +88,14 @@ open_other_panel_at :: proc(app: ^App, path: string) {
 act_open_system :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
-	for e in folder_targets(&t.folder) { open_system(app, fs.join(t.path, e.name, context.temp_allocator)) }
+	for e in folder_targets(&t.folder) { open_system(app, fs.join(t.path, e.name, context.temp_allocator), t.in_archive) }
 }
 
-// The system's application for the file. Headless (the tests), nothing starts: the path is noted in `app.opened`.
-open_system :: proc(app: ^App, path: string) {
+// The system's application for the file, started on a worker (launch). `in_archive`: the file is in an archive (its tab's
+// in_archive). Headless (the tests), nothing starts: the path is noted in `app.opened`.
+open_system :: proc(app: ^App, path: string, in_archive: bool) {
 	// (a file of an archive: taken out to a temporary folder on a worker, then opened from there)
-	if fs.archive_holds(path) {
+	if in_archive {
 		Take_Out :: struct { app: ^App, path: string, out: string }
 		job := new(Take_Out)
 		job^ = {app = app, path = strings.clone(path)}
@@ -104,16 +106,76 @@ open_system :: proc(app: ^App, path: string) {
 				job := (^Take_Out)(data)
 				defer { delete(job.path); delete(job.out); free(job) }
 				if job.out == "" { say(job.app, "%s cannot be taken out of its archive.", fs.base(job.path)); return }
-				open_system(job.app, job.out)
+				open_system(job.app, job.out, false)
 			}, job) { delete(job.path); delete(job.out); free(job) }
 		}, job)
 		return
 	}
+	launch(app, .Open, path)
+}
+
+// What a worker starts: the system's application for a file, a chosen one (Open with), a terminal in a folder.
+Launch_Kind :: enum u8 { Open, Open_With, Terminal }
+
+@(private = "file")
+Launch :: struct {
+	app:      ^App,
+	kind:     Launch_Kind,
+	path:     string,   // owned: the file, or the terminal's folder
+	id:       string,   // owned: Open with's application
+	name:     string,   // owned: its name, said when it cannot start
+	headless: bool,     // nothing starts (the tests)
+}
+
+// Starts a program on a worker: the portal is asked, or a process spawned, and either may wait. A failure comes back
+// and is said. Headless (the tests), nothing starts: it is noted in `app.opened` at once, the worker runs all the same.
+launch :: proc(app: ^App, kind: Launch_Kind, path: string, id := "", name := "") {
 	if app.headless {
-		append(&app.opened, strings.clone(path))
-		return
+		switch kind {
+		case .Open:      append(&app.opened, strings.clone(path))
+		case .Open_With: append(&app.opened, strings.concatenate({id, ":", path}))
+		case .Terminal:  append(&app.opened, strings.concatenate({"terminal:", path}))
+		}
 	}
-	if !platform.open_path(path) { say(app, "No application opens %s.", fs.base(path)) }
+	l := new(Launch)
+	l^ = {app = app, kind = kind, path = strings.clone(path), id = strings.clone(id), name = strings.clone(name), headless = app.headless}
+	pool_submit(&app.pool, launch_run, l)
+}
+
+@(private = "file")
+launch_run :: proc(data: rawptr) {
+	l := (^Launch)(data)
+	ok := true
+	if !l.headless {
+		switch l.kind {
+		case .Open:      ok = platform.open_path(l.path)
+		case .Open_With: ok = desktop.open_with(l.path, l.id)
+		case .Terminal:  ok = desktop.open_terminal(l.path)
+		}
+	}
+	sync.atomic_store(&l.app.launched_on, sync.current_thread_id())
+	if ok || !ui.post(&l.app.main.state, launch_failed, l) { launch_free(l) }
+}
+
+// On the interface's thread: why nothing started.
+@(private = "file")
+launch_failed :: proc(data: rawptr, word: u64) {
+	l := (^Launch)(data)
+	defer launch_free(l)
+	switch l.kind {
+	case .Open:      say(l.app, "No application opens %s.", fs.base(l.path))
+	case .Open_With: say(l.app, "%s cannot start.", l.name)
+	case .Terminal:  say(l.app, "No terminal was found: set $TERMINAL.")
+	}
+	app_frames(l.app)
+}
+
+@(private = "file")
+launch_free :: proc(l: ^Launch) {
+	delete(l.path)
+	delete(l.id)
+	delete(l.name)
+	free(l)
 }
 
 act_up :: proc(app: ^App) { if t := current_tab(app); t != nil { tab_up(app, t) } }
@@ -592,11 +654,9 @@ act_terminal_in :: proc(app: ^App) {
 	terminal_at(app, dir)
 }
 
-// The system's terminal in `dir`. Headless (the tests), nothing starts: it is noted in `app.opened`.
-terminal_at :: proc(app: ^App, dir: string) {
-	if app.headless { append(&app.opened, strings.concatenate({"terminal:", dir})); return }
-	if !desktop.open_terminal(dir) { say(app, "No terminal was found: set $TERMINAL.") }
-}
+// The system's terminal in `dir`, started on a worker (launch). Headless (the tests), nothing starts: it is noted in
+// `app.opened`.
+terminal_at :: proc(app: ^App, dir: string) { launch(app, .Terminal, dir) }
 
 act_copy_path :: proc(app: ^App) {
 	t := current_tab(app)
@@ -883,9 +943,10 @@ tab_pick :: proc(app: ^App, i: int) {
 	if at < len(p.tabs) { p.active = at }
 }
 
-// In an archive (a folder of one, or its top): what writes is refused at once, said (no stat of its entries on this thread).
+// In an archive (a folder of one, or its top): what writes is refused at once, said (the read's answer: no stat on this
+// thread).
 read_only_here :: proc(app: ^App, t: ^Tab) -> bool {
-	if !fs.archive_holds(fs.join(t.path, "x", context.temp_allocator)) { return false }
+	if !t.in_archive { return false }
 	say(app, "%s", fs.ERROR_TEXT[.Read_Only])
 	return true
 }

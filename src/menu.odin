@@ -432,13 +432,7 @@ open_with_menu :: proc(app: ^App, path: string) {
 		if !ready { _ = ui.menu_item("Reading…", enabled = false) } else if len(hs) == 0 { _ = ui.menu_item("No application", enabled = false) }
 		for h, i in hs {
 			label := h.default ? fmt.tprintf("%s (default)###ow%d", shown_text(h.name), i) : fmt.tprintf("%s###ow%d", shown_text(h.name), i)
-			if ui.menu_item(label).clicked {
-				if app.headless {
-					append(&app.opened, strings.concatenate({h.id, ":", path}))
-				} else if !desktop.open_with(path, h.id) {
-					say(app, "%s cannot start.", h.name)
-				}
-			}
+			if ui.menu_item(label).clicked { launch(app, .Open_With, path, h.id, h.name) }
 		}
 	}
 }

@@ -167,14 +167,18 @@ App :: struct {
 	tab_coming:   bool,             // a tab of another window is dragged over this one (tab_drop) ...
 	tab_coming_at: [2]f32,          // ... the pointer there
 	tab_coming_path: string,        // owned: ... its folder, "" until the system gives it (Linux: at the drop)
-	session_writer: Session_Writer,
+	session_writer: File_Writer,    // the files written on a worker, one write at a time each (file_writer.odin)
+	prefs_writer:   File_Writer,
+	layouts_writer: File_Writer,
+	setup_writer:   File_Writer,
 	mounting:     [dynamic]string,  // owned: the shares being found or mounted on a worker (locations.odin)
-	shares:       []fs.Share,       // the shares of the network mounted now (the sidebar's Network section)  // the session's writes on a worker, one at a time (session_save)
+	shares:       []fs.Share,       // the shares of the network mounted now (the sidebar's Network section)
 	session_seen:    string,        // owned: the session's text at its last change (session_autosave waits for it to settle)
 	session_changed_ms: f64,        // when it changed
 	session_written: string,        // owned: the session (but the window's place) as last written (session_autosave)
 	tab_image:    platform.Drag_Image,   // owned: the dragged tab's picture, read back from the renderer (tab_drag_poll)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
+	launched_on: int,               // atomic: the thread that last started a program (launch: a worker, never this one)
 }
 
 WINDOW_SIZE :: [2]int{1180, 720}
@@ -319,6 +323,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	jobs_start(app)
 	watcher_start(app)
 	places_load(app)
+	layouts_load(app)
 	// (the session's tabs come back; folders given open beside them, as the second start's do)
 	if session_load(app) {
 		folders_show(app, o.folders)
@@ -385,6 +390,10 @@ app_close :: proc(app: ^App) {
 	reads_ended := pool_stop(&app.pool, proc(data: rawptr) {}, until)   // (a read left waiting: its memory goes with the process)
 	edits_ended := pool_stop(&app.edit_pool, proc(data: rawptr) {}, until)
 	session_save(app)   // (after the workers: a bookmark's write on one of them never comes after this one)
+	// (a write still pending, its task dropped with the workers: written now)
+	file_writer_flush(&app.prefs_writer)
+	file_writer_flush(&app.layouts_writer)
+	file_writer_flush(&app.setup_writer)
 	measures_ended := pool_stop(&app.measure_pool, proc(data: rawptr) {}, until)
 	thumbs_ended := pool_stop(&app.thumb_pool, proc(data: rawptr) {}, until)
 	thumbs_free(app)
@@ -445,7 +454,10 @@ app_free :: proc(app: ^App) {
 	delete(app.tab_coming_path)
 	delete(app.session_written)
 	delete(app.session_seen)
-	session_writer_free(&app.session_writer)
+	file_writer_free(&app.session_writer)
+	file_writer_free(&app.prefs_writer)
+	file_writer_free(&app.layouts_writer)
+	file_writer_free(&app.setup_writer)
 	for u in app.mounting { delete(u) }
 	delete(app.mounting)
 	ui.field_destroy(&app.side_filter)

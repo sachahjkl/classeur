@@ -1073,8 +1073,10 @@ test_layouts :: proc(t: ^testing.T) {
 		wait_read(s)
 		testing.expect_value(t, len(app.panels), 2)
 		testing.expect_value(t, panel_tab(app.panels[1]).path, fs.join(dir, "Documents", context.temp_allocator))
-		// read again from its file
+		// read again from its file, once its writer has written it (on a worker)
+		file_writer_flush(&app.layouts_writer)
 		layouts_free(&app.layouts)
+		layouts_load(app)
 		testing.expect(t, layout_open(app, "work"))
 		wait_read(s)
 		testing.expect_value(t, len(app.panels), 2)
@@ -1968,7 +1970,7 @@ test_sort_by_measures :: proc(t: ^testing.T) {
 }
 
 // A zip of stored files, as a zip writer makes one (local headers, the central directory, its end).
-@(private = "file")
+// (shared by the tests of the package: each file of tests uses it)
 stored_zip :: proc(files: [][2]string) -> []u8 {
 	le16 :: proc(b: ^[dynamic]u8, v: int) { append(b, u8(v), u8(v >> 8)) }
 	le32 :: proc(b: ^[dynamic]u8, v: int) { le16(b, v); le16(b, v >> 16) }
@@ -2026,7 +2028,8 @@ test_archive_folders :: proc(t: ^testing.T) {
 		fs.take_out_root = fs.join(dir, ".taken", context.temp_allocator)
 		defer fs.take_out_root = ""
 		before := len(app.opened)
-		open_system(app, hello)
+		testing.expect(t, tab.in_archive, "the read knows its folder is in the archive")
+		open_system(app, hello, tab.in_archive)
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return len((^App)(s.user).opened) > 0 && strings.has_suffix((^App)(s.user).opened[len((^App)(s.user).opened) - 1], "hello.txt") }, "taken out and opened")
 		testing.expect(t, len(app.opened) > before, "opened")
 		out := app.opened[len(app.opened) - 1]

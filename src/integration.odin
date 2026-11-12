@@ -19,7 +19,6 @@ import "gt:platform"
 import "gt:process"
 import "gt:render"
 import setup "gt:setup"
-import "fs"
 import "core:math"
 import "gt:draw"
 import lucide "gt:lucide"
@@ -133,11 +132,10 @@ setup_choice_read :: proc() -> string {
 	return err == nil ? strings.trim_space(string(data)) : ""
 }
 
+// (on a worker: file_writer.odin)
 @(private = "file")
-setup_choice_write :: proc(choice: string) {
-	path := setup_choice_file()
-	_ = os.make_directory_all(fs.parent(path))
-	_ = os.write_entire_file(path, transmute([]u8)choice)
+setup_choice_write :: proc(app: ^App, choice: string) {
+	file_writer_put(&app.setup_writer, &app.pool, setup_choice_file(), choice)
 }
 
 // At a start with the window: the Setup when there is something to do (Windows), unless the person answered for this
@@ -148,6 +146,7 @@ setup_offer :: proc(app: ^App, asked: bool) {
 		setup.open(&app.setup, setup_config())
 		return
 	}
+	// (the answer read on this thread: once, before the first frame)
 	if SETUP_AT_START && setup.wanted(setup.facts(setup_config()), APP_VERSION, setup_choice_read()) { setup.open(&app.setup, setup_config()) }
 }
 
@@ -189,9 +188,9 @@ setup_build :: proc(app: ^App, em: f32) {
 	// (the answer is kept in the person's config: never by the tests)
 	if app.headless { return }
 	switch ev {
-	case .Installed:       setup_choice_write(setup.CHOICE_INSTALLED)
-	case .Kept_Standalone: setup_choice_write(setup.CHOICE_STANDALONE)
-	case .Dismissed:       setup_choice_write(setup.choice_dismissed(APP_VERSION))
+	case .Installed:       setup_choice_write(app, setup.CHOICE_INSTALLED)
+	case .Kept_Standalone: setup_choice_write(app, setup.CHOICE_STANDALONE)
+	case .Dismissed:       setup_choice_write(app, setup.choice_dismissed(APP_VERSION))
 	case .Launched:
 		// (the installed copy starts once this one has ended: app_run's end)
 		delete(app.launch_after)

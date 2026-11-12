@@ -12,7 +12,6 @@ import "core:strings"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:ui"
-import "fs"
 
 Layout :: struct {
 	name, text: string,   // owned
@@ -20,7 +19,6 @@ Layout :: struct {
 
 Layouts :: struct {
 	list:      [dynamic]Layout,
-	loaded:    bool,
 	naming:    bool,           // the field that names the layout shown is open
 	field:     ui.Text_Field,
 	focus_due: bool,
@@ -41,12 +39,10 @@ layouts_file :: proc(app: ^App) -> string {
 	return strings.concatenate({platform.config_dir(context.temp_allocator), "/", APP_NAME, "/layouts"}, context.temp_allocator)
 }
 
-// (read once, when first asked: a small file)
-@(private = "file")
+// Read once, on this thread: at the start, before the window is shown and the first frame (the changes are written on a
+// worker: layouts_save).
 layouts_load :: proc(app: ^App) {
 	l := &app.layouts
-	if l.loaded { return }
-	l.loaded = true
 	path := layouts_file(app)
 	if path == "" { return }
 	data, err := os.read_entire_file(path, context.temp_allocator)
@@ -75,13 +71,11 @@ layouts_save :: proc(app: ^App) {
 	if path == "" { return }
 	b := strings.builder_make(context.temp_allocator)
 	for x in app.layouts.list { fmt.sbprintf(&b, "layout %s\n%s", x.name, x.text) }
-	_ = os.make_directory_all(fs.parent(path))
-	_ = os.write_entire_file(path, transmute([]u8)strings.to_string(b))
+	file_writer_put(&app.layouts_writer, &app.pool, path, strings.to_string(b))
 }
 
 // Saves the panels shown as the layout `name` (a layout of that name is replaced).
 layout_save :: proc(app: ^App, name: string) {
-	layouts_load(app)
 	l := &app.layouts
 	b := strings.builder_make(context.temp_allocator)
 	panels_text(app, &b)
@@ -102,7 +96,6 @@ layout_save :: proc(app: ^App, name: string) {
 
 // Opens the layout `name` in place of the panels shown.
 layout_open :: proc(app: ^App, name: string) -> bool {
-	layouts_load(app)
 	for x in app.layouts.list {
 		if x.name != name { continue }
 		text := strings.clone(x.text, context.temp_allocator)
@@ -119,7 +112,6 @@ layout_open :: proc(app: ^App, name: string) -> bool {
 }
 
 layout_delete :: proc(app: ^App, name: string) {
-	layouts_load(app)
 	l := &app.layouts
 	for x, i in l.list {
 		if x.name != name { continue }
@@ -133,7 +125,6 @@ layout_delete :: proc(app: ^App, name: string) {
 }
 
 act_layout_save :: proc(app: ^App) {
-	layouts_load(app)
 	l := &app.layouts
 	l.naming, l.focus_due = true, true
 	ui.field_set(&l.field, fmt.tprintf("Layout %d", len(l.list) + 1))
@@ -141,7 +132,6 @@ act_layout_save :: proc(app: ^App) {
 }
 
 act_layout_open :: proc(app: ^App) {
-	layouts_load(app)
 	l := &app.layouts
 	if len(l.list) == 0 {
 		say(app, "No layout is saved: Ctrl+Alt+S saves the panels shown.")

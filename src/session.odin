@@ -20,7 +20,6 @@ import "core:fmt"
 import "core:os"
 import "core:strconv"
 import "core:strings"
-import "core:sync"
 import "gt:platform"
 import "gt:ui"
 import "fs"
@@ -32,17 +31,8 @@ session_file :: proc(app: ^App, allocator := context.temp_allocator) -> string {
 	return strings.concatenate({platform.config_dir(context.temp_allocator), "/", APP_NAME, "/session"}, allocator)
 }
 
-// The session's writes on a worker: one at a time, the latest text wins (two workers writing at once could rename an
-// older text over a newer one). The writer takes what is pending until nothing is; a new text replaces a pending one.
-Session_Writer :: struct {
-	mutex:   sync.Mutex,
-	path:    string,    // owned
-	pending: string,    // owned: the text to write next, "" none
-	running: bool,      // a writer task is queued or writing
-}
-
-// `later`: written on a worker (the session changed while the window runs); else now (the window closes, the workers
-// stopped: whatever was pending is superseded by this one).
+// `later`: written on a worker (the session changed while the window runs: file_writer.odin); else now (the window
+// closes, the workers stopped: whatever was pending is superseded by this one).
 session_save :: proc(app: ^App, later := false) {
 	path := session_file(app)
 	if path == "" { return }
@@ -50,45 +40,11 @@ session_save :: proc(app: ^App, later := false) {
 	pl := platform.get_placement(app.main.win)
 	fmt.sbprintf(&b, "window %d %d %d %d %d\n", pl.rect[0], pl.rect[1], pl.rect[2], pl.rect[3], pl.maximized ? 1 : 0)
 	session_rest(app, &b)
-	if !later {
-		session_write(path, strings.to_string(b))
-		return
+	if later {
+		file_writer_put(&app.session_writer, &app.pool, path, strings.to_string(b))
+	} else {
+		file_writer_now(&app.session_writer, path, strings.to_string(b))
 	}
-	w := &app.session_writer
-	sync.mutex_lock(&w.mutex)
-	defer sync.mutex_unlock(&w.mutex)
-	if w.path != path {
-		delete(w.path)
-		w.path = strings.clone(path)
-	}
-	delete(w.pending)
-	w.pending = strings.clone(strings.to_string(b))
-	if w.running { return }
-	w.running = true
-	pool_submit(&app.pool, proc(data: rawptr) {
-		w := (^Session_Writer)(data)
-		for {
-			sync.mutex_lock(&w.mutex)
-			text, path := w.pending, strings.clone(w.path)
-			w.pending = ""
-			if text == "" {
-				w.running = false
-				sync.mutex_unlock(&w.mutex)
-				delete(path)
-				return
-			}
-			sync.mutex_unlock(&w.mutex)
-			session_write(path, text)
-			delete(text)
-			delete(path)
-		}
-	}, w)
-}
-
-session_writer_free :: proc(w: ^Session_Writer) {
-	delete(w.path)
-	delete(w.pending)
-	w^ = {}
 }
 
 // What the session holds but the window's place.
@@ -187,17 +143,8 @@ panels_open :: proc(app: ^App, text: string) -> bool {
 	return len(app.panels) > first
 }
 
-// (written beside, then renamed over: a crash while writing leaves the last session whole)
-@(private = "file")
-session_write :: proc(path, text: string) {
-	_ = os.make_directory_all(fs.parent(path))
-	tmp := strings.concatenate({path, ".new"}, context.temp_allocator)
-	if os.write_entire_file(tmp, transmute([]u8)text) != nil { return }
-	_ = os.rename(tmp, path)
-}
-
 // Reads the session: the window's place, the sidebar, the panels and tabs, the bookmarks and recents. True: a panel was
-// opened.
+// opened. (Read on this thread: at the start, before the window is shown and the first frame.)
 session_load :: proc(app: ^App) -> (opened: bool) {
 	path := session_file(app)
 	if path == "" { return }
