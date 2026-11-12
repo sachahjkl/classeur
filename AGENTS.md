@@ -22,8 +22,13 @@ Every step is a command of `tools/classeurtool` (`help` lists them):
 
 - Every action is a command of `src/commands.odin` (title, icon, keys) with its procedure in `src/actions.odin`: the
   keyboard, the palette and the menus read that table. No key is read elsewhere unless it moves in a list or a field.
-- Nothing slow runs on the interface's thread: reading a folder, measuring, copying are tasks of the workers
-  (`src/pool.odin`); their results come back with `ui.post`.
+- The interface's thread never waits. No disk, network or system call runs there, in a build, a draw, an input or an
+  action: not a `stat`, not a small read, not a rename, not a mount table, not a clipboard of files. Reading a folder,
+  measuring, copying, renaming, making a folder, the volumes, the shares: all are tasks of the workers (`src/pool.odin`)
+  whose results come back with `ui.post`. A share that hangs must never freeze the window.
+- A frame does no work in proportion to the number of entries: no sort, no full filter, no pass over every row or every
+  entry, no allocation per entry. Counts, sizes and orders are worked out when the data changes (on a worker for a
+  listing) and kept; a frame reads what it shows.
 - The tests never touch the person's files or desktop: they make their folders with `testkit.temp_folder`, and
   `open_system` starts nothing when the program is headless.
 - What more than one program needs goes in gui_toolkit, generic, with its docs, test and changelog fragment; classeur then
