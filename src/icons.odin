@@ -147,7 +147,7 @@ icon_done :: proc(data: rawptr, word: u64) {
 	app_frames(app)
 }
 
-// Each frame: the pictures least used go when too many are kept.
+// Each frame: the pictures least used go when too many are kept, never one drawn in this frame.
 icons_tidy :: proc(app: ^App) {
 	if len(app.icons_cache) <= ICONS_KEPT { return }
 	Old :: struct { key: string, used: u64 }
@@ -157,7 +157,7 @@ icons_tidy :: proc(app: ^App) {
 	for o in all { limit = min(limit, o.used) }
 	cut := limit + (app.frame - limit) / 4
 	for o in all {
-		if o.used > cut { continue }
+		if o.used > cut || o.used == app.frame { continue }
 		key, ic := delete_key(&app.icons_cache, o.key)
 		if ic.state == .Ready { render.destroy_texture(&app.shared.r, ic.tex) }
 		delete(key)

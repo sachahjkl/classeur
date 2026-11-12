@@ -35,7 +35,7 @@ App :: struct {
 	pool:        Pool,
 	measure_pool: Pool,
 	thumb_pool:  Pool,              // the thumbnails of the grid (thumbs.odin)
-	thumbs:      map[string]Thumb,  // by path (the keys owned)
+	thumbs:      map[string]Thumb,  // by path, size and date (thumb_key; the keys owned)
 	icons_cache: map[string]Sys_Icon,   // the system's icons by key and size (icons.odin)
 	icon_keys:   map[string]string,     // a file's name -> its icon's key (both owned)
 	type_names:  map[string]Type_Name,  // an extension -> the system's name of its type (type_names.odin; keys owned)
@@ -46,6 +46,7 @@ App :: struct {
 	vol_known:   bool,                  // vol_same is the worker's answer (else the guess is used: dnd.odin)
 	drag_first_folder: bool,            // the first of the files dragged is a folder (the ghost's icon)
 	frame:       u64,               // the frames built (what a thumbnail was last used in)
+	shown_frame: u64,               // atomic: the last frame built, for the workers (a thumbnail not wanted since is not read)
 	default_zoom: int,             // the measures of folders (measure.odin)
 	measures:    map[string]Measure,   // by path (the keys owned)
 	measure_gen: u64,               // atomic: a measure asked in an older generation is dropped
@@ -299,9 +300,9 @@ app_open :: proc(o: Open_Options) -> ^App {
 	app.devtools = devtools.start_from_env(win, APP_NAME)
 	h.before_input = proc(h: ^host.Host) { app := (^App)(h.user); devtools.service(app.devtools, &h.state, &app.shared.r) }
 
-	pool_start(&app.pool)
+	pool_start(&app.pool, POOL_THREADS, POOL_GROW)
 	pool_start(&app.measure_pool, MEASURE_THREADS)
-	pool_start(&app.thumb_pool, THUMB_THREADS)
+	pool_start(&app.thumb_pool, THUMB_THREADS, THUMB_THREADS, newest_first = true)
 	app.palette.recording = -1   // (no command's keys recorded: the recorder is shut)
 	app.side_open = {.Recents = false, .Bookmarks = true, .Storage = true, .Network = true, .Places = true}
 	jobs_start(app)

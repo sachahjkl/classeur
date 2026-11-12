@@ -30,7 +30,7 @@ type_name :: proc(app: ^App, ext: string) -> string {
 	app.type_names[strings.clone(ext)] = {}
 	job := new(Type_Name_Job)
 	job^ = {app = app, ext = strings.clone(ext)}
-	pool_submit(&app.thumb_pool, type_name_run, job)
+	pool_submit(&app.thumb_pool, type_name_run, job, urgent = true)   // (a tiny read: not after the pictures' decodes)
 	return ""
 }
 
