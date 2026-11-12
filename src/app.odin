@@ -70,6 +70,7 @@ App :: struct {
 	bm_held:       bool,                // ... and its button is still down (let go: it lands)
 	bm_line:       ui.Rect,             // where it lands, as shown ({}: none)
 	no_dialog:     bool,                // this build: no dialog takes the keys (typing goes to the filter)                // a heading was clicked or dragged: the section the commands move is known
+	shortcuts_open: bool,               // the sheet of the keys (F1)
 	side_filter: ui.Text_Field,
 	volume_space: [dynamic]fs.Space,   // of each volume, read with the places
 	panel_rects: [dynamic]ui.Rect,  // each panel's box as last laid out (the tabs above are as wide)

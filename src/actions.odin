@@ -142,6 +142,8 @@ act_filter :: proc(app: ^App) {
 
 act_palette :: proc(app: ^App) { palette_open(app) }
 
+act_shortcuts :: proc(app: ^App) { app.shortcuts_open = true }
+
 ////////////////////////////////
 // Tabs and panels
 

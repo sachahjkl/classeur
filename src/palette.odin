@@ -44,7 +44,7 @@ command_group :: proc(id: string) -> int {
 	case has(id, "select"): return 3
 	case has(id, "view") || has(id, "zoom") || has(id, "sort") || has(id, "group") || id == "tree" || id == "hidden" || id == "sidebar" || id == "folders_mixed" || id == "inspector": return 4
 	case id == "filter" || id == "flat" || id == "types" || id == "files_only" || id == "folders_only" || id == "every_type": return 5
-	case id == "palette" || id == "options" || id == "setup" || id == "jobs" || id == "jobs_cancel": return 6
+	case id == "palette" || id == "shortcuts" || id == "options" || id == "setup" || id == "jobs" || id == "jobs_cancel": return 6
 	}
 	return 2
 }
@@ -80,10 +80,13 @@ palette_list :: proc(app: ^App) -> (l: Palette_List) {
 	cmds := make([dynamic]ui.Command, context.temp_allocator)
 	order := make([dynamic]int, context.temp_allocator)
 	keys := make([dynamic]string, context.temp_allocator)
+	// (Tab 1 to Last tab would take nine lines of every search: they show once "tab" is typed)
+	tabs := strings.has_prefix(strings.to_lower(strings.trim_space(ui.field_string(&app.palette.field)), context.temp_allocator), "tab")
 	for g in 0 ..< len(COMMAND_GROUPS) {
 		for &c, i in COMMANDS {
-			if command_group(c.id) != g { continue }
+			if command_group(c.id) != g || (!tabs && tab_pick_command(c.id)) { continue }
 			tags := make([dynamic]string, context.temp_allocator)
+			append(&tags, ..c.tags)
 			for alias, id in app.keymap.aliases { if id == c.id { append(&tags, alias) } }
 			append(&cmds, ui.Command{label = c.title, group = COMMAND_GROUPS[g], icon = c.icon, keys = c.keys, tags = tags[:]})
 			append(&order, i)
@@ -107,7 +110,31 @@ palette_list :: proc(app: ^App) -> (l: Palette_List) {
 	return
 }
 
+// One of the commands that show the tab of a number (Alt+1 to Alt+9).
+tab_pick_command :: proc(id: string) -> bool {
+	return id == "tab_last" || (len(id) == 5 && strings.has_prefix(id, "tab_") && id[4] >= '1' && id[4] <= '9')
+}
+
+// The sheet of the keys (F1) while it is open: every command that has keys under its group, the person's own keys
+// when they set some (a sequence reads "Ctrl+M, T", as the sheet joins a command's two chords).
+shortcuts_build :: proc(app: ^App) {
+	list := make([dynamic]ui.Command, context.temp_allocator)
+	if app.shortcuts_open {
+		for g in 0 ..< len(COMMAND_GROUPS) {
+			for &c in COMMANDS {
+				if command_group(c.id) != g { continue }
+				keys := c.keys
+				if b, ok := app.keymap.custom[c.id]; ok { keys = b.chords }
+				append(&list, ui.Command{label = c.title, group = COMMAND_GROUPS[g], icon = c.icon, keys = keys})
+			}
+		}
+	}
+	ui.shortcuts_sheet("shortcuts", list[:], &app.shortcuts_open)
+}
+
 palette_build :: proc(app: ^App) {
+	// (the sheet of the keys is the palette's sibling: built here, over the window, before it)
+	shortcuts_build(app)
 	p := &app.palette
 	if p.recording >= 0 {
 		palette_recorder(app)

@@ -391,6 +391,7 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 		// (where every command is, and the settings, first: the menu that the "…" opens is where one looks for them)
 		menu_command(app, "palette")
 		menu_command(app, "options")
+		menu_command(app, "shortcuts")
 		ui.menu_separator()
 		menu_command(app, "new_folder")
 		menu_command(app, "new_file")
