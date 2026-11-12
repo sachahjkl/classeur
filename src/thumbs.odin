@@ -2,15 +2,19 @@ package classeur
 
 // The thumbnails of the grid: a picture file is read and decoded on a pool of its own (a photo of 24 megapixels takes a
 // fifth of a second), made at most THUMB_PX on its longer side with a box filter, then given to the interface's thread,
-// which makes its texture. Only the cards built ask for theirs; the textures not used for a while go when more than
-// THUMBS_KEPT are kept. The pool takes the newest asked first (the cards on screen), and a job whose card has not been
-// built for THUMB_STALE_FRAMES (scrolled past) is not read: its card asks again if it comes back. A thumbnail is kept by
-// its file's path, size and date: a file changed gets a new one.
+// which makes its texture. A file classeur does not decode (a PDF, a video, a document) gets the system's thumbnail
+// (desktop.thumbnail: its cache, else its thumbnailer, on the same pool); a large picture's is read from the system's
+// cache first, and kept there once decoded (decoding it again costs more than reading it). Only the cards built ask for
+// theirs; the textures not used for a while go when more than THUMBS_KEPT are kept. The pool takes the newest asked
+// first (the cards on screen), and a job whose card has not been built for THUMB_STALE_FRAMES (scrolled past) is not
+// read: its card asks again if it comes back. A thumbnail is kept by its file's path, size and date: a file changed gets
+// a new one.
 
 import "core:fmt"
 import "core:os"
 import "core:strings"
 import "core:sync"
+import desktop "gt:desktop"
 import "gt:platform"
 import "gt:render"
 import "gt:ui"
@@ -21,6 +25,7 @@ THUMB_PX        :: 256
 THUMBS_KEPT     :: 400
 THUMB_MAX_BYTES :: 64 * 1024 * 1024   // a larger file is not read for its thumbnail
 THUMB_STALE_FRAMES :: 3               // a card not built for this many frames does not want its picture read
+THUMB_CACHED_BYTES :: 2 * 1024 * 1024 // a larger picture's thumbnail is read from, and kept in, the system's cache
 
 Thumb_State :: enum u8 { Asked, Ready, Failed }
 
@@ -41,6 +46,7 @@ Thumb_Job :: struct {
 	size:    [2]int,
 	ok:      bool,
 	skipped: bool,     // not wanted lately: not read, its entry goes (asked again if its card comes back)
+	system:  bool,     // the system's thumbnails may be asked (app.system_thumbs when it was made)
 }
 
 // The key of a file's thumbnail: its path, size and date.
@@ -60,6 +66,12 @@ thumb_mime :: proc(name: string) -> string {
 	return ""
 }
 
+// The entry has a thumbnail to ask: a picture classeur decodes, or any file when the system's thumbnails are asked (a type
+// with no thumbnailer fails once, and its card keeps its icon).
+thumb_wanted :: proc(app: ^App, e: ^fs.Entry) -> bool {
+	return e.kind == .File && (app.system_thumbs || thumb_mime(e.name) != "")
+}
+
 // The thumbnail of the file at `path` (of this size and date) if it is ready; else it is asked (once).
 thumb_get :: proc(app: ^App, path: string, size, mtime: i64) -> (^Thumb, bool) {
 	key := thumb_key(path, size, mtime)
@@ -69,7 +81,7 @@ thumb_get :: proc(app: ^App, path: string, size, mtime: i64) -> (^Thumb, bool) {
 		return th, th.state == .Ready
 	}
 	job := new(Thumb_Job)
-	job^ = {app = app, key = strings.clone(key), path = strings.clone(path), wanted = app.frame}
+	job^ = {app = app, key = strings.clone(key), path = strings.clone(path), wanted = app.frame, system = app.system_thumbs}
 	app.thumbs[strings.clone(key)] = {state = .Asked, used = app.frame, job = job}
 	pool_submit(&app.thumb_pool, thumb_run, job)
 	return nil, false
@@ -84,14 +96,39 @@ thumb_run :: proc(data: rawptr) {
 		return
 	}
 	info, ok := fs.stat(job.path)
-	if !ok || info.size <= 0 || info.size > THUMB_MAX_BYTES { return }
+	if !ok || info.size <= 0 { return }
+	mime := thumb_mime(job.path)
+	// (a type classeur does not decode, or a picture too large to read here: the system's, if it has a thumbnailer)
+	if mime == "" || info.size > THUMB_MAX_BYTES {
+		if job.system { thumb_system(job, cached_only = false) }
+		return
+	}
+	large := job.system && info.size > THUMB_CACHED_BYTES
+	if large && thumb_system(job, cached_only = true) { return }
 	bytes, err := os.read_entire_file(job.path, context.temp_allocator)
 	if err != nil { return }
-	img, decoded := platform.clipboard_image_decode(thumb_mime(job.path), bytes)
+	img, decoded := platform.clipboard_image_decode(mime, bytes)
 	if !decoded { return }
 	defer delete(img.rgba)
 	job.rgba, job.size = shrink(img.rgba, img.size, THUMB_PX)
 	job.ok = true
+	if large { _ = desktop.thumbnail_store(job.path, job.rgba, job.size.x, job.size.y) }
+}
+
+// The system's thumbnail of the job's file: from its cache only, or made by its thumbnailer on a miss (this worker
+// waits for it). False: it has none.
+@(private = "file")
+thumb_system :: proc(job: ^Thumb_Job, cached_only: bool) -> bool {
+	th: desktop.Thumbnail
+	ok: bool
+	if cached_only {
+		th, ok = desktop.thumbnail_cached(job.path, THUMB_PX)
+	} else {
+		th, ok = desktop.thumbnail(job.path, THUMB_PX)
+	}
+	if !ok { return false }
+	job.rgba, job.size, job.ok = th.rgba, th.size, true
+	return true
 }
 
 // The picture at most `side` on its longer side: each pixel the mean of the block it covers.

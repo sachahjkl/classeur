@@ -1,6 +1,6 @@
 package classeur
 
-// The grid view, File Pilot's: cards in rows, each with its thumbnail (a picture's, made on the workers: thumbs.odin)
+// The grid view, File Pilot's: cards in rows, each with its thumbnail (a picture's, a PDF's, a video's: made on the workers, thumbs.odin)
 // or its icon large, its name and its size. The rows are a virtual list: only those in view are built. The keys move
 // the cursor card by card (view.odin's list_keys); a row of the list is a row of cards.
 
@@ -174,7 +174,7 @@ card_body :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, width, heigh
 	if ui.row(.Center) {
 		ui.spacer(ui.px(em * 0.5))
 		path := entry_path(t, e)
-		if e.kind == .File && thumb_mime(e.name) != "" {
+		if thumb_wanted(app, e) {
 			if th, ready := thumb_get(app, path, e.size, e.mtime); ready {
 				d := ui.frame_new(Picture_Draw)
 				d^ = {th.tex, {f32(th.size.x), f32(th.size.y)}, corner_k()}

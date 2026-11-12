@@ -1,14 +1,16 @@
 package classeur
 
 // The inspector, File Pilot's (Space): a pane at the right of the panel that shows what the cursor is on. A picture
-// large, a text file's beginning in the monospaced font, a folder's content, any other file what it is. What it shows
-// is read on the workers when the cursor stops on it; only the last one asked is kept.
+// large, a PDF's first page or a frame of a video (the system's large thumbnail), a text file's beginning in the
+// monospaced font, a folder's content, any other file what it is. What it shows is read on the workers when the cursor
+// stops on it; only the last one asked is kept.
 
 import "core:fmt"
 import config "gt:config"
 import "core:os"
 import "core:strings"
 import "core:unicode/utf8"
+import desktop "gt:desktop"
 import "gt:draw"
 import lucide "gt:lucide"
 import "gt:platform"
@@ -21,6 +23,7 @@ INSPECTOR_TEXT_BYTES :: 64 * 1024
 INSPECTOR_PICTURE_PX :: 1600
 INSPECTOR_MIN_PX     :: 220
 INSPECTOR_DEFAULT_PX :: 380
+INSPECTOR_THUMB_PX   :: 1024   // the system's thumbnail of a PDF or a video: its largest (the xx-large of freedesktop.org)
 
 Inspect_Kind :: enum u8 { None, Picture, Text, Folder, Other }
 
@@ -39,6 +42,7 @@ Inspector :: struct {
 	has_tex:  bool,
 	size:     [2]int,          // the texture's (shrunk to INSPECTOR_PICTURE_PX)
 	pixels:   [2]int,          // the picture's own, as its file holds it
+	caption:  string,          // the picture is the system's thumbnail of the file: what it is of ("": the file's own)
 	preview:  ui.Preview,      // the picture's zoom and pan (the wheel, a drag, a double click: the toolkit's preview)
 	listing:  fs.Listing,      // sorted (on the worker)
 	visible:  [dynamic]u32,    // its entries that are not hidden (made on the worker: a frame goes through none)
@@ -76,6 +80,7 @@ Inspect_Job :: struct {
 	rgba:    []u8,
 	size:    [2]int,
 	pixels:  [2]int,
+	caption: string,           // asked of the system's thumbnail (preview_caption; a constant)
 	listing: fs.Listing,
 	sort:    fs.Sort,          // the listing's order
 	visible: [dynamic]u32,     // owned until taken
@@ -99,7 +104,7 @@ inspector_clear :: proc(app: ^App) {
 	insp.text = ""
 	delete(insp.spans)
 	insp.spans, insp.language, insp.cut = nil, false, false
-	insp.pixels = {}
+	insp.pixels, insp.caption = {}, ""
 	if insp.has_tex { render.destroy_texture(&app.shared.r, insp.tex) }
 	insp.has_tex = false
 	insp.preview = {}   // (another picture: fitted again)
@@ -153,10 +158,25 @@ inspector_ask :: proc(app: ^App, path: string, e: fs.Entry) {
 	switch {
 	case e.kind == .Directory:                                job.kind = .Folder
 	case e.kind == .File && thumb_mime(e.name) != "":         job.kind = .Picture
+	case e.kind == .File && app.system_thumbs && preview_caption(e.name) != "":
+		job.kind, job.caption = .Picture, preview_caption(e.name)
 	case e.kind == .File && looks_textual(e.name, e.flags):   job.kind = .Text
 	case:                                                     job.kind = .Other
 	}
 	pool_submit(&app.pool, inspect_run, job)
+}
+
+// What the system's thumbnail of a file shows, by its name: a PDF's first page, a frame of a video; "" for the others
+// (their thumbnail, when the system has one, is no closer look than their icon).
+@(private = "file")
+preview_caption :: proc(name: string) -> string {
+	switch strings.to_lower(fs.extension(name), context.temp_allocator) {
+	case "pdf":
+		return "First page"
+	case "mp4", "m4v", "mkv", "webm", "mov", "avi", "wmv", "flv", "mpg", "mpeg", "ogv", "3gp", "ts", "mts", "m2ts":
+		return "A frame of the video"
+	}
+	return ""
 }
 
 // A name whose content reads as text (the content decides at last: a zero byte, or no valid UTF-8, is no text).
@@ -193,6 +213,13 @@ inspect_run :: proc(data: rawptr) {
 		job.visible = make([dynamic]u32, 0, len(entries))
 		for e, i in entries { if .Hidden not_in e.flags { append(&job.visible, u32(i)) } }
 	case .Picture:
+		if job.caption != "" {
+			// (the system's: its cache, else its thumbnailer, which this worker waits for)
+			th, ok := desktop.thumbnail(job.path, INSPECTOR_THUMB_PX)
+			if !ok { job.kind = .Other; return }
+			job.rgba, job.size = th.rgba, th.size
+			return
+		}
 		info, ok := fs.stat(job.path)
 		if !ok || info.size > THUMB_MAX_BYTES { job.kind = .Other; return }
 		bytes, err := os.read_entire_file(job.path, context.temp_allocator)
@@ -252,7 +279,7 @@ inspect_done :: proc(data: rawptr, word: u64) {
 	case .Picture:
 		insp.tex = render.create_texture_rgba(&app.shared.r, job.size.x, job.size.y)
 		render.update_texture_rgba(&app.shared.r, insp.tex, 0, 0, job.size.x, job.size.y, job.rgba)
-		insp.has_tex, insp.size, insp.pixels = true, job.size, job.pixels
+		insp.has_tex, insp.size, insp.pixels, insp.caption = true, job.size, job.pixels, job.caption
 	case .Text:
 		insp.text, job.text = job.text, ""
 		insp.spans, job.spans = job.spans, nil
@@ -335,6 +362,12 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 				ui.next({width = ui.fill(), height = ui.fill()})
 				ui.preview_image("###insp_pic", &insp.preview, insp.tex, {f32(insp.size.x), f32(insp.size.y)}, {buttons = true, radius = 3 * corner_k(), no_keys = true})
 				ui.spacer(ui.px(em * 0.8))
+			}
+			if insp.caption != "" {
+				if ui.tags("weak") {
+					ui.next({width = ui.fill(), height = ui.px(em * 2.2), text_align = .Center, font_size = em * 0.86})
+					ui.label(fmt.tprintf("%s###insp_caption", insp.caption))
+				}
 			}
 		case .Text:
 			ui.next({width = ui.fill(), height = ui.fill()})

@@ -24,6 +24,8 @@ is immediate-mode); the data changes only on the interface's thread.
 | `src/sidebar.odin` | The sidebar: its filter, its sections (Recents, Bookmarks, Storage, Network, Places). |
 | `src/icons.odin` | The entries' icons: drawn folders and pages, Lucide icons coloured by kind. |
 | `src/measure.odin` | Folder measures (folders, files, bytes all the way down) on a pool of their own. |
+| `src/thumbs.odin` | The grid's thumbnails on a pool of their own (`app.thumb_pool`, two threads, the newest asked first, a card scrolled past not read): PNG, JPEG and BMP decoded and shrunk here; any other file the system's thumbnail (gui_toolkit's `desktop.thumbnail`: on Linux the freedesktop.org cache and thumbnailers, on Windows the shell's); a picture over 2 MB read from the system's cache first and kept there once decoded (`desktop.thumbnail_cached`, `thumbnail_store`). The tests turn the system's off (`app.system_thumbs` is off headless) unless they give their own XDG folders. |
+| `src/inspector.odin` | The inspector: a picture, a PDF's first page or a video's frame (the system's 1024-pixel thumbnail, said under it), a text, a folder's rows, the properties; read on the workers when the cursor stops. |
 | `src/places.odin` | The sidebar's places (the person's folders) and volumes, read on a worker. |
 | `src/network.odin` | The devices of the network that share files, searched on a worker (`fs.network_devices`: one query of multicast DNS for the file services, and on Windows the network neighbourhood) when the Network section shows or opens, and by Find network devices. |
 | `src/format.odin` | Sizes, dates (local time zone), types and icons of entries. |
@@ -42,6 +44,8 @@ is immediate-mode); the data changes only on the interface's thread.
   The interface keeps what it shows until the answer (the rename's field stays open). The places of the sidebar, a
   share's folder and the share a tab's folder is under (its title, its first crumb) are read on the workers too, and so
   is whether the folder is in an archive (`Tab.in_archive`: what writes is refused at once, what opens as a folder).
+- A thumbnailer the system runs for a PDF or a video (`desktop.thumbnail`) runs on a worker, which waits for it (at
+  most 30 seconds): the grid's on the thumbnails' pool, the inspector's on the workers.
 - A program started (the system's application for a file, Open with, a terminal) is a task of the workers (`launch`):
   a failure comes back to be said. The settings' files are written by `File_Writer`s. Only the reads of the start
   (the preferences, the session, the layouts) run on the interface's thread, before the first frame.

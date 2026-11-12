@@ -94,10 +94,14 @@ with one line on how it is made, and update [architecture.md](architecture.md).
   filter (`no_typeahead`).
 - The jobs say their speed and the time left; cut rows are dimmed, pasted ones selected; the footer reads plainly.
 
-## Next
+### The system's thumbnails
 
-5. The inspector: PDF and videos.
-6. The thumbnails' cache on the disk, more formats.
+- The inspector shows a PDF's first page and a frame of a video: the system's large thumbnail, said so under it
+  (gui_toolkit's `desktop.thumbnail`; `src/inspector.odin`).
+- The grid shows the thumbnail of any file the system has a thumbnailer for (PDF, videos, documents), kept in the
+  system's cache on the disk; a large picture's is read from that cache and kept there (`src/thumbs.odin`).
+
+## Next
 
 ## Debts
 

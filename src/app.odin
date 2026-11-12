@@ -161,6 +161,8 @@ App :: struct {
 	update_serial:  int,               // the updater's state last said
 	installed_copy: bool,              // this copy is the installed one: it updates itself by itself
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
+	system_thumbs: bool,            // the system's thumbnails are asked (desktop.thumbnail: its cache, its thumbnailers);
+	                                // off headless, so a test never reaches the person's cache (one turns it on with its own)
 	session_path: string,           // owned: the tests' session file ("": the person's, none when headless)
 	standalone:  bool,              // a window of a torn-off tab (tab_drag.odin): no session
 	exe:         string,            // owned: this program's file, read at the start (after an update puts a new one in
@@ -295,6 +297,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	app := new(App)
 	if !o.headless { global_app = app }
 	app.headless = o.headless
+	app.system_thumbs = !o.headless
 	app.session_path = strings.clone(o.session)
 	app.standalone = o.standalone
 	app.exe = strings.clone(process.executable_path())
