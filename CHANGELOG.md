@@ -3,6 +3,11 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.17.2] - 2026-11-12
+
+### Fixed
+- **Space in an empty filter no longer shows a space**: the inspector opens and the filter stays empty, with no space shown for a moment.
+
 ## [0.17.1] - 2026-11-12
 
 ### Fixed
@@ -400,6 +405,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.17.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.17.2
 [0.17.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.17.1
 [0.17.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.17.0
 [0.16.3]: https://github.com/sachahjkl/classeur/releases/tag/v0.16.3
