@@ -44,13 +44,15 @@ Job :: struct {
 	files_total: int,         // atomic
 	files_done:  int,         // atomic
 	cancel:      bool,        // atomic: set by the interface
-	mutex:       sync.Mutex,  // guards `current` and `errors`
+	mutex:       sync.Mutex,  // guards `current`, `errors` and the two files asked about
 	current:     string,      // owned: the name being done
 	errors:      [dynamic]string,   // owned: what failed, one line each
 	done:        [dynamic][2]string,   // owned: each source done and where it is now (undo.odin reads them)
 
 	// a name taken: the jobs' thread waits on `answered` until the interface sets `answer`
 	ask_name:   string,       // owned (by the jobs' thread while it waits)
+	ask_there:  fs.Info,      // under `mutex`: the file at ask_name and the one that comes, for the question to compare
+	ask_coming: fs.Info,
 	answer:     Conflict,
 	answer_all: bool,
 	answered:   sync.Sema,
@@ -382,12 +384,16 @@ on_bytes :: proc(user: rawptr, n: i64) { sync.atomic_add(&(^Job)(user).bytes_don
 @(private = "file")
 on_cancelled :: proc(user: rawptr) -> bool { return cancelled((^Job)(user)) }
 
-// What to do with `target`, taken: the job's policy, else the person's answer (asked through the interface).
+// What to do with `target`, taken: the job's policy, else the person's answer (asked through the interface). `there`
+// and `coming`: the two files as read here (the interface reads no disk).
 @(private = "file")
-resolve :: proc(job: ^Job, target: string) -> Conflict {
+resolve :: proc(job: ^Job, target: string, there, coming: fs.Info) -> Conflict {
 	if job.policy != .Ask { return job.policy }
 	delete(job.ask_name)
 	job.ask_name = strings.clone(target)
+	sync.mutex_lock(&job.mutex)
+	job.ask_there, job.ask_coming = there, coming
+	sync.mutex_unlock(&job.mutex)
 	sync.atomic_store(&job.state, Job_State.Asking)
 	// (cancelled meanwhile, or nobody to ask: skipped; jobs_stop sets `cancel` before it looks for a job that asks)
 	if cancelled(job) || !ui.post(&job.app.main.state, job_asks, job) {
@@ -418,7 +424,7 @@ copy_one :: proc(job: ^Job, from, target: string) -> (at: string, ok: bool) {
 		there, _ := fs.stat(to)
 		merge := is_folder && there.kind == .Directory
 		if !merge || to == from {
-			choice := to == from ? Conflict.Keep_Both : resolve(job, to)
+			choice := to == from ? Conflict.Keep_Both : resolve(job, to, there, info)
 			switch choice {
 			case .Skip, .Ask:
 				return
@@ -468,7 +474,7 @@ move_one :: proc(job: ^Job, from, target: string) -> (at: string, ok: bool) {
 		if info.kind == .Directory && there.kind == .Directory && .Link not_in info.flags {
 			e = .Cross_Volume   // (a folder onto a folder: merged, as a copy is)
 		} else {
-			switch resolve(job, to) {
+			switch resolve(job, to, there, info) {
 			case .Skip, .Ask:
 				return
 			case .Keep_Both:

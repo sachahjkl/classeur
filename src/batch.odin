@@ -212,13 +212,12 @@ batch_build :: proc(app: ^App, em: f32) {
 	if ui.modal("batch_rename", pw, &b.open, 0.1) {
 		if ui.style({width = ui.px(pw)}) {
 			ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 2.8))})
-			if ui.row(.Center, id = "###batch_head") {
+			if ui.row(.Center, {.Draw_Side_Bottom}, "###batch_head") {
 				ui.spacer(ui.px(em * 0.9))
 				if ui.tags("weak") { glyph(app, lucide.PENCIL, em * 1.6) }
 				ui.next({width = ui.fill(), height = ui.pct(1)})
 				ui.label(fmt.tprintf("Rename %d items###batch_title", n))
 			}
-			ui.hline(ui.px(pw))
 			// (Enter in a field renames)
 			if batch_field_row(app, "Pattern", "###bpat", &b.pattern, "{name}", em, pw, focus = b.focus_due) { apply = true }
 			b.focus_due = false
@@ -227,13 +226,14 @@ batch_build :: proc(app: ^App, em: f32) {
 			ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 2.6))})
 			if ui.row(.Center, id = "###batch_opts") {
 				ui.spacer(ui.px(em * 0.9))
-				// (the case: three words, the chosen one marked, as the toolkit's segmented in words)
+				// (the case: one of three, the toolkit's segmented control)
 				casing := int(b.casing)
-				ui.next({height = ui.pct(1)})
-				ui.segmented("###case", {"Case kept", "lower", "UPPER"}, &casing, look = .Text)
+				// (three equal parts: each word must fit a third)
+				ui.next({width = ui.px(em * 18), height = ui.px(ui.dense(em * 2.2))})
+				ui.segmented("###case", {"As is", "lower", "UPPER"}, &casing, tips = {"The case of each name kept", "Every letter in lower case", "Every letter in upper case"})
 				b.casing = Batch_Case(casing)
 				ui.spacer(ui.fill())
-				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.0))})
+				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
 				if ui.button(len(b.list) > 0 ? "Pattern again###blist" : "Names from the clipboard###blist").clicked {
 					if len(b.list) > 0 {
 						for s in b.list { delete(s) }
@@ -286,14 +286,15 @@ batch_build :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.9))
 				if ui.tags("weak") {
 					ui.next({width = ui.fill(), height = ui.pct(1), font_size = em * 0.85})
-					ui.label(bad > 0 ? fmt.tprintf("%d name%s cannot be had.###bstate", bad, bad == 1 ? "" : "s") : "Enter: rename   Esc: close###bstate")
+					ui.label(bad > 0 ? fmt.tprintf("%d name%s cannot be had.###bstate", bad, bad == 1 ? "" : "s") : "Esc: close###bstate")
 				}
-				ui.next({width = ui.text_size(em * 1.6), height = ui.px(ui.dense(em * 2.0))})
+				// (as ui.confirm's buttons; the one Enter presses says so)
+				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
 				if ui.button("Cancel###bcancel").clicked { b.open = false }
-				ui.spacer(ui.px(em * 0.5))
+				ui.spacer(ui.px(em * 0.6))
 				if ui.disabled(bad > 0) {
-					ui.next({width = ui.text_size(em * 1.6), height = ui.px(ui.dense(em * 2.0))})
-					if ui.tags("accent_button") { if ui.button("Rename###bapply").clicked { apply = true } }
+					ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
+					if ui.tags("accent_button") { if ui.button("Rename (Enter)###bapply").clicked { apply = true } }
 				}
 				ui.spacer(ui.px(em * 0.9))
 			}

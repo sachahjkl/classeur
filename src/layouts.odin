@@ -170,24 +170,52 @@ layouts_build :: proc(app: ^App, em: f32) {
 		if open != "" { layout_open(app, strings.clone(open, context.temp_allocator)) }
 	}
 	if !l.naming { return }
-	if ui.modal("layout_name", em * 26, &l.naming, 0.2) {
-		ui.next({width = ui.px(em * 26), height = ui.px(ui.dense(em * 3.2))})
-		if ui.row(.Center, id = "###layout_head") {
-			ui.spacer(ui.px(em * 0.8))
-			if ui.tags("weak") { glyph(app, lucide.LAYOUT_GRID, em * 1.8) }
-			key := ui.key_from_string(ui.parent_box().key, "###layout_name")
-			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.3))})
-			res := ui.line_edit("###layout_name", &l.field, "The layout's name")
-			if l.focus_due { ui.set_focus(key); l.focus_due = false }
-			if res.cancelled { l.naming = false }
-			if res.committed {
-				name := strings.trim_space(ui.field_string(&l.field))
-				if name != "" {
-					layout_save(app, strings.clone(name, context.temp_allocator))
-					l.naming = false
+	// (laid out as ui.confirm: a title, a weak note, the field, then the buttons; Enter in the field saves)
+	w := em * ui.CONFIRM_WIDTH_EM
+	if ui.modal("layout_name", w, &l.naming, 0.2) {
+		pad := em * 1.2
+		save := false
+		name := strings.trim_space(ui.field_string(&l.field))
+		ui.spacer(ui.px(pad))
+		ui.next({width = ui.px(w), height = ui.children_sum()})
+		if ui.row() {
+			ui.spacer(ui.px(pad))
+			ui.next({width = ui.px(w - 2 * pad), height = ui.children_sum(), axis = .Y})
+			if ui.column() {
+				ui.next({width = ui.fill(), font_size = em * 1.15})
+				ui.paragraph("Save the panels shown as a layout###layout_title")
+				ui.spacer(ui.px(em * 0.4))
+				if ui.tags("weak") {
+					ui.next({width = ui.fill()})
+					ui.paragraph("Its name: Ctrl+Alt+L lists the layouts to open one again in place of the panels.###layout_note")
+				}
+				ui.spacer(ui.px(em * 0.8))
+				key := ui.key_from_string(ui.parent_box().key, "###layout_name")
+				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.3))})
+				res := ui.line_edit("###layout_name", &l.field, "The layout's name")
+				if l.focus_due { ui.set_focus(key); l.focus_due = false }
+				if res.cancelled { l.naming = false }
+				if res.committed { save = true }
+				ui.spacer(ui.px(em * 1.1))
+				ui.next({width = ui.fill(), height = ui.children_sum()})
+				if ui.row(id = "###layout_buttons") {
+					ui.spacer(ui.fill())
+					ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
+					if ui.button("Cancel###layout_cancel").clicked { l.naming = false }
+					ui.spacer(ui.px(em * 0.6))
+					if ui.disabled(name == "") {
+						ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
+						if ui.tags("accent_button") { if ui.button("Save (Enter)###layout_save").clicked { save = true } }
+					}
 				}
 			}
-			ui.spacer(ui.px(em * 0.8))
+		}
+		ui.spacer(ui.px(pad))
+		// (read again: the field may have changed in this frame)
+		name = strings.trim_space(ui.field_string(&l.field))
+		if save && name != "" {
+			layout_save(app, strings.clone(name, context.temp_allocator))
+			l.naming = false
 		}
 	}
 }

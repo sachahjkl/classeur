@@ -5,6 +5,7 @@ package classeur
 
 import "core:fmt"
 import "core:strings"
+import "core:sync"
 import "gt:ui"
 import "fs"
 
@@ -94,6 +95,13 @@ conflict_build :: proc(app: ^App, em: f32) {
 			if ui.column() {
 				ui.next({width = ui.fill(), font_size = em * 1.15})
 				ui.paragraph(fmt.tprintf("%s is already in %s###title", shown_text(fs.base(job.ask_name)), shown_text(fs.base(fs.parent(job.ask_name)))))
+				// (the two files side by side, as the job read them: which to keep is seen before it is chosen)
+				sync.mutex_lock(&job.mutex)
+				there, coming := job.ask_there, job.ask_coming
+				sync.mutex_unlock(&job.mutex)
+				ui.spacer(ui.px(em * 0.4))
+				conflict_file_line(app, "There", there, coming, em, "###there")
+				conflict_file_line(app, job.kind == .Move ? "Moved" : "Copied", coming, there, em, "###coming")
 				ui.spacer(ui.px(em * 0.4))
 				if ui.tags("weak") {
 					ui.next({width = ui.fill()})
@@ -127,5 +135,24 @@ conflict_build :: proc(app: ^App, em: f32) {
 	if answer != .Ask {
 		job_answer(job, answer, v.all)
 		v.open = false
+	}
+}
+
+// A line of the name-taken question: "There: 12 KB · 2026-11-10 14:02", then "· newer" in the accent's colour when it is
+// the newer of the two.
+@(private = "file")
+conflict_file_line :: proc(app: ^App, word: string, f, other: fs.Info, em: f32, id: string) {
+	what := f.kind == .Directory ? "Folder" : size_text(f.size)
+	text := what
+	if date := date_text(app, f.mtime); date != "" { text = fmt.tprintf("%s · %s", what, date) }
+	ui.next({width = ui.fill(), height = ui.px(em * 1.5)})
+	if ui.row(.Center, id = id) {
+		ui.next({width = ui.text_size(0, 0), height = ui.pct(1)})
+		ui.label(fmt.tprintf("%s: %s###file", word, text))
+		if other.mtime != 0 && f.mtime > other.mtime {
+			ui.spacer(ui.px(em * 0.3))
+			ui.next({width = ui.text_size(0, 0), height = ui.pct(1), fg = ui.color("accent")})
+			ui.label("· newer###newer")
+		}
 	}
 }
