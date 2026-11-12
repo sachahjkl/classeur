@@ -58,12 +58,11 @@ test_inspector_picture :: proc(t: ^testing.T) {
 		testing.expect_value(t, app.inspector.pixels, [2]int{2000, 120})
 		testing.expect(t, app.inspector.size.x <= INSPECTOR_PICTURE_PX, "shrunk")
 		testing.expect(t, session.find_text(s, "2000 × 120") != nil, "its pixels in the head")
-		// (at the top of its room, as tall as it is fitted: no tall box that centres it)
+		// (its box takes the pane's room down to its foot: its zoom buttons there, not over the picture's edge)
 		pic := session.get(s, "insp_pic")
 		pane := session.get(s, "inspector")
-		pic_h := pic.rect.max.y - pic.rect.min.y
-		pane_h := pane.rect.max.y - pane.rect.min.y
-		testing.expectf(t, pic_h < pane_h * 0.3, "the picture's box is as tall as it: %v of %v", pic_h, pane_h)
+		gap := pane.rect.max.y - pic.rect.max.y
+		testing.expectf(t, gap >= 0 && gap < 40, "the picture's box ends at the pane's foot: %v short", gap)
 	})
 }
 

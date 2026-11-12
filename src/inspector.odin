@@ -351,18 +351,17 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 		case .Picture:
 			// (fitted; the wheel zooms about the pointer, a drag moves it, a double click goes to its pixels and back; its
 			// keys stay the list's: the arrows move the cursor, Space closes the inspector)
-			// (at the top of its room, under the properties: its box as tall as the picture fitted to the pane's width,
-			// shorter when the pane is not that tall)
-			room := width - em * 1.6
-			fitted := min(f32(insp.size.y), room * f32(insp.size.y) / f32(max(insp.size.x, 1)))
+			// (all the room under the properties, down to the pane's foot: the picture fitted in it, its buttons at the
+			// foot; a box as tall as the picture left the rest of the pane empty and the buttons over its edge)
 			ui.spacer(ui.px(em * 0.6))
-			ui.next({width = ui.fill(), height = ui.px(max(fitted, em), 0)})
+			ui.next({width = ui.fill(), height = ui.fill()})
 			if ui.row() {
 				ui.spacer(ui.px(em * 0.8))
 				ui.next({width = ui.fill(), height = ui.fill()})
 				ui.preview_image("###insp_pic", &insp.preview, insp.tex, {f32(insp.size.x), f32(insp.size.y)}, {buttons = true, radius = 3 * corner_k(), no_keys = true})
 				ui.spacer(ui.px(em * 0.8))
 			}
+			if insp.caption == "" { ui.spacer(ui.px(em * 0.8)) }
 			if insp.caption != "" {
 				if ui.tags("weak") {
 					ui.next({width = ui.fill(), height = ui.px(em * 2.2), text_align = .Center, font_size = em * 0.86})
