@@ -19,7 +19,7 @@ UPDATE_FOLDER :: "https://github.com/sachahjkl/classeur/releases/latest/download
 
 updates_start :: proc(app: ^App) {
 	if app.headless { return }   // (the tests reach no network)
-	app.installed_copy = setup.facts(setup_config()).running_it
+	// (app.installed_copy comes with the Setup's facts, read on a worker: setup_offer; updates_auto again then)
 	app.updater = update.updater_start({
 		product = classeur_update.PRODUCT, folder = UPDATE_FOLDER, current = APP_VERSION,
 		exe = app.exe, user_agent = fmt.tprintf("classeur/%s", APP_VERSION),
@@ -49,9 +49,14 @@ updates_follow :: proc(app: ^App) {
 	if st.serial == app.update_serial { return }
 	app.update_serial = st.serial
 	if st.asked || st.phase == .Installed || st.phase == .Available { say(app, "%s", update.status_words(st)) }
-	// (the installed copy: its manifest and Settings > Apps say the new version)
+	// (the installed copy: its manifest and Settings > Apps say the new version; written on a worker)
 	if st.phase == .Installed {
-		if ok, why := setup.updated(setup_config(), st.version); !ok { fmt.eprintfln("classeur: the update is in place, but %s", why) }
+		version := new_clone(strings.clone(st.version))
+		pool_submit(&app.pool, proc(data: rawptr) {
+			version := (^string)(data)
+			defer { delete(version^); free(version) }
+			if ok, why := setup.updated(setup_config(), version^); !ok { fmt.eprintfln("classeur: the update is in place, but %s", why) }
+		}, version)
 	}
 }
 

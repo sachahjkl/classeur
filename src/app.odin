@@ -180,6 +180,8 @@ App :: struct {
 	tab_image:    platform.Drag_Image,   // owned: the dragged tab's picture, read back from the renderer (tab_drag_poll)
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
 	launched_on: int,               // atomic: the thread that last started a program (launch: a worker, never this one)
+	window_fails: bool,             // the tests: a tab's window of its own fails to start (tab_window)
+	setup_known: bool,              // the install's facts and the Setup's answer came from their worker (setup_offer)
 }
 
 WINDOW_SIZE :: [2]int{1180, 720}

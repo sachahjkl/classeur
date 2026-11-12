@@ -41,6 +41,7 @@ Tab :: struct {
 	in_archive:   bool,              // the folder is an archive entered or a folder of one (read only), read with the folder
 	measured:     u64,               // the read whose folders were given to the measures
 	locked:       bool,
+	tearing:      bool,              // its window of its own starts on a worker (tab_window): closed when that lands
 	flat:         bool,              // the search of File Pilot: every entry under the folder, flattened
 	tree:         bool,              // the tree view: folders opened in place (tree_open), their entries under them
 	group:        Group_By,          // the rows grouped (the tab's; the folder follows it at each read)

@@ -139,15 +139,47 @@ setup_choice_write :: proc(app: ^App, choice: string) {
 }
 
 // At a start with the window: the Setup when there is something to do (Windows), unless the person answered for this
-// version or keeps this copy standalone; `asked`: classeur --setup.
+// version or keeps this copy standalone; `asked`: classeur --setup. The install's facts and the answer are read on a
+// worker (they reach the disk, the registry): the offer comes when they land, and whether this copy is the installed one
+// with them (the updater's auto). Headless (the tests), the worker reads nothing of the person's and offers nothing.
 setup_offer :: proc(app: ^App, asked: bool) {
-	if app.headless { return }
-	if asked {
-		setup.open(&app.setup, setup_config())
-		return
+	if asked && !app.headless { setup.open(&app.setup, setup_config()) }
+	job := new(Setup_Facts)
+	job^ = {app = app, offer = SETUP_AT_START && !asked, headless = app.headless}
+	pool_submit(&app.pool, setup_facts_run, job)
+}
+
+@(private = "file")
+Setup_Facts :: struct {
+	app:        ^App,
+	offer:      bool,   // the Setup is offered if wanted
+	headless:   bool,
+	wanted:     bool,   // the worker's answers
+	running_it: bool,
+}
+
+@(private = "file")
+setup_facts_run :: proc(data: rawptr) {
+	job := (^Setup_Facts)(data)
+	if !job.headless {
+		// (the facts' strings are in this worker's temp memory: only the answers are kept)
+		f := setup.facts(setup_config())
+		job.running_it = f.running_it
+		job.wanted = job.offer && setup.wanted(f, APP_VERSION, setup_choice_read())
 	}
-	// (the answer read on this thread: once, before the first frame)
-	if SETUP_AT_START && setup.wanted(setup.facts(setup_config()), APP_VERSION, setup_choice_read()) { setup.open(&app.setup, setup_config()) }
+	if !ui.post(&job.app.main.state, setup_facts_done, job) { free(job) }
+}
+
+@(private = "file")
+setup_facts_done :: proc(data: rawptr, word: u64) {
+	job := (^Setup_Facts)(data)
+	defer free(job)
+	app := job.app
+	app.setup_known = true
+	app.installed_copy = job.running_it
+	updates_auto(app)
+	if job.wanted { setup.open(&app.setup, setup_config()) }
+	app_frames(app)
 }
 
 act_setup :: proc(app: ^App) { setup.open(&app.setup, setup_config()) }

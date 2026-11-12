@@ -10,6 +10,7 @@ import "core:os"
 import "core:strconv"
 import "core:slice"
 import "core:strings"
+import "core:sync"
 import "gt:draw"
 import "gt:render"
 import setup "gt:setup"
@@ -389,12 +390,13 @@ tab_out_run :: proc(app: ^App) {
 	alone := len(app.panels) == 1 && len(app.panels[0].tabs) == 1
 	_, moved := effect.?
 	if !moved {
-		if alone { return }
-		if !tab_window(app, path) { return }
+		// (found again: the drag of the system may have run frames)
+		if !alone { if q := find_tab(app, id); q != nil { tab_window(app, q) } }
+		return
 	}
 	// (the window's only tab taken by another classeur window: this one has nothing left to show)
 	if alone {
-		if moved && !app.headless { platform.request_close(app.main.win) }
+		if !app.headless { platform.request_close(app.main.win) }
 		return
 	}
 	for p in app.panels {
@@ -402,13 +404,64 @@ tab_out_run :: proc(app: ^App) {
 	}
 }
 
-// A window of its own on `path` (this program again, standalone).
-tab_window :: proc(app: ^App, path: string) -> bool {
-	if app.headless {
-		append(&app.opened, strings.concatenate({"window:", path}))
-		return true
+// A window of its own on a tab (this program again, standalone: classeur --window <path>), started on a worker: a start
+// may wait. The tab closes when it has started (tab_window_done); a failure is said and the tab stays. Headless (the
+// tests), nothing starts: it is noted in `app.opened` at once, the worker runs all the same (app.window_fails: it fails).
+tab_window :: proc(app: ^App, t: ^Tab) {
+	if t.tearing { return }   // (torn again while its window starts: one window)
+	t.tearing = true
+	if app.headless { append(&app.opened, strings.concatenate({"window:", t.path})) }
+	job := new(Tab_Window)
+	job^ = {app = app, tab = t.id, exe = strings.clone(app.exe), path = strings.clone(t.path), headless = app.headless, fails = app.window_fails}
+	pool_submit(&app.pool, tab_window_run, job)
+	app_frames(app)
+}
+
+@(private = "file")
+Tab_Window :: struct {
+	app:      ^App,
+	tab:      u64,      // the tab's id (it may be moved or closed meanwhile: found again)
+	exe:      string,   // owned
+	path:     string,   // owned
+	headless: bool,     // nothing starts (the tests) ...
+	fails:    bool,     // ... and it fails
+	ok:       bool,     // the worker's answer
+}
+
+@(private = "file")
+tab_window_run :: proc(data: rawptr) {
+	job := (^Tab_Window)(data)
+	job.ok = job.headless ? !job.fails : setup.launch(job.exe, {"--window", job.path})
+	sync.atomic_store(&job.app.launched_on, sync.current_thread_id())
+	if !ui.post(&job.app.main.state, tab_window_done, job) { tab_window_free(job) }
+}
+
+// On the interface's thread: started, the tab leaves this window (unless it is the window's only tab by now); not, it
+// stays and the failure is said.
+@(private = "file")
+tab_window_done :: proc(data: rawptr, word: u64) {
+	job := (^Tab_Window)(data)
+	defer tab_window_free(job)
+	app := job.app
+	if !job.ok { say(app, "No window could be started.") }
+	alone := len(app.panels) == 1 && len(app.panels[0].tabs) == 1
+	for p in app.panels {
+		for q, i in p.tabs {
+			if q.id != job.tab { continue }
+			q.tearing = false
+			if job.ok && !alone { tab_close(app, p, i) }
+			app_frames(app)
+			return
+		}
 	}
-	return setup.launch(app.exe, {"--window", path})
+	app_frames(app)
+}
+
+@(private = "file")
+tab_window_free :: proc(job: ^Tab_Window) {
+	delete(job.exe)
+	delete(job.path)
+	free(job)
 }
 
 // A tab of a classeur window dropped here (Drop_* with TAB_MIME): it goes to the panel under the pointer. From this window
@@ -456,8 +509,7 @@ act_tab_window :: proc(app: ^App) {
 	p := current_panel(app)
 	t := current_tab(app)
 	if p == nil || t == nil || len(app.panels) == 1 && len(p.tabs) == 1 { return }
-	if !tab_window(app, strings.clone(t.path, context.temp_allocator)) { say(app, "No window could be started."); return }
-	tab_close(app, p, p.active)
+	tab_window(app, t)
 }
 
 // A tab of another window over this one, at `pos` (`path`: its folder when known): its ghost shows in the row there.
