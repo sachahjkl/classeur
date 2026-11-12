@@ -25,7 +25,7 @@ ROW_LEAD_EM     :: 0.4   // between a row's edge and its icon
 ICON_CELL_EM    :: 1.9   // a row's icon, which is its box too
 TREE_CHEVRON_EM :: 1.6   // a tree's chevron (icon_action at 0.8 em)
 COL_MODIFIED_EM :: 9.5
-COL_TYPE_EM     :: 8.5
+COL_TYPE_EM     :: 11   // (the system's names of the types: "Plain text document")
 COL_COUNT_EM    :: 5.6
 COL_SIZE_EM     :: 6.5
 // How far the alternating rows go from the list's colour toward the headers' (sRGB).
@@ -881,7 +881,7 @@ entry_row :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, row: int, selected: bool, na
 			switch Detail(k) {
 			case .Name:
 			case .Modified: ui.table_cell(l, k, date_text(app, e.mtime))
-			case .Type:     ui.table_cell(l, k, type_text(e^))
+			case .Type:     ui.table_cell(l, k, type_text(app, e^))
 			case .Folders:  ui.table_cell(l, k, folders)
 			case .Files:    ui.table_cell(l, k, files)
 			case .Size:
@@ -1218,8 +1218,8 @@ footer_info :: proc(app: ^App, t: ^Tab) -> string {
 	e := folder_cursor_entry(f)
 	if e == nil { return "" }
 	name := shown_text(fs.base(shown_name(app, e^)))
-	if e.size < 0 { return fmt.tprintf("%s · %s", name, type_text(e^)) }   // (a folder not measured)
-	return fmt.tprintf("%s · %s · %s", name, type_text(e^), size_text(e.size))
+	if e.size < 0 { return fmt.tprintf("%s · %s", name, type_text(app, e^)) }   // (a folder not measured)
+	return fmt.tprintf("%s · %s · %s", name, type_text(app, e^), size_text(e.size))
 }
 
 // A count of the footer: its icon and its number, its meaning in its tooltip. `lit`: in the accent (a filter leaves
@@ -1354,7 +1354,7 @@ entry_tip :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, sig: ui.Signal) {
 	name := fs.base(e.name)
 	where_ := ""
 	if t.folder.flat && fs.parent(e.name) != "" { where_ = fmt.tprintf("In %s", home_path(app, fs.join(t.path, fs.parent(e.name), context.temp_allocator))) }
-	facts := e.kind == .Directory ? fmt.tprintf("%s · %s", type_text(e^), date_text(app, e.mtime)) : fmt.tprintf("%s · %s · %s", type_text(e^), size_text(e.size), date_text(app, e.mtime))
+	facts := e.kind == .Directory ? fmt.tprintf("%s · %s", type_text(app, e^), date_text(app, e.mtime)) : fmt.tprintf("%s · %s · %s", type_text(app, e^), size_text(e.size), date_text(app, e.mtime))
 	hover_tip(sig, name, facts, where_)
 }
 

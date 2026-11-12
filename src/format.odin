@@ -5,6 +5,7 @@ package classeur
 import "core:fmt"
 import "core:strings"
 import "core:time"
+import "core:time/datetime"
 import "core:time/timezone"
 import "fs"
 
@@ -21,27 +22,81 @@ size_text :: proc(n: i64, allocator := context.temp_allocator) -> string {
 	return v < 10 ? fmt.aprintf("%.1f %s", v, units[u], allocator = allocator) : fmt.aprintf("%.0f %s", v, units[u], allocator = allocator)
 }
 
-// "2026-11-09 21:40" in the local time (UTC when the time zone is not known).
+// How the dates read (files.date_format).
+Date_Format :: enum u8 {
+	ISO,              // "2026-11-09 21:40"
+	Relative,         // "Today 21:40", "Yesterday 21:40", "Monday 21:40", else "9 Nov 2026"
+	Day_Month_Year,   // "9 Nov 2026 21:40"
+}
+
+@(private = "file", rodata)
+MONTH_NAMES := [12]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+
+@(private = "file", rodata)
+WEEKDAY_NAMES := [datetime.Weekday]string{
+	.Sunday = "Sunday", .Monday = "Monday", .Tuesday = "Tuesday", .Wednesday = "Wednesday", .Thursday = "Thursday",
+	.Friday = "Friday", .Saturday = "Saturday",
+}
+
+// A time in the local time (UTC when the time zone is not known).
+local_datetime :: proc(tz: ^datetime.TZ_Region, ns: i64) -> (dt: datetime.DateTime, ok: bool) {
+	dt = time.time_to_datetime(time.Time{_nsec = ns}) or_return
+	if tz != nil {
+		if local, lok := timezone.datetime_to_tz(dt, tz); lok { dt = local }
+	}
+	return dt, true
+}
+
+// A date in the local time, in the person's format.
 date_text :: proc(app: ^App, ns: i64, allocator := context.temp_allocator) -> string {
 	if ns == 0 { return "" }
-	dt, ok := time.time_to_datetime(time.Time{_nsec = ns})
+	dt, ok := local_datetime(app.tz, ns)
 	if !ok { return "" }
-	if app.tz != nil {
-		if local, lok := timezone.datetime_to_tz(dt, app.tz); lok { dt = local }
+	today: datetime.Date
+	if app.settings.date_format == .Relative {
+		// (today read once a frame, not for each row shown)
+		if app.today_frame != app.frame || app.today.year == 0 {
+			app.today_frame = app.frame
+			if now, nok := local_datetime(app.tz, time.now()._nsec); nok { app.today = now.date }
+		}
+		today = app.today
+	}
+	return date_format_text(dt, today, app.settings.date_format, allocator)
+}
+
+// `dt` in `format`; `today` is what Relative counts from.
+date_format_text :: proc(dt: datetime.DateTime, today: datetime.Date, format: Date_Format, allocator := context.temp_allocator) -> string {
+	month := MONTH_NAMES[clamp(int(dt.month), 1, 12) - 1]
+	switch format {
+	case .ISO:
+	case .Day_Month_Year:
+		return fmt.aprintf("%d %s %d %02d:%02d", dt.day, month, dt.year, dt.hour, dt.minute, allocator = allocator)
+	case .Relative:
+		day, _ := datetime.date_to_ordinal(dt.date)
+		now, _ := datetime.date_to_ordinal(today)
+		switch {
+		case day == now:     return fmt.aprintf("Today %02d:%02d", dt.hour, dt.minute, allocator = allocator)
+		case day == now - 1: return fmt.aprintf("Yesterday %02d:%02d", dt.hour, dt.minute, allocator = allocator)
+		// (a week back the weekday is today's again: from there, the date)
+		case day < now && day > now - 7:
+			return fmt.aprintf("%s %02d:%02d", WEEKDAY_NAMES[datetime.day_of_week(day)], dt.hour, dt.minute, allocator = allocator)
+		}
+		return fmt.aprintf("%d %s %d", dt.day, month, dt.year, allocator = allocator)
 	}
 	return fmt.aprintf("%04d-%02d-%02d %02d:%02d", dt.year, dt.month, dt.day, dt.hour, dt.minute, allocator = allocator)
 }
 
-
-type_text :: proc(e: fs.Entry, allocator := context.temp_allocator) -> string {
+// What an entry is: the system's name of its type when it is known (type_names.odin), else its extension's.
+type_text :: proc(app: ^App, e: fs.Entry, allocator := context.temp_allocator) -> string {
 	switch e.kind {
-	case .Directory:   return .Link in e.flags ? "Folder link" : "File folder"
+	case .Directory:   return .Link in e.flags ? "Folder link" : "Folder"
 	case .Broken_Link: return "Broken link"
 	case .Other:       return "Special"
 	case .File:
 	}
-	ext := fs.extension(e.name)
+	ext := fs.extension(fs.base(e.name))   // (a search's rows are named by their path below the folder)
 	if ext == "" { return .Executable in e.flags ? "Program" : "File" }
+	if name := type_name(app, ext); name != "" { return strings.clone(name, allocator) }
 	return strings.concatenate({strings.to_upper(ext, context.temp_allocator), " File"}, allocator)
 }
 

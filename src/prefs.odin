@@ -23,6 +23,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "files.show_extensions", tags = {"suffix", "names"}, description = "Shows the extensions of the files' names.", kind = .Bool, default = {b = true}},
 	{name = "files.show_hidden", tags = {"dotfiles", "hidden"}, description = "Shows the hidden files (their names start with a dot; on Windows, their attribute).", kind = .Bool, default = {b = false}},
 	{name = "files.folders_first", tags = {"directories", "sort", "order"}, description = "Lists the folders before the files, whatever the sort.", kind = .Bool, default = {b = true}},
+	{name = "files.date_format", tags = {"dates", "time", "modified", "relative"}, description = "How the dates read: 2026-11-09 21:40; Today 21:40, Yesterday, the weekday for the last week, then 9 Nov 2026; or 9 Nov 2026 21:40.", kind = .String, default = {s = "ISO"}, choices = {"ISO", "relative", "day month year"}},
 	{name = "files.measure_folders", tags = {"size", "du", "count"}, description = "Measures the folders shown: what they hold all the way down, in the Folders, Files and Size columns.", kind = .Bool, default = {b = true}},
 	{name = "view.columns", description = "The columns of the details shown after the name, in their order.", kind = .String, default = {s = DETAIL_COLUMNS_DEFAULT}, hidden = true},
 	{name = "view.column_widths", description = "The widths of the details' columns the person changed (ems).", kind = .String, default = {s = ""}, hidden = true},
@@ -50,6 +51,7 @@ Settings :: struct {
 	inactive_opacity: f32,
 	font_size:        f32,
 	show_extensions:  bool,
+	date_format:      Date_Format,
 	measure_folders:  bool,
 	single_click:     bool,
 }
@@ -103,6 +105,11 @@ settings_apply :: proc(app: ^App) {
 	s.inactive_opacity = f32(config.float_of(p, "look.inactive_opacity"))
 	s.font_size = f32(config.float_of(p, "look.font_size"))
 	s.show_extensions = config.bool_of(p, "files.show_extensions")
+	switch config.string_of(p, "files.date_format") {
+	case "relative":       s.date_format = .Relative
+	case "day month year": s.date_format = .Day_Month_Year
+	case:                  s.date_format = .ISO
+	}
 	s.measure_folders = config.bool_of(p, "files.measure_folders")
 	s.single_click = config.bool_of(p, "open.single_click")
 	columns_read(app, config.string_of(p, "view.columns"), config.string_of(p, "view.column_widths"))

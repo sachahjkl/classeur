@@ -38,6 +38,9 @@ App :: struct {
 	thumbs:      map[string]Thumb,  // by path (the keys owned)
 	icons_cache: map[string]Sys_Icon,   // the system's icons by key and size (icons.odin)
 	icon_keys:   map[string]string,     // a file's name -> its icon's key (both owned)
+	type_names:  map[string]Type_Name,  // an extension -> the system's name of its type (type_names.odin; keys owned)
+	today:       datetime.Date,         // the local date, read once a frame by date_text (Relative dates) ...
+	today_frame: u64,                   // ... in this frame
 	vol_from, vol_to: string,           // owned: the last pair asked whether on one volume (a drag), and the answer
 	vol_same:    bool,
 	vol_known:   bool,                  // vol_same is the worker's answer (else the guess is used: dnd.odin)
@@ -356,6 +359,8 @@ app_close :: proc(app: ^App) {
 	pool_stop(&app.thumb_pool, proc(data: rawptr) {})
 	thumbs_free(app)
 	icons_free(app)
+	type_names_free(app)
+	delete(app.type_names)
 	if app.logo_made { render.destroy_texture(&app.shared.r, app.logo) }
 	inspector_free(app)   // (before the renderer goes: the textures are its)
 	devtools.stop(app.devtools)

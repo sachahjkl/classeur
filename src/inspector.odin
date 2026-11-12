@@ -282,7 +282,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 		size := e.size >= 0 ? size_text(e.size) : ""
 		if m, ok := measure_of(app, t, e^); ok { size = fmt.tprintf("%s · %d folders · %d files", size_text(m.bytes), m.folders, m.files) }
 		if insp.ready && insp.kind == .Picture && insp.pixels.x > 0 { size = fmt.tprintf("%s · %d × %d", size, insp.pixels.x, insp.pixels.y) }
-		meta := fmt.tprintf("%s · %s · %s", type_text(e^), size, date_text(app, e.mtime))
+		meta := fmt.tprintf("%s · %s · %s", type_text(app, e^), size, date_text(app, e.mtime))
 		inspector_head(app, fs.join(t.path, e.name, context.temp_allocator), e.kind == .Directory, fs.base(e.name), meta, em)
 		if insp.ready && insp.has_props { inspector_props(app, t, e^, em) }
 		if !insp.ready {
