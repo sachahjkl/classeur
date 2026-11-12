@@ -32,6 +32,7 @@ COMMANDS :: [?]Command{
 	{name = "changelog", about = "new <type> <subject> <text> | check: the fragments of changelog.d/ (one per change a person sees)", run = run_changelog},
 	{name = "ship", about = "<version> [--dry-run]: from a clean master: the changelog, APP_VERSION, the checks, a commit, the tag, the push", run = run_ship},
 	{name = "site", about = "build <site> <out> | check: the site's pages from site/ and CHANGELOG.md", run = run_site},
+	{name = "timed", about = ": the tests that measure time (opt-in: a loaded machine fails them for nothing)", run = run_timed},
 	{name = "shots", about = "[--out folder]: the pictures of the README, the program's own frames with no window of the system", run = run_shots},
 }
 

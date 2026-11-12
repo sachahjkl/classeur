@@ -16,6 +16,7 @@ Every step is a command of `tools/classeurtool` (`help` lists them):
 - `test`: the tests of `src` (the whole program with no window of the system), `src/fs` and the tool.
 - `check`: `odin check -vet` (and `src/fs` for the other system), the tests, a release build.
 - `shots` makes the README's pictures from `test_shots`, `logo` the logo.
+- `timed`: the tests that measure time, opt-in (`when !TIMED { return }`); `check` does not run them.
 - Linux: `nix develop` first (`flake.nix`).
 
 ## Rules

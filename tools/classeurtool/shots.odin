@@ -13,6 +13,16 @@ SHOTS_OUT   :: "docs/screenshots"
 SHOTS_FROM  :: "build/session/test_shots"
 SHOTS_NAMES :: [?]string{"main", "panels", "palette", "search", "options", "inspector", "goto", "batch"}
 
+// The tests of the program that measure time, each named in TIMED_TESTS: they run only when asked.
+TIMED_TESTS :: "classeur.test_close_during_walk"
+
+run_timed :: proc(args: []string) -> int {
+	if !build_text() { return 1 }
+	_ = os.make_directory("build")
+	extra := []string{"-out:build/test_timed", "-define:ODIN_TEST_THREADS=1", "-define:CLASSEUR_TIMED=true", "-define:ODIN_TEST_NAMES=" + TIMED_TESTS}
+	return toolbox.run(odin_cmd("test", "src", extra), {echo = true}) ? 0 : 1
+}
+
 run_shots :: proc(args: []string) -> int {
 	out := SHOTS_OUT
 	if len(args) == 2 && args[0] == "--out" { out = args[1] }

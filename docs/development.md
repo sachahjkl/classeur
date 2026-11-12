@@ -23,6 +23,7 @@ Every step is a command of `tools/classeurtool`:
 | `check` | `odin check -vet` of the program, of `src/fs` for the other system and of the tool, the tests, a release build; Windows: `classeur.com version` gives classeur's output, `classeur.exe` has its icon |
 | `logo` | `assets/logo*.png`, `assets/classeur.ico` (the exe's icon) and `.project/image.png`, drawn by gui_toolkit's `paint` |
 | `shots [--out folder]` | `docs/screenshots/*.png`, from `test_shots` in `src/app_test.odin` |
+| `timed` | the tests that measure time (`TIMED_TESTS`, `-define:CLASSEUR_TIMED=true`): opt-in, a loaded machine fails them for nothing |
 
 ## Tests
 

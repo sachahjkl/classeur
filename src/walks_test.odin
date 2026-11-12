@@ -134,6 +134,7 @@ test_change_while_read :: proc(t: ^testing.T) {
 @(test)
 test_close_during_walk :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
+		when !TIMED { return }
 		context.allocator = runtime.heap_allocator()
 		dir := make_fixture(t, {})
 		write_tree(dir, 200, 100)

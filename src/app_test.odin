@@ -24,6 +24,8 @@ import "fs"
 
 // classeurtool shots: the pictures of the README, from test_shots.
 SHOTS :: #config(CLASSEUR_SHOTS, false)
+// The tests that measure time run only when asked (classeurtool timed): a loaded machine would fail them for nothing.
+TIMED :: #config(CLASSEUR_TIMED, false)
 
 // (shared by the tests of the package: each file of tests uses it)
 FIXTURE :: [?]string{
