@@ -57,3 +57,28 @@ test_hidden_empty_state :: proc(t: ^testing.T) {
 		testing.expect_value(t, len(current_tab(app).folder.shown), 1)
 	})
 }
+
+// Space in the empty filter opens the inspector, as in the list, and types nothing; in a filter with letters it is a space.
+@(test)
+test_space_in_empty_filter :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir})
+		context.allocator = runtime.heap_allocator()
+		tab := current_tab(app)
+		session.key(s, .F, {.Ctrl})
+		session.frames(s, 2)
+		testing.expect(t, !app.inspector.open)
+		session.type_text(s, " ")
+		session.frames(s, 2)
+		testing.expect_value(t, ui.field_string(&tab.filter), "")
+		testing.expect(t, app.inspector.open, "Space: the inspector")
+		session.type_text(s, " ")
+		session.frames(s, 2)
+		testing.expect(t, !app.inspector.open, "Space again: closed")
+		session.type_text(s, "re p")
+		session.frames(s, 2)
+		testing.expect_value(t, ui.field_string(&tab.filter), "re p")
+	})
+}
