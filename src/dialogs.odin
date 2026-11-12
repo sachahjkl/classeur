@@ -10,23 +10,31 @@ import "gt:ui"
 import "fs"
 
 DIALOG_WIDTH_EM :: 30
+@(private = "file") DIALOG_PAD_EM :: 0.9        // the room at the sides of every part
+@(private = "file") DIALOG_ITEMS_SHOWN :: 5     // what Delete for good names, one per line; the others counted
 
 Confirm :: struct {
-	open:  bool,
-	paths: [dynamic]string,   // owned: what Delete for good deletes
+	open:    bool,
+	paths:   [dynamic]string,   // owned: what Delete for good deletes
+	folders: [dynamic]bool,     // each one is a folder (its icon: known from the listing, no disk read)
 }
 
 confirm_free :: proc(c: ^Confirm) {
 	for p in c.paths { delete(p) }
 	delete(c.paths)
+	delete(c.folders)
 	c^ = {}
 }
 
-confirm_delete :: proc(app: ^App, paths: []string) {
+confirm_delete :: proc(app: ^App, paths: []string, folders: []bool) {
 	c := &app.confirm
 	for p in c.paths { delete(p) }
 	clear(&c.paths)
-	for p in paths { append(&c.paths, strings.clone(p)) }
+	clear(&c.folders)
+	for p, i in paths {
+		append(&c.paths, strings.clone(p))
+		append(&c.folders, i < len(folders) && folders[i])
+	}
 	c.open = true
 }
 
@@ -35,24 +43,28 @@ dialogs_build :: proc(app: ^App, em: f32) {
 	conflict_build(app, em)
 }
 
+// As the inspector: what it is at the top (its icon, a title, a line of details), then the files it is about, a note,
+// and the buttons on a strip of their own.
 @(private = "file")
 confirm_build :: proc(app: ^App, em: f32) {
 	c := &app.confirm
 	if ui.modal("confirm_delete", em * DIALOG_WIDTH_EM, &c.open) {
-		dialog_body(app, lucide.TRASH_2, em)
 		n := len(c.paths)
-		title := n == 1 ? fmt.tprintf("Delete %s for good?", fs.base(c.paths[0])) : fmt.tprintf("Delete %d items for good?", n)
-		dialog_text(title, "They do not go to the trash: this cannot be undone.", em)
+		if n == 0 { c.open = false; return }
+		where_ := home_path(app, fs.parent(c.paths[0]))
+		detail := n == 1 ? fmt.tprintf("in %s", where_) : fmt.tprintf("%d items in %s", n, where_)
+		dialog_head(app, lucide.TRASH_2, ui.color("danger_button background"), "Delete for good?", detail, em)
+		dialog_items(app, c, em)
+		dialog_note("They do not go to the trash: this cannot be undone.", em)
 		go := false
 		buttons_place(em)
-		if ui.row(.Center, id = "###buttons") {
+		if ui.row(.Center, {.Draw_Side_Top}, "###buttons") {
 			ui.spacer(ui.fill())
 			if ui.button("Cancel###cancel").clicked { c.open = false }
 			ui.spacer(ui.px(em * 0.5))
 			if ui.tags("danger_button") { go = ui.button("Delete###delete").clicked }
-			ui.spacer(ui.px(em * 1.2))
+			ui.spacer(ui.px(em * DIALOG_PAD_EM))
 		}
-		dialog_end(em)
 		if go {
 			job_add(app, .Delete, c.paths[:])
 			c.open = false
@@ -80,17 +92,20 @@ conflict_build :: proc(app: ^App, em: f32) {
 	}
 	answer := Conflict.Ask
 	if ui.modal("conflict", em * DIALOG_WIDTH_EM, &v.open) {
-		dialog_body(app, lucide.ALERT_CIRCLE, em)
-		dialog_text(fmt.tprintf("%s is already in %s.", fs.base(job.ask_name), fs.base(fs.parent(job.ask_name))),
-			"Replace it with the one you copy, keep both (the new one numbered), or skip it.", em)
-		ui.next({width = ui.fill()})
-		if ui.row(.Center) {
-			ui.spacer(ui.px(em * 1.2))
+		name := fs.base(job.ask_name)
+		dialog_head(app, lucide.ALERT_CIRCLE, ui.color("accent"), fmt.tprintf("%s is already there", name),
+			fmt.tprintf("in %s", home_path(app, fs.parent(job.ask_name))), em)
+		ui.spacer(ui.px(em * 0.6))
+		dialog_note("Replace it with the one you copy, keep both (the new one numbered), or skip it.", em)
+		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0))})
+		if ui.row(.Center, id = "###all_row") {
+			ui.spacer(ui.px(em * DIALOG_PAD_EM))
 			ui.checkbox("###all", "Do the same for the next ones", &v.all)
 		}
+		ui.spacer(ui.px(em * 0.5))
 		buttons_place(em)
-		if ui.row(.Center, id = "###buttons") {
-			ui.spacer(ui.px(em * 1.2))
+		if ui.row(.Center, {.Draw_Side_Top}, "###buttons") {
+			ui.spacer(ui.px(em * DIALOG_PAD_EM))
 			if ui.button("Cancel the job###cancel").clicked { job_cancel(job); v.open = false }
 			ui.spacer(ui.fill())
 			if ui.button("Skip###skip").clicked { answer = .Skip }
@@ -98,9 +113,8 @@ conflict_build :: proc(app: ^App, em: f32) {
 			if ui.button("Keep both###both").clicked { answer = .Keep_Both }
 			ui.spacer(ui.px(em * 0.5))
 			if ui.tags("accent_button") { if ui.button("Replace###replace").clicked { answer = .Replace } }
-			ui.spacer(ui.px(em * 1.2))
+			ui.spacer(ui.px(em * DIALOG_PAD_EM))
 		}
-		dialog_end(em)
 	}
 	// (Escape closes it: the file is skipped)
 	if !v.open && answer == .Ask && !job.cancel { answer = .Skip }
@@ -110,46 +124,73 @@ conflict_build :: proc(app: ^App, em: f32) {
 	}
 }
 
+// The top, as the inspector's: the icon, the title, a weak line under it; a line below.
 @(private = "file")
-dialog_body :: proc(app: ^App, icon: string, em: f32) {
-	ui.spacer(ui.px(em * 1.0))
-	ui.next({width = ui.fill(), height = ui.px(em * 2.4)})
-	if ui.row(.Center) {
-		ui.spacer(ui.px(em * 1.2))
-		glyph(app, icon, em * 2.2, ui.color("accent"))
+dialog_head :: proc(app: ^App, icon: string, tint: ui.Color, title, detail: string, em: f32) {
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 3.6))})
+	if ui.row(.Center, {.Draw_Side_Bottom}, "###dlg_head") {
+		ui.spacer(ui.px(em * DIALOG_PAD_EM))
+		glyph(app, icon, em * 1.7, tint)
+		ui.spacer(ui.px(em * 0.7))
+		ui.next({width = ui.fill(), height = ui.pct(1), axis = .Y})
+		if ui.column() {
+			ui.spacer(ui.fill())
+			ui.next({width = ui.fill(), height = ui.px(em * 1.5), font_size = em * 1.05})
+			ui.label(fmt.tprintf("%s###dlg_title", shown_text(title)))
+			if ui.tags("weak") {
+				ui.next({width = ui.fill(), height = ui.px(em * 1.3), font_size = em * 0.86})
+				ui.label(fmt.tprintf("%s###dlg_detail", shown_text(detail)))
+			}
+			ui.spacer(ui.fill())
+		}
+		ui.spacer(ui.px(em * DIALOG_PAD_EM))
 	}
 }
 
+// What Delete for good takes: a line each (its icon and name, as the inspector lists a folder), the others counted.
 @(private = "file")
-dialog_text :: proc(title, text: string, em: f32) {
-	ui.next({width = ui.fill()})
-	if ui.row() {
-		ui.spacer(ui.px(em * 1.2))
-		ui.next({width = ui.fill()})
-		if ui.column() {
-			if ui.style({font_size = em * 1.1}) {
-				ui.next({width = ui.fill()})
-				ui.paragraph(fmt.tprintf("%s###title", shown_text(title)))
-			}
+dialog_items :: proc(app: ^App, c: ^Confirm, em: f32) {
+	ui.spacer(ui.px(em * 0.4))
+	for p, i in c.paths {
+		if i == DIALOG_ITEMS_SHOWN { break }
+		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.9))})
+		if ui.row(.Center, {}, fmt.tprintf("###dlg_item%d", i)) {
+			ui.spacer(ui.px(em * DIALOG_PAD_EM))
+			path_icon(app, p, c.folders[i], em * 1.6)
 			ui.spacer(ui.px(em * 0.4))
-			if ui.tags("weak") {
-				ui.next({width = ui.fill()})
-				ui.paragraph(fmt.tprintf("%s###text", text))
+			ui.next({width = ui.fill(), height = ui.pct(1)})
+			ui.label(fmt.tprintf("%s###n", shown_text(fs.base(p))))
+			ui.spacer(ui.px(em * DIALOG_PAD_EM))
+		}
+	}
+	if more := len(c.paths) - DIALOG_ITEMS_SHOWN; more > 0 {
+		if ui.tags("weak") {
+			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.7))})
+			if ui.row(.Center, {}, "###dlg_more") {
+				ui.spacer(ui.px(em * (DIALOG_PAD_EM + 2.0)))
+				ui.label(fmt.tprintf("and %d more###t", more))
 			}
 		}
-		ui.spacer(ui.px(em * 1.2))
+	}
+	ui.spacer(ui.px(em * 0.4))
+}
+
+// A weak note, folded in the dialog's width (a width of its own: the paragraph knows where to fold before the layout).
+@(private = "file")
+dialog_note :: proc(text: string, em: f32) {
+	ui.next({width = ui.fill()})
+	if ui.row(id = "###dlg_note_row") {
+		ui.spacer(ui.px(em * DIALOG_PAD_EM))
+		if ui.tags("weak") {
+			ui.next({width = ui.px(em * (DIALOG_WIDTH_EM - 2 * DIALOG_PAD_EM)), font_size = em * 0.92})
+			ui.paragraph(fmt.tprintf("%s###dlg_note", text))
+		}
 	}
 	ui.spacer(ui.px(em * 0.8))
 }
 
-// The row of the buttons: its height and the room above it (the next `ui.row` is it).
+// The strip of the buttons: its size (the next `ui.row(.Center, {.Draw_Side_Top}, "###buttons")` is it, a line above it).
 @(private = "file")
 buttons_place :: proc(em: f32) {
-	ui.spacer(ui.px(em * 0.4))
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.2))})
-}
-
-@(private = "file")
-dialog_end :: proc(em: f32) {
-	ui.spacer(ui.px(em * 1.0))
+	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 3.0))})
 }

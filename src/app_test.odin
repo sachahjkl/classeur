@@ -2826,3 +2826,35 @@ test_header_menu :: proc(t: ^testing.T) {
 		testing.expect_value(t, config.string_of(&app.prefs, "view.columns"), DETAIL_COLUMNS_DEFAULT)
 	})
 }
+
+// The question before deleting for good: its note folds in the dialog, above the buttons (it ran under them); what it
+// deletes listed, a folder with a folder's icon.
+@(test)
+test_delete_dialog :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir}, size = {1000, 700})
+		context.allocator = runtime.heap_allocator()
+		tab := current_tab(app)
+		session.key(s, .Home)
+		session.key(s, .Down, {.Shift}, repeat = 2)
+		session.key(s, .Delete, {.Shift})
+		session.frames(s, 3)
+		testing.expect(t, app.confirm.open, "the question")
+		testing.expect_value(t, len(app.confirm.paths), 3)
+		testing.expect(t, app.confirm.folders[0], "the first one a folder")
+		note, buttons := session.find(s, "dlg_note"), session.find(s, "buttons")
+		testing.expect(t, note != nil && buttons != nil, "the note and the buttons")
+		if note != nil && buttons != nil {
+			testing.expectf(t, note.rect.max.y <= buttons.rect.min.y, "the note (%v) above the buttons (%v)", note.rect, buttons.rect)
+			testing.expectf(t, note.rect.max.x <= buttons.rect.max.x, "the note (%v) in the dialog (%v)", note.rect, buttons.rect)
+		}
+		testing.expect(t, session.find(s, "dlg_item2") != nil, "the three named")
+		session.save_png(s, "delete_dialog.png")
+		session.key(s, .Escape)
+		session.frames(s, 2)
+		testing.expect(t, !app.confirm.open, "Escape: nothing deleted")
+		_ = tab
+	})
+}
