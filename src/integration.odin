@@ -16,6 +16,7 @@ import "core:os"
 import "core:strings"
 import config "gt:config"
 import desktop "gt:desktop"
+import "gt:i18n"
 import "gt:platform"
 import "gt:process"
 import "gt:render"
@@ -119,9 +120,10 @@ setup_config :: proc() -> setup.Config {
 	}
 }
 
-@(private = "file", rodata)
+// (not rodata: i18n.later marks the labels for the catalogue; tr where they are shown)
+@(private = "file")
 SETUP_CHOICES := [?]setup.Choice{
-	{label = "classeur in the terminal (on the PATH)", on = true},
+	{label = i18n.later("classeur in the terminal (on the PATH)"), on = true},
 }
 
 // What the person answered the Setup (setup.CHOICE_*), kept in <config>/classeur/setup.
@@ -241,7 +243,7 @@ desktop_follow_done :: proc(data: rawptr, word: u64) {
 	for name in names {
 		if r := config.ref_of(&app.prefs, name); r != config.NO_REF { config.entry(&app.prefs, r).def.hidden = !job.integrated }
 	}
-	if job.failed != "" { say(app, "The desktop's launcher cannot be changed: %s", job.failed) }
+	if job.failed != "" { say(app, i18n.tr("The desktop's launcher cannot be changed: %s"), job.failed) }
 	app_frames(app)
 }
 
@@ -314,17 +316,17 @@ setup_head :: proc(app: ^App, c: setup.Config, em: f32) {
 			ui.custom("###setup_logo", proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) { draw.image(dc, (^render.Texture)(user)^, b.rect) }, tex)
 			ui.spacer(ui.px(em * 0.9))
 		}
-		title, badge := "Reading the install…", ""
+		title, badge := i18n.tr("Reading the install…"), ""
 		if d.known { title, badge = setup.headline(f^, c) }
 		ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 		if ui.column(id = "###setup_words") {
 			ui.next({width = ui.fill(), height = ui.px(em * 1.9), font_size = math.round(em * 1.35), text_pad = 0})
 			ui.label(fmt.tprintf("%s###setup_title", title))
-			installed := "none"
-			if d.known && f.state != .Not_Installed && f.state != .Nix_Package { installed = f.version != "" ? fmt.tprintf("v%s", f.version) : "a copy" }
+			installed := i18n.tr("none")
+			if d.known && f.state != .Not_Installed && f.state != .Nix_Package { installed = f.version != "" ? fmt.tprintf("v%s", f.version) : i18n.tr("a copy") }
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), height = ui.px(em * 1.4), font_size = math.round(em * 0.9), text_pad = 0})
-				ui.label(fmt.tprintf("This copy: v%s   Installed copy: %s   %s###setup_versions", c.version, installed, c.identity.vendor))
+				ui.label(fmt.tprintf("%s###setup_versions", fmt.tprintf(i18n.tr("This copy: v%s   Installed copy: %s   %s"), c.version, installed, c.identity.vendor)))
 			}
 		}
 		if badge != "" {
@@ -335,7 +337,7 @@ setup_head :: proc(app: ^App, c: setup.Config, em: f32) {
 			}
 		}
 		ui.spacer(ui.px(em * 1.2))
-		if ui.tags("weak") { if icon_action(app, "setup_close_x", lucide.X, "Close (Escape)", em) { d.open = false } }
+		if ui.tags("weak") { if icon_action(app, "setup_close_x", lucide.X, i18n.tr("Close (Escape)"), em) { d.open = false } }
 		ui.spacer(ui.px(em * 0.6))
 	}
 }
@@ -349,36 +351,36 @@ setup_body :: proc(app: ^App, c: setup.Config, em: f32) {
 	ui.spacer(ui.px(em * 0.8))
 	setup_paragraph("setup_state", words, tone == "accent" ? "" : tone, em)
 	if d.note != "" || setup.busy(d) {
-		setup_paragraph("setup_note", setup.busy(d) ? "Working…" : d.note, setup.busy(d) ? "weak" : d.note_good ? "good" : "bad", em)
+		setup_paragraph("setup_note", setup.busy(d) ? i18n.tr("Working…") : d.note, setup.busy(d) ? "weak" : d.note_good ? "good" : "bad", em)
 	}
-	setup_section("Location", em)
-	setup_line(app, "setup_where", "Installed program", f.exe, true, em)
+	setup_section(i18n.tr("Location"), em)
+	setup_line(app, "setup_where", i18n.tr("Installed program"), f.exe, true, em)
 	if !f.from_nix {
-		setup_section("Options", em)
+		setup_section(i18n.tr("Options"), em)
 		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.3))})
 		if ui.row(.Center, {.Draw_Side_Bottom}, "###setup_opt_desk") {
 			ui.spacer(ui.px(em * 1.2))
-			ui.checkbox("###setup_shortcut", "Shortcut on the Desktop", &d.shortcut)
+			ui.checkbox("###setup_shortcut", i18n.tr("Shortcut on the Desktop"), &d.shortcut)
 		}
 		for ch, i in setup_choices() {
 			if i >= len(d.choices) { break }
 			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.3))})
 			if ui.row(.Center, {.Draw_Side_Bottom}, fmt.tprintf("###setup_opt_%d", i)) {
 				ui.spacer(ui.px(em * 1.2))
-				ui.checkbox(fmt.tprintf("###setup_choice_%d", i), ch.label, &d.choices[i])
+				ui.checkbox(fmt.tprintf("###setup_choice_%d", i), i18n.tr(ch.label), &d.choices[i])
 			}
 		}
 	}
-	setup_section("On this system", em)
+	setup_section(i18n.tr("On this system"), em)
 	// (missing: of an install that is there; none: no install)
-	absent := f.state == .Not_Installed || f.state == .Nix_Package ? "none" : "missing"
-	setup_line(app, "setup_menu", setup.WORDS_MENU, f.start_lnk ? "in place" : absent, false, em)
-	setup_line(app, "setup_record", setup.WORDS_RECORD, f.record ? "in place" : absent, false, em)
-	setup_line(app, "setup_desk", "Desktop shortcut", f.desk_lnk ? "in place" : "none", false, em)
-	setup_line(app, "setup_running", "This copy", f.running, true, em)
+	absent := f.state == .Not_Installed || f.state == .Nix_Package ? i18n.tr("none") : i18n.tr("missing")
+	setup_line(app, "setup_menu", setup.WORDS_MENU, f.start_lnk ? i18n.tr("in place") : absent, false, em)
+	setup_line(app, "setup_record", setup.WORDS_RECORD, f.record ? i18n.tr("in place") : absent, false, em)
+	setup_line(app, "setup_desk", i18n.tr("Desktop shortcut"), f.desk_lnk ? i18n.tr("in place") : i18n.tr("none"), false, em)
+	setup_line(app, "setup_running", i18n.tr("This copy"), f.running, true, em)
 	if f.nixos && f.state != .Nix_Package && f.state != .This_Copy {
 		ui.spacer(ui.px(em * 0.6))
-		setup_paragraph("setup_nixos", "On NixOS, a Nix package is the better install: Nix updates it. An install here makes this copy run by itself (nix-build makes the libraries it needs).", "weak", em)
+		setup_paragraph("setup_nixos", i18n.tr("On NixOS, a Nix package is the better install: Nix updates it. An install here makes this copy run by itself (nix-build makes the libraries it needs)."), "weak", em)
 	}
 	ui.spacer(ui.px(em * 0.8))
 }
@@ -415,9 +417,9 @@ setup_line :: proc(app: ^App, id, key, value: string, path: bool, em: f32) {
 		ui.label(fmt.tprintf("%s###v", value))
 		if path && value != "" {
 			if ui.tags("weak") {
-				if icon_action(app, fmt.tprintf("%s_copy", id), lucide.COPY, "Copy the path", em) {
+				if icon_action(app, fmt.tprintf("%s_copy", id), lucide.COPY, i18n.tr("Copy the path"), em) {
 					ui.window_clipboard_set(value)
-					announce(app, .Good, "Copied: %s", value)
+					announce(app, .Good, i18n.tr("Copied: %s"), value)
 				}
 			}
 		}
@@ -451,18 +453,18 @@ setup_buttons :: proc(app: ^App, c: setup.Config, em: f32) -> (ev: setup.Event) 
 	if ui.row(.Center, {}, "###setup_buttons") {
 		ui.spacer(ui.px(em * 1.2))
 		if setup.can_uninstall(d) {
-			if button("setup_uninstall", d.confirm ? "Click again to uninstall" : "Uninstall", .Danger, em) && !setup.busy(d) {
+			if button("setup_uninstall", d.confirm ? i18n.tr("Click again to uninstall") : i18n.tr("Uninstall"), .Danger, em) && !setup.busy(d) {
 				if d.confirm { setup.start_uninstall(d, c) } else { d.confirm = true }
 			}
 		}
 		ui.spacer(ui.fill())
 		how := setup.closing(d, c)
-		CLOSING_WORDS := [setup.Closing]string{.Close = "Close", .Not_Now = "Not now", .Keep_Standalone = "Keep standalone"}
+		CLOSING_WORDS := [setup.Closing]string{.Close = i18n.tr("Close"), .Not_Now = i18n.tr("Not now"), .Keep_Standalone = i18n.tr("Keep standalone")}
 		CLOSING_IDS := [setup.Closing]string{.Close = "setup_close", .Not_Now = "setup_later", .Keep_Standalone = "setup_standalone"}
 		if button(CLOSING_IDS[how], CLOSING_WORDS[how], .Neutral, em) { ev = setup.close(d, how) }
 		if d.installed != "" && d.facts.state != .This_Copy {
 			ui.spacer(ui.px(em * 0.5))
-			if button("setup_launch", "Open the installed copy", .Primary, em) { ev = setup.open_installed(d) }
+			if button("setup_launch", i18n.tr("Open the installed copy"), .Primary, em) { ev = setup.open_installed(d) }
 		}
 		if label := setup.install_label(d, c); label != "" {
 			ui.spacer(ui.px(em * 0.5))

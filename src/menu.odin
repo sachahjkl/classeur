@@ -8,6 +8,7 @@ import "core:fmt"
 import "core:strings"
 import "core:time"
 import "gt:desktop"
+import "gt:i18n"
 import lucide "gt:lucide"
 import tasks "gt:tasks"
 import "gt:ui"
@@ -84,7 +85,7 @@ entry_menu_open :: proc(app: ^App, t: ^Tab, pos: ui.Vec2, from_keyboard := false
 menu_command :: proc(app: ^App, id: string, enabled := true, checked := false, title := "") {
 	c := command_find(id)
 	if c == nil { return }
-	text := title != "" ? fmt.tprintf("%s###%s", title, c.id) : c.title
+	text := title != "" ? fmt.tprintf("%s###%s", title, c.id) : i18n.tr(c.title)
 	if ui.menu_item(text, command_keys(app, c), checked = checked, icon = c.icon, enabled = enabled).clicked { c.run(app) }
 }
 
@@ -111,19 +112,19 @@ entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 		menu_command(app, "open_system")
 		if e != nil && !folder { open_with_menu(app, full) }
 		// (in a search the item's folder is not the one shown)
-		menu_command(app, "open_folder", enabled = e != nil && fs.parent(full) != t.path, title = "Go to its folder")
+		menu_command(app, "open_folder", enabled = e != nil && fs.parent(full) != t.path, title = i18n.tr("Go to its folder"))
 		if folder { menu_command(app, "terminal_in") }
 		ui.menu_separator()
 		menu_command(app, "cut")
 		menu_command(app, "copy")
-		menu_command(app, "paste_into", enabled = folder, title = "Paste into this folder")
+		menu_command(app, "paste_into", enabled = folder, title = i18n.tr("Paste into this folder"))
 		menu_command(app, "copy_path")
 		menu_command(app, "copy_name")
 		menu_command(app, "copy_to_other", enabled = other)
 		menu_command(app, "move_to_other", enabled = other)
 		ui.menu_separator()
 		if trash {
-			menu_command(app, "put_back", title = "Put back")
+			menu_command(app, "put_back", title = i18n.tr("Put back"))
 			menu_command(app, "empty_trash")
 		} else {
 			menu_command(app, "trash")
@@ -131,9 +132,9 @@ entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 		menu_command(app, "delete")
 		// (several: the batch rename, as F2 opens it)
 		n := t.folder.count
-		menu_command(app, "rename", title = n > 1 ? fmt.tprintf("Rename %d items…", n) : "")
+		menu_command(app, "rename", title = n > 1 ? fmt.tprintf(i18n.tr(n, "Rename %d item…", "Rename %d items…"), n) : "")
 		ui.menu_separator()
-		menu_command(app, "bookmark_folder", enabled = folder, title = folder && bookmarked(app, full) ? "Remove the bookmark" : "Bookmark this folder")
+		menu_command(app, "bookmark_folder", enabled = folder, title = folder && bookmarked(app, full) ? i18n.tr("Remove the bookmark") : i18n.tr("Bookmark this folder"))
 		menu_command(app, "inspector", checked = app.inspector.open)
 		ui.menu_separator()
 	} else {
@@ -141,7 +142,7 @@ entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 		menu_command(app, "undo", enabled = len(app.undo) > 0)
 		menu_command(app, "redo", enabled = len(app.redo) > 0)
 		if trash {
-			menu_command(app, "put_back", enabled = t.folder.count > 0, title = "Put back")
+			menu_command(app, "put_back", enabled = t.folder.count > 0, title = i18n.tr("Put back"))
 			menu_command(app, "empty_trash", enabled = len(t.folder.listing.entries) > 0)
 		}
 		ui.menu_separator()
@@ -152,7 +153,7 @@ entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 	menu_command(app, "select_all")
 	menu_command(app, "refresh")
 	ui.menu_separator()
-	if ui.menu_submenu("Sort by", icon = lucide.ARROW_UP_DOWN) {
+	if ui.menu_submenu(i18n.tr("Sort by"), icon = lucide.ARROW_UP_DOWN) {
 		s := t.folder.sort
 		menu_command(app, "sort_name", checked = s.key == .Name)
 		menu_command(app, "sort_modified", checked = s.key == .Modified)
@@ -203,18 +204,18 @@ types_menu_build :: proc(app: ^App, em: f32) {
 		f := &t.folder
 		// (the columns' filters light this funnel too: they are cleared here as well)
 		if f.dates_off != {} || f.sizes_off != {} {
-			if ui.menu_item("Every date and size###kclear", keep_open = true).clicked { folder_all_ranks(f, .Date); folder_all_ranks(f, .Size) }
+			if ui.menu_item(fmt.tprintf("%s###kclear", i18n.tr("Every date and size")), keep_open = true).clicked { folder_all_ranks(f, .Date); folder_all_ranks(f, .Size) }
 			ui.menu_separator()
 		}
-		if ui.menu_item("Files and folders###k0", checked = f.kinds == .All, keep_open = true).clicked { folder_set_kinds(f, .All) }
-		if ui.menu_item("Files only###k1", checked = f.kinds == .Files, keep_open = true).clicked { folder_set_kinds(f, .Files) }
-		if ui.menu_item("Folders only###k2", checked = f.kinds == .Folders, keep_open = true).clicked { folder_set_kinds(f, .Folders) }
+		if ui.menu_item(fmt.tprintf("%s###k0", i18n.tr("Files and folders")), checked = f.kinds == .All, keep_open = true).clicked { folder_set_kinds(f, .All) }
+		if ui.menu_item(fmt.tprintf("%s###k1", i18n.tr("Files only")), checked = f.kinds == .Files, keep_open = true).clicked { folder_set_kinds(f, .Files) }
+		if ui.menu_item(fmt.tprintf("%s###k2", i18n.tr("Folders only")), checked = f.kinds == .Folders, keep_open = true).clicked { folder_set_kinds(f, .Folders) }
 		ui.menu_separator()
 		types := folder_types_kept(f)
 		all := len(f.types_off) == 0
-		if ui.menu_item("Every type###tall", checked = all, keep_open = true).clicked { folder_all_types(f, !all) }
+		if ui.menu_item(fmt.tprintf("%s###tall", i18n.tr("Every type")), checked = all, keep_open = true).clicked { folder_all_types(f, !all) }
 		for ty, i in types {
-			label := ty.ext == "" ? "No extension" : strings.to_upper(ty.ext, context.temp_allocator)
+			label := ty.ext == "" ? i18n.tr("No extension") : strings.to_upper(ty.ext, context.temp_allocator)
 			on := ty.ext not_in f.types_off
 			if ui.menu_item(fmt.tprintf("%s###ty%d", label, i), fmt.tprintf("%d", ty.count), checked = on, keep_open = true).clicked {
 				folder_toggle_type(f, ty.ext)
@@ -236,12 +237,13 @@ rank_menu_open :: proc(app: ^App, t: ^Tab, by: Group_By, at: ui.Vec2) {
 	ui.ctx_menu_open(m.ranks_key, at)
 }
 
-@(private = "file", rodata)
+// (not rodata: i18n.later marks them for the catalogue; tr where they are shown)
+@(private = "file")
 RANK_TITLES := [Group_By][8]string{
 	.None = {},
 	.Type = {},
-	.Date = {"Today", "Yesterday", "This week", "This month", "This year", "Older", "", "No date"},
-	.Size = {"Folders", "Tiny (under 16 KB)", "Small (under 1 MB)", "Medium (under 128 MB)", "Large (under 1 GB)", "Huge (1 GB and more)", "", ""},
+	.Date = {i18n.later("Today"), i18n.later("Yesterday"), i18n.later("This week"), i18n.later("This month"), i18n.later("This year"), i18n.later("Older"), "", i18n.later("No date")},
+	.Size = {i18n.later("Folders"), i18n.later("Tiny (under 16 KB)"), i18n.later("Small (under 1 MB)"), i18n.later("Medium (under 128 MB)"), i18n.later("Large (under 1 GB)"), i18n.later("Huge (1 GB and more)"), "", ""},
 }
 
 @(private = "file")
@@ -269,12 +271,12 @@ rank_menu_build :: proc(app: ^App, em: f32) {
 			}
 		}
 		counts := m.rank_counts
-		every := by == .Date ? "Every date###rall" : "Every size###rall"
+		every := fmt.tprintf("%s###rall", by == .Date ? i18n.tr("Every date") : i18n.tr("Every size"))
 		if ui.menu_item(every, checked = off == {}, keep_open = true).clicked { folder_all_ranks(f, by) }
 		ui.menu_separator()
 		for title, r in RANK_TITLES[by] {
 			if title == "" || counts[r] == 0 && r not_in off { continue }
-			if ui.menu_item(fmt.tprintf("%s###r%d", title, r), fmt.tprintf("%d", counts[r]), checked = r not_in off, keep_open = true).clicked {
+			if ui.menu_item(fmt.tprintf("%s###r%d", i18n.tr(title), r), fmt.tprintf("%d", counts[r]), checked = r not_in off, keep_open = true).clicked {
 				folder_toggle_rank(f, by, r, now, app.tz)
 			}
 		}
@@ -401,7 +403,7 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 		menu_command(app, "goto_popup")
 		menu_command(app, "terminal")
 		ui.menu_separator()
-		if ui.menu_submenu("Sort by", icon = lucide.ARROW_UP_DOWN) {
+		if ui.menu_submenu(i18n.tr("Sort by"), icon = lucide.ARROW_UP_DOWN) {
 			s := t.folder.sort
 			menu_command(app, "sort_name", checked = s.key == .Name)
 			menu_command(app, "sort_modified", checked = s.key == .Modified)
@@ -410,7 +412,7 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 			ui.menu_separator()
 			menu_command(app, "folders_mixed", checked = !s.mixed)
 		}
-		if ui.menu_submenu("Group by", icon = lucide.ROWS_2) {
+		if ui.menu_submenu(i18n.tr("Group by"), icon = lucide.ROWS_2) {
 			g := t.group
 			menu_command(app, "group_date", checked = g == .Date)
 			menu_command(app, "group_type", checked = g == .Type)
@@ -427,12 +429,12 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 // "Open with": the applications the system knows for the file, its default first.
 @(private = "file")
 open_with_menu :: proc(app: ^App, path: string) {
-	if ui.menu_submenu("Open with", icon = lucide.APP_WINDOW) {
+	if ui.menu_submenu(i18n.tr("Open with"), icon = lucide.APP_WINDOW) {
 		ready := app.menu.with_path == path && app.menu.handlers_ready
 		hs := ready ? app.menu.handlers : nil
-		if !ready { _ = ui.menu_item("Reading…", enabled = false) } else if len(hs) == 0 { _ = ui.menu_item("No application", enabled = false) }
+		if !ready { _ = ui.menu_item(i18n.tr("Reading…"), enabled = false) } else if len(hs) == 0 { _ = ui.menu_item(i18n.tr("No application"), enabled = false) }
 		for h, i in hs {
-			label := h.default ? fmt.tprintf("%s (default)###ow%d", ui.text_shown(h.name), i) : fmt.tprintf("%s###ow%d", ui.text_shown(h.name), i)
+			label := h.default ? fmt.tprintf("%s###ow%d", fmt.tprintf(i18n.tr("%s (default)"), ui.text_shown(h.name)), i) : fmt.tprintf("%s###ow%d", ui.text_shown(h.name), i)
 			if ui.menu_item(label).clicked { launch(app, .Open_With, path, h.id, h.name) }
 		}
 	}

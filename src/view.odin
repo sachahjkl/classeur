@@ -10,6 +10,7 @@ import "core:strings"
 import "core:sync"
 import "gt:draw"
 import "gt:host"
+import "gt:i18n"
 import lucide "gt:lucide"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
@@ -147,8 +148,8 @@ command_tip :: proc(app: ^App, id: string) -> string {
 	c := command_find(id)
 	if c == nil { return id }
 	keys := command_keys(app, c)
-	if keys == "" { return c.title }
-	return fmt.tprintf("%s (%s)", c.title, keys)
+	if keys == "" { return i18n.tr(c.title) }
+	return fmt.tprintf("%s (%s)", i18n.tr(c.title), keys)
 }
 
 // A command's first keys as text ("Ctrl+M, T"), the person's own binding when there is one; "" none.
@@ -327,7 +328,7 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 					}
 				}
 				if sig.pressed { p.active = i; app.focus = index }
-				if !app.tab_drag.active { hover_tip(sig, home_path(app, t.path), t.locked ? "Locked: folders open in a new tab" : "") }
+				if !app.tab_drag.active { hover_tip(sig, home_path(app, t.path), t.locked ? i18n.tr("Locked: folders open in a new tab") : "") }
 				append(&app.tab_rects, Tab_Rect{index, i, tab.rect})
 				tab_drag_signal(app, index, i, sig)
 				// (the tab dragged, dimmed where it was: its ghost follows the pointer; not while its picture is read)
@@ -340,7 +341,7 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 			}
 			if ghost_at == len(p.tabs) { tab_ghost(app, tab_w, em) }
 		}
-		if over && icon_action(app, fmt.tprintf("tablist%d", index), lucide.CHEVRON_DOWN, "Every tab of the panel", em) {
+		if over && icon_action(app, fmt.tprintf("tablist%d", index), lucide.CHEVRON_DOWN, i18n.tr("Every tab of the panel"), em) {
 			app.focus = index
 			tabs_menu_open(app, p)
 		}
@@ -510,7 +511,7 @@ job_status :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.px(em * 7), height = ui.px(em * 0.45)})
 		ui.progress(fmt.tprintf("###jobbar%d", job.id), clamp(t, 0, 1), st == .Counting)
 		ui.spacer(ui.px(em * 0.2))
-		if icon_action(app, fmt.tprintf("jobcancel%d", job.id), lucide.X, "Cancel", em) { job_cancel(job) }
+		if icon_action(app, fmt.tprintf("jobcancel%d", job.id), lucide.X, i18n.tr("Cancel"), em) { job_cancel(job) }
 		vrule(em)
 		return
 	}

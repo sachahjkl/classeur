@@ -1,0 +1,1804 @@
+# classeur's texts in French (docs/i18n.md of gui_toolkit). Written by `classeurtool i18n fr`; a translation left empty is the English.
+language fr
+
+en %s cannot be taken out of its archive.
+fr %s ne peut pas être extrait de son archive.
+
+en No application opens %s.
+fr Aucune application n'ouvre %s.
+
+en %s cannot start.
+fr %s ne peut pas démarrer.
+
+en No terminal was found: set $TERMINAL.
+fr Aucun terminal trouvé : définissez $TERMINAL.
+
+en Rename from the item's own folder: the search lists items of several folders.
+fr Renommez depuis le dossier de l'élément : la recherche liste des éléments de plusieurs dossiers.
+
+en A name cannot hold %s.
+fr Un nom ne peut pas contenir %s.
+
+en %s is already there.
+fr %s existe déjà.
+
+en %s cannot be renamed: %s.
+fr %s ne peut pas être renommé : %s.
+
+en New folder
+fr Nouveau dossier
+
+en New file.txt
+fr Nouveau fichier.txt
+
+en New folder %d
+fr Nouveau dossier %d
+
+en New file %d.txt
+fr Nouveau fichier %d.txt
+
+en The folder cannot be made here: %s.
+fr Impossible de créer le dossier ici : %s.
+
+en The file cannot be made here: %s.
+fr Impossible de créer le fichier ici : %s.
+
+en %d path copied.
+en+ %d paths copied.
+fr %d chemin copié.
+fr+ %d chemins copiés.
+
+en The path is copied.
+fr Chemin copié.
+
+en Hidden files are shown.
+fr Fichiers cachés affichés.
+
+en Hidden files are hidden.
+fr Fichiers cachés masqués.
+
+en %d item cut: paste them to move them.
+en+ %d items cut: paste them to move them.
+fr %d élément coupé : collez-le pour le déplacer.
+fr+ %d éléments coupés : collez-les pour les déplacer.
+
+en %d item copied.
+en+ %d items copied.
+fr %d élément copié.
+fr+ %d éléments copiés.
+
+en The clipboard holds no files.
+fr Le presse-papiers ne contient aucun fichier.
+
+en There is no other panel.
+fr Il n'y a pas d'autre panneau.
+
+en Put back works in the trash (trash:///).
+fr Restaurer fonctionne dans la corbeille (trash:///).
+
+en Open the trash (trash:///) to empty it.
+fr Ouvrez la corbeille (trash:///) pour la vider.
+
+en The trash is empty.
+fr La corbeille est vide.
+
+en Bookmark removed.
+fr Favori retiré.
+
+en %s is bookmarked.
+fr %s est dans les favoris.
+
+en %d name copied.
+en+ %d names copied.
+fr %d nom copié.
+fr+ %d noms copiés.
+
+en The name is copied.
+fr Nom copié.
+
+en empty
+fr vide
+
+en not a name
+fr nom invalide
+
+en twice
+fr en double
+
+en taken
+fr déjà pris
+
+en The names could not all be given: nothing was renamed.
+fr Tous les noms n'ont pas pu être donnés : rien n'a été renommé.
+
+en %d item renamed.
+en+ %d items renamed.
+fr %d élément renommé.
+fr+ %d éléments renommés.
+
+en Rename %d item
+en+ Rename %d items
+fr Renommer %d élément
+fr+ Renommer %d éléments
+
+en Pattern
+fr Modèle
+
+en Find
+fr Rechercher
+
+en Text to replace
+fr Texte à remplacer
+
+en Replace
+fr Remplacer
+
+en With
+fr Par
+
+en As is
+fr Tel quel
+
+en lower
+fr minuscules
+
+en UPPER
+fr MAJUSCULES
+
+en The case of each name kept
+fr La casse de chaque nom gardée
+
+en Every letter in lower case
+fr Toutes les lettres en minuscules
+
+en Every letter in upper case
+fr Toutes les lettres en majuscules
+
+en Pattern again
+fr Revenir au modèle
+
+en Names from the clipboard
+fr Noms du presse-papiers
+
+en %d name cannot be had.
+en+ %d names cannot be had.
+fr %d nom est impossible.
+fr+ %d noms sont impossibles.
+
+en Esc: close
+fr Échap : fermer
+
+en Cancel
+fr Annuler
+
+en Rename (Enter)
+fr Renommer (Entrée)
+
+en Open
+fr Ouvrir
+
+en Open in new tab
+fr Ouvrir dans un nouvel onglet
+
+en Open in other panel
+fr Ouvrir dans l'autre panneau
+
+en Go up
+fr Dossier parent
+
+en Go back
+fr Précédent
+
+en Go forward
+fr Suivant
+
+en Go home
+fr Dossier personnel
+
+en Refresh
+fr Actualiser
+
+en Go to folder
+fr Aller au dossier
+
+en Type the path
+fr Saisir le chemin
+
+en Filter this folder
+fr Filtrer ce dossier
+
+en Search subfolders
+fr Rechercher dans les sous-dossiers
+
+en Settings
+fr Réglages
+
+en Inspector
+fr Inspecteur
+
+en Command palette
+fr Palette de commandes
+
+en Keyboard shortcuts
+fr Raccourcis clavier
+
+en New tab
+fr Nouvel onglet
+
+en Close tab
+fr Fermer l'onglet
+
+en Reopen closed tab
+fr Rouvrir l'onglet fermé
+
+en Next tab
+fr Onglet suivant
+
+en Previous tab
+fr Onglet précédent
+
+en Duplicate tab
+fr Dupliquer l'onglet
+
+en Split right
+fr Diviser à droite
+
+en Split down
+fr Diviser en bas
+
+en Close panel
+fr Fermer le panneau
+
+en Next panel
+fr Panneau suivant
+
+en Previous panel
+fr Panneau précédent
+
+en Select all
+fr Tout sélectionner
+
+en Select none
+fr Ne rien sélectionner
+
+en Invert selection
+fr Inverser la sélection
+
+en Copy
+fr Copier
+
+en Cut
+fr Couper
+
+en Paste
+fr Coller
+
+en Paste into folder
+fr Coller dans le dossier
+
+en Copy to other panel
+fr Copier vers l'autre panneau
+
+en Move to other panel
+fr Déplacer vers l'autre panneau
+
+en Move to trash
+fr Mettre à la corbeille
+
+en Delete permanently
+fr Supprimer définitivement
+
+en Put back
+fr Restaurer
+
+en Empty trash
+fr Vider la corbeille
+
+en Undo
+fr Annuler
+
+en Redo
+fr Rétablir
+
+en Jobs
+fr Tâches
+
+en Cancel jobs
+fr Annuler les tâches
+
+en Rename
+fr Renommer
+
+en New file
+fr Nouveau fichier
+
+en Open terminal here
+fr Ouvrir un terminal ici
+
+en Open terminal in folder
+fr Ouvrir un terminal dans le dossier
+
+en Move section up
+fr Monter la section
+
+en Move section down
+fr Descendre la section
+
+en Find network devices
+fr Chercher les appareils du réseau
+
+en Move tab to window
+fr Déplacer l'onglet dans une fenêtre
+
+en Close other tabs
+fr Fermer les autres onglets
+
+en Close tabs to left
+fr Fermer les onglets à gauche
+
+en Close tabs to right
+fr Fermer les onglets à droite
+
+en Copy path
+fr Copier le chemin
+
+en Open with default app
+fr Ouvrir avec l'application par défaut
+
+en Bookmark this folder
+fr Ajouter ce dossier aux favoris
+
+en Bookmark folder at cursor
+fr Ajouter le dossier du curseur aux favoris
+
+en Clear recents
+fr Effacer les récents
+
+en Lock tab
+fr Verrouiller l'onglet
+
+en Hidden files
+fr Fichiers cachés
+
+en Sidebar
+fr Barre latérale
+
+en Details view
+fr Vue détaillée
+
+en Grid view
+fr Vue en grille
+
+en Zoom in
+fr Agrandir
+
+en Zoom out
+fr Réduire
+
+en Sort by name
+fr Trier par nom
+
+en Sort by date modified
+fr Trier par date de modification
+
+en Sort by size
+fr Trier par taille
+
+en Sort by type
+fr Trier par type
+
+en Folders first
+fr Dossiers en premier
+
+en Setup
+fr Installation
+
+en Save layout
+fr Enregistrer la disposition
+
+en Open layout
+fr Ouvrir une disposition
+
+en Tree view
+fr Vue en arborescence
+
+en Group by date
+fr Grouper par date
+
+en Group by type
+fr Grouper par type
+
+en Group by size
+fr Grouper par taille
+
+en Names view
+fr Vue des noms
+
+en Names in columns
+fr Noms en colonnes
+
+en Types shown
+fr Types affichés
+
+en Show files only
+fr Afficher les fichiers seulement
+
+en Show folders only
+fr Afficher les dossiers seulement
+
+en Show every type
+fr Afficher tous les types
+
+en Copy names
+fr Copier les noms
+
+en Go to its folder
+fr Aller à son dossier
+
+en Tab 1
+fr Onglet 1
+
+en Tab 2
+fr Onglet 2
+
+en Tab 3
+fr Onglet 3
+
+en Tab 4
+fr Onglet 4
+
+en Tab 5
+fr Onglet 5
+
+en Tab 6
+fr Onglet 6
+
+en Tab 7
+fr Onglet 7
+
+en Tab 8
+fr Onglet 8
+
+en Last tab
+fr Dernier onglet
+
+en Quit
+fr Quitter
+
+en Restart classeur
+fr Redémarrer classeur
+
+en New window
+fr Nouvelle fenêtre
+
+en Minimize window
+fr Réduire la fenêtre
+
+en Maximize window
+fr Agrandir la fenêtre
+
+en Full screen
+fr Plein écran
+
+en Check for updates
+fr Rechercher des mises à jour
+
+en Install the update
+fr Installer la mise à jour
+
+en Restart to update
+fr Redémarrer pour mettre à jour
+
+en About classeur
+fr À propos de classeur
+
+en Open the website
+fr Ouvrir le site web
+
+en Report a problem
+fr Signaler un problème
+
+en Release notes
+fr Notes de version
+
+en Open settings folder
+fr Ouvrir le dossier des réglages
+
+en Copy the version
+fr Copier la version
+
+en Next theme
+fr Thème suivant
+
+en Previous theme
+fr Thème précédent
+
+en Compact rows
+fr Lignes compactes
+
+en Animations
+fr Animations
+
+en Larger text
+fr Texte plus grand
+
+en Smaller text
+fr Texte plus petit
+
+en Default text size
+fr Taille du texte par défaut
+
+en Reload all folders
+fr Relire tous les dossiers
+
+en Reset the layout
+fr Réinitialiser la disposition
+
+en Clear thumbnails
+fr Effacer les miniatures
+
+en classeur stopped unexpectedly
+fr classeur s'est arrêté de façon inattendue
+
+en Its last session ended without closing. What happened is written in a report on this computer; nothing was sent anywhere.
+fr Sa dernière session s'est terminée sans fermeture. Ce qui s'est passé est écrit dans un rapport sur cet ordinateur ; rien n'a été envoyé.
+
+en Copy its path
+fr Copier son chemin
+
+en The report's path is copied.
+fr Chemin du rapport copié.
+
+en Open the report (Enter)
+fr Ouvrir le rapport (Entrée)
+
+en Delete %s for good?
+fr Supprimer %s définitivement ?
+
+en Delete %d item for good?
+en+ Delete %d items for good?
+fr Supprimer %d élément définitivement ?
+fr+ Supprimer %d éléments définitivement ?
+
+en It does not go to the trash: this cannot be undone.
+fr Il ne va pas à la corbeille : impossible d'annuler.
+
+en They do not go to the trash: this cannot be undone.
+fr Ils ne vont pas à la corbeille : impossible d'annuler.
+
+en Delete
+fr Supprimer
+
+en Empty the trash?
+fr Vider la corbeille ?
+
+en Empty the trash
+fr Vider la corbeille
+
+en Its item is deleted for good: this cannot be undone.
+fr Son élément est supprimé définitivement : impossible d'annuler.
+
+en Its %d item is deleted for good: this cannot be undone.
+en+ Its %d items are deleted for good: this cannot be undone.
+fr Son %d élément est supprimé définitivement : impossible d'annuler.
+fr+ Ses %d éléments sont supprimés définitivement : impossible d'annuler.
+
+en %s is already in %s
+fr %s est déjà dans %s
+
+en There
+fr Existant
+
+en Moved
+fr Déplacé
+
+ctx the file coming, put back from the trash
+en Put back
+fr Restauré
+
+en Copied
+fr Copié
+
+en Replace it, keep both (the new one numbered), or skip it.
+fr Remplacez-le, gardez les deux (le nouveau numéroté) ou ignorez-le.
+
+en Do the same for the next ones
+fr Faire de même pour les suivants
+
+en Cancel the job
+fr Annuler la tâche
+
+en Skip
+fr Ignorer
+
+en Keep both (Enter)
+fr Garder les deux (Entrée)
+
+en Folder
+fr Dossier
+
+en · newer
+fr · plus récent
+
+en %d item
+en+ %d items
+fr %d élément
+fr+ %d éléments
+
+en Move to %s
+fr Déplacer vers %s
+
+en Copy to %s
+fr Copier vers %s
+
+en Folders
+fr Dossiers
+
+en No extension
+fr Sans extension
+
+en Tiny (under 16 KB)
+fr Minuscules (moins de 16 Ko)
+
+en Small (under 1 MB)
+fr Petits (moins de 1 Mo)
+
+en Medium (under 128 MB)
+fr Moyens (moins de 128 Mo)
+
+en Large (under 1 GB)
+fr Grands (moins de 1 Go)
+
+en Huge (1 GB and more)
+fr Énormes (1 Go et plus)
+
+en No date
+fr Sans date
+
+en Today
+fr Aujourd'hui
+
+en Yesterday
+fr Hier
+
+en This week
+fr Cette semaine
+
+en This month
+fr Ce mois-ci
+
+en This year
+fr Cette année
+
+en Older
+fr Plus ancien
+
+en KB
+fr Ko
+
+en MB
+fr Mo
+
+en GB
+fr Go
+
+en TB
+fr To
+
+en PB
+fr Po
+
+en %d B
+fr %d o
+
+en Jan
+fr janv.
+
+en Feb
+fr févr.
+
+en Mar
+fr mars
+
+en Apr
+fr avr.
+
+en May
+fr mai
+
+en Jun
+fr juin
+
+en Jul
+fr juil.
+
+en Aug
+fr août
+
+en Sep
+fr sept.
+
+en Oct
+fr oct.
+
+en Nov
+fr nov.
+
+en Dec
+fr déc.
+
+en Sunday
+fr Dimanche
+
+en Monday
+fr Lundi
+
+en Tuesday
+fr Mardi
+
+en Wednesday
+fr Mercredi
+
+en Thursday
+fr Jeudi
+
+en Friday
+fr Vendredi
+
+en Saturday
+fr Samedi
+
+en Today %02d:%02d
+fr Aujourd'hui %02d:%02d
+
+en Yesterday %02d:%02d
+fr Hier %02d:%02d
+
+en Folder link
+fr Lien de dossier
+
+en Broken link
+fr Lien cassé
+
+en Special
+fr Spécial
+
+en Program
+fr Programme
+
+en File
+fr Fichier
+
+en %s File
+fr Fichier %s
+
+en This folder does not exist.
+fr Ce dossier n'existe pas.
+
+en You do not have the permission to read this folder.
+fr Vous n'avez pas la permission de lire ce dossier.
+
+en This is not a folder.
+fr Ce n'est pas un dossier.
+
+en The name is taken.
+fr Ce nom est déjà pris.
+
+en This is on another volume.
+fr C'est sur un autre volume.
+
+en The volume is full.
+fr Le volume est plein.
+
+en Cancelled.
+fr Annulé.
+
+en An archive is read only: copy what is in it out of it.
+fr Une archive est en lecture seule : copiez son contenu hors de l'archive.
+
+en This folder cannot be read.
+fr Ce dossier ne peut pas être lu.
+
+en it is not there
+fr il n'est pas là
+
+en permission denied
+fr permission refusée
+
+en it is not a folder
+fr ce n'est pas un dossier
+
+en the name is taken
+fr le nom est déjà pris
+
+en it is on another volume
+fr il est sur un autre volume
+
+en the volume is full
+fr le volume est plein
+
+en cancelled
+fr opération annulée
+
+en an archive is read only
+fr une archive est en lecture seule
+
+en the system refused
+fr le système a refusé
+
+en Read only
+fr Lecture seule
+
+en Hidden
+fr Caché
+
+en System
+fr Système
+
+en Archive
+fr Archive
+
+en Compressed
+fr Compressé
+
+en Encrypted
+fr Chiffré
+
+en gio is not there: gvfs mounts the shares
+fr gio est absent : gvfs monte les partages
+
+en gio mount failed
+fr gio mount a échoué
+
+en Computer
+fr Ordinateur
+
+en Trash
+fr Corbeille
+
+en Recycle Bin
+fr Corbeille
+
+en File system
+fr Système de fichiers
+
+en Removable drive
+fr Disque amovible
+
+en Network drive
+fr Lecteur réseau
+
+en Local disk
+fr Disque local
+
+en Recent
+fr Récent
+
+en Bookmark
+fr Favori
+
+en Place
+fr Emplacement
+
+en No folder there has these letters. Enter goes to the path typed.
+fr Aucun dossier ici ne contient ces lettres. Entrée va au chemin saisi.
+
+en No folder has these letters.
+fr Aucun dossier ne contient ces lettres.
+
+en Up, Down: choose   Tab: complete the path   Enter: go   Esc: close
+fr Haut, Bas : choisir   Tab : compléter le chemin   Entrée : aller   Échap : fermer
+
+en First page
+fr Première page
+
+en A frame of the video
+fr Une image de la vidéo
+
+en This folder is empty.
+fr Ce dossier est vide.
+
+en Nothing selected.
+fr Aucune sélection.
+
+en %d folders
+en+ %d folders
+fr %d dossier
+fr+ %d dossiers
+
+en %d files
+en+ %d files
+fr %d fichier
+fr+ %d fichiers
+
+en Reading…
+fr Lecture…
+
+en The first %s are shown.
+fr Les %s premiers sont affichés.
+
+en and %d more
+en+ and %d more
+fr et %d autre
+fr+ et %d autres
+
+en No preview for this kind of file.
+fr Pas d'aperçu pour ce genre de fichier.
+
+en %d folder
+en+ %d folders
+fr %d dossier
+fr+ %d dossiers
+
+en %d file
+en+ %d files
+fr %d fichier
+fr+ %d fichiers
+
+en Where
+fr Emplacement
+
+en Modified
+fr Modifié
+
+en Created
+fr Créé
+
+en Accessed
+fr Consulté
+
+en Owner
+fr Propriétaire
+
+en classeur in the terminal (on the PATH)
+fr classeur dans le terminal (dans le PATH)
+
+en The desktop's launcher cannot be changed: %s
+fr Le lanceur du bureau ne peut pas être modifié : %s
+
+en Reading the install…
+fr Lecture de l'installation…
+
+en none
+fr aucune
+
+en a copy
+fr une copie
+
+en This copy: v%s   Installed copy: %s   %s
+fr Cette copie : v%s   Copie installée : %s   %s
+
+en Close (Escape)
+fr Fermer (Échap)
+
+en Working…
+fr En cours…
+
+en Location
+fr Emplacement
+
+en Installed program
+fr Programme installé
+
+en Options
+fr Options
+
+en Shortcut on the Desktop
+fr Raccourci sur le Bureau
+
+en On this system
+fr Sur ce système
+
+en missing
+fr manquant
+
+en in place
+fr en place
+
+en Desktop shortcut
+fr Raccourci du Bureau
+
+en This copy
+fr Cette copie
+
+en On NixOS, a Nix package is the better install: Nix updates it. An install here makes this copy run by itself (nix-build makes the libraries it needs).
+fr Sur NixOS, un paquet Nix est la meilleure installation : Nix le met à jour. Une installation ici fait tourner cette copie seule (nix-build fournit les bibliothèques dont elle a besoin).
+
+en Copy the path
+fr Copier le chemin
+
+en Copied: %s
+fr Copié : %s
+
+en Click again to uninstall
+fr Cliquez encore pour désinstaller
+
+en Uninstall
+fr Désinstaller
+
+en Close
+fr Fermer
+
+en Not now
+fr Pas maintenant
+
+en Keep standalone
+fr Garder autonome
+
+en Open the installed copy
+fr Ouvrir la copie installée
+
+en Copying
+fr Copie
+
+en Moving
+fr Déplacement
+
+en Moving to the trash
+fr Mise à la corbeille
+
+en Deleting
+fr Suppression
+
+en Putting back
+fr Restauration
+
+en %d s left
+fr %d s restantes
+
+en %d min left
+fr %d min restantes
+
+en %d h left
+fr %d h restantes
+
+en %d h %d min left
+fr %d h %d min restantes
+
+en %s: counting…
+fr %s : comptage…
+
+en %s %d of %d · %s%s
+fr %s %d sur %d · %s%s
+
+en %s cannot be copied: %s.
+fr %s ne peut pas être copié : %s.
+
+en %s cannot be moved: %s.
+fr %s ne peut pas être déplacé : %s.
+
+en %s cannot be moved to the trash: %s.
+fr %s ne peut pas être mis à la corbeille : %s.
+
+en %s cannot be deleted: %s.
+fr %s ne peut pas être supprimé : %s.
+
+en %s cannot be put back: %s.
+fr %s ne peut pas être restauré : %s.
+
+en %s cannot be copied into itself.
+fr %s ne peut pas être copié dans lui-même.
+
+en %s: cancelled.
+fr %s : opération annulée.
+
+en %d item moved.
+en+ %d items moved.
+fr %d élément déplacé.
+fr+ %d éléments déplacés.
+
+en %d item moved to the trash.
+en+ %d items moved to the trash.
+fr %d élément mis à la corbeille.
+fr+ %d éléments mis à la corbeille.
+
+en %d item deleted.
+en+ %d items deleted.
+fr %d élément supprimé.
+fr+ %d éléments supprimés.
+
+en %d item put back.
+en+ %d items put back.
+fr %d élément restauré.
+fr+ %d éléments restaurés.
+
+en %s again.
+fr %s : nouvel essai.
+
+en Copying %s and %d more to %s
+en+ Copying %s and %d more to %s
+fr Copie de %s et %d autre vers %s
+fr+ Copie de %s et %d autres vers %s
+
+en Copying %s and %d more
+en+ Copying %s and %d more
+fr Copie de %s et %d autre
+fr+ Copie de %s et %d autres
+
+en Copying %s to %s
+fr Copie de %s vers %s
+
+en Copying %s
+fr Copie de %s
+
+en Moving %s and %d more to %s
+en+ Moving %s and %d more to %s
+fr Déplacement de %s et %d autre vers %s
+fr+ Déplacement de %s et %d autres vers %s
+
+en Moving %s and %d more
+en+ Moving %s and %d more
+fr Déplacement de %s et %d autre
+fr+ Déplacement de %s et %d autres
+
+en Moving %s to %s
+fr Déplacement de %s vers %s
+
+en Moving %s
+fr Déplacement de %s
+
+en Moving to the trash %s and %d more
+en+ Moving to the trash %s and %d more
+fr Mise à la corbeille de %s et %d autre
+fr+ Mise à la corbeille de %s et %d autres
+
+en Moving to the trash %s
+fr Mise à la corbeille de %s
+
+en Deleting %s and %d more
+en+ Deleting %s and %d more
+fr Suppression de %s et %d autre
+fr+ Suppression de %s et %d autres
+
+en Deleting %s
+fr Suppression de %s
+
+en Putting back %s and %d more
+en+ Putting back %s and %d more
+fr Restauration de %s et %d autre
+fr+ Restauration de %s et %d autres
+
+en Putting back %s
+fr Restauration de %s
+
+en No job yet
+fr Aucune tâche pour l'instant
+
+en Jobs: %d
+fr Tâches : %d
+
+en Background
+fr Arrière-plan
+
+en waiting
+fr en attente
+
+en counting…
+fr comptage…
+
+en %d of %d%s
+fr %d sur %d%s
+
+en asks
+fr attend une réponse
+
+en done
+fr terminée
+
+en %d failed
+en+ %d failed
+fr %d en échec
+fr+ %d en échec
+
+ctx a job's state
+en cancelled
+fr annulée
+
+en Retry
+fr Réessayer
+
+en     and %d more
+en+     and %d more
+fr     et %d autre
+fr+     et %d autres
+
+en The last %d of %d   Esc: to the background
+fr Les %d dernières sur %d   Échap : en arrière-plan
+
+en They run on in the background   Esc: hide
+fr Elles continuent en arrière-plan   Échap : masquer
+
+en Layout %s saved again.
+fr Disposition %s enregistrée à nouveau.
+
+en Layout %s saved.
+fr Disposition %s enregistrée.
+
+en Layout %s deleted.
+fr Disposition %s supprimée.
+
+en Layout %d
+fr Disposition %d
+
+en No layout is saved: Ctrl+Alt+S saves the panels shown.
+fr Aucune disposition enregistrée : Ctrl+Alt+S enregistre les panneaux affichés.
+
+en Delete a layout
+fr Supprimer une disposition
+
+en Save the panels shown as a layout
+fr Enregistrer les panneaux affichés comme disposition
+
+en Its name: Ctrl+Alt+L lists the layouts to open one again in place of the panels.
+fr Son nom : Ctrl+Alt+L liste les dispositions pour en rouvrir une à la place des panneaux.
+
+en The layout's name
+fr Nom de la disposition
+
+en Save
+fr Enregistrer
+
+en The licence is removed.
+fr La licence est retirée.
+
+en Registered to %s. Thank you.
+fr Enregistré au nom de %s. Merci.
+
+en Paste a key first.
+fr Collez d'abord une clé.
+
+en This licence is not classeur's.
+fr Cette licence n'est pas celle de classeur.
+
+en This key is not one the shop signed: check that it was copied whole.
+fr Cette clé n'a pas été signée par la boutique : vérifiez qu'elle a été copiée en entier.
+
+en This version of classeur accepts no licence yet.
+fr Cette version de classeur n'accepte pas encore de licence.
+
+en The licence file cannot be read.
+fr Le fichier de licence ne peut pas être lu.
+
+en The licence cannot be written in classeur's folder.
+fr La licence ne peut pas être écrite dans le dossier de classeur.
+
+en Licence
+fr Licence
+
+en Reading the licence…
+fr Lecture de la licence…
+
+en Registered to %s (%s). Thank you for supporting classeur.
+fr Enregistré au nom de %s (%s). Merci de soutenir classeur.
+
+en Order %s, %s.
+fr Commande %s, %s.
+
+en Remove the licence
+fr Retirer la licence
+
+en Unregistered. classeur is free; a licence supports its work.
+fr Non enregistré. classeur est gratuit ; une licence soutient son travail.
+
+en Support classeur: buy a licence
+fr Soutenez classeur : achetez une licence
+
+en Paste the key of your licence
+fr Collez la clé de votre licence
+
+en Register
+fr Enregistrer la licence
+
+en Choose a file…
+fr Choisir un fichier…
+
+en Choose a licence file
+fr Choisir un fichier de licence
+
+en classeur licence
+fr Licence classeur
+
+en %s: this system reaches no such place by a path.
+fr %s : ce système n'atteint pas ce genre d'emplacement par un chemin.
+
+en %s: not a place classeur knows.
+fr %s : emplacement inconnu de classeur.
+
+en it is mounted, but classeur finds no folder for it
+fr il est monté, mais classeur ne trouve pas son dossier
+
+en Connecting to %s…
+fr Connexion à %s…
+
+en Paste into this folder
+fr Coller dans ce dossier
+
+en Rename %d item…
+en+ Rename %d items…
+fr Renommer %d élément…
+fr+ Renommer %d éléments…
+
+en Remove the bookmark
+fr Retirer des favoris
+
+en Sort by
+fr Trier par
+
+en Every date and size
+fr Toutes les dates et tailles
+
+en Files and folders
+fr Fichiers et dossiers
+
+en Files only
+fr Fichiers seulement
+
+en Folders only
+fr Dossiers seulement
+
+en Every type
+fr Tous les types
+
+en Every date
+fr Toutes les dates
+
+en Every size
+fr Toutes les tailles
+
+en Group by
+fr Grouper par
+
+en Open with
+fr Ouvrir avec
+
+en No application
+fr Aucune application
+
+en %s (default)
+fr %s (par défaut)
+
+en Appearance
+fr Apparence
+
+en Window
+fr Fenêtre
+
+en Files
+fr Fichiers
+
+en Opening
+fr Ouverture
+
+en Scrolling
+fr Défilement
+
+en Input
+fr Saisie
+
+en Delays and menus
+fr Délais et menus
+
+en Updates
+fr Mises à jour
+
+en Rendering
+fr Rendu
+
+en General
+fr Général
+
+en Go
+fr Aller
+
+en Tabs and panels
+fr Onglets et panneaux
+
+en Selection
+fr Sélection
+
+en View
+fr Affichage
+
+ctx palette: the word that shows Tab 1 to Last tab
+en tab
+fr onglet
+
+en Enter: run   Ctrl+Enter: a key of your own   Alt+Enter: the letters typed, its alias
+fr Entrée : exécuter   Ctrl+Entrée : un raccourci à vous   Alt+Entrée : les lettres tapées, son alias
+
+en %s: an alias of %s.
+fr %s : un alias de %s.
+
+en %s: its own keys again.
+fr %s : ses raccourcis d'origine.
+
+en Keys for %s
+fr Raccourcis de %s
+
+en Press them: two for a sequence. Backspace first gives it its own keys again.
+fr Appuyez sur les touches : deux pour une séquence. Retour arrière d'abord lui rend ses raccourcis d'origine.
+
+en Press the keys…
+fr Appuyez sur les touches…
+
+en Keep (Enter)
+fr Garder (Entrée)
+
+en Home
+fr Dossier personnel
+
+en Desktop
+fr Bureau
+
+en Documents
+fr Documents
+
+en Downloads
+fr Téléchargements
+
+en Pictures
+fr Images
+
+en Music
+fr Musique
+
+en Videos
+fr Vidéos
+
+en Paints every other row a shade lighter, to tell the rows apart.
+fr Éclaircit une ligne sur deux, pour distinguer les lignes.
+
+en Dims the contents of the panels that do not have the keyboard, so that the one that has it stands out.
+fr Atténue le contenu des panneaux qui n'ont pas le clavier, pour que celui qui l'a ressorte.
+
+en Shows the extensions of the files' names.
+fr Affiche les extensions des noms de fichiers.
+
+en Shows the hidden files (their names start with a dot; on Windows, their attribute).
+fr Affiche les fichiers cachés (leur nom commence par un point ; sous Windows, leur attribut).
+
+en Lists the folders before the files, whatever the sort.
+fr Liste les dossiers avant les fichiers, quel que soit le tri.
+
+en How the dates read: 2026-11-09 21:40; Today 21:40, Yesterday, the weekday for the last week, then 9 Nov 2026; or 9 Nov 2026 21:40.
+fr L'écriture des dates : 2026-11-09 21:40 ; Aujourd'hui 21:40, Hier, le jour de la semaine pour la dernière semaine, puis 9 nov. 2026 ; ou 9 nov. 2026 21:40.
+
+en Measures the folders shown: what they hold all the way down, in the Folders, Files and Size columns.
+fr Mesure les dossiers affichés : tout ce qu'ils contiennent, jusqu'en bas, dans les colonnes Dossiers, Fichiers et Taille.
+
+en Opens an item with one click instead of two.
+fr Ouvre un élément en un clic au lieu de deux.
+
+en The settings cannot be written to %s
+fr Les réglages ne peuvent pas être écrits dans %s
+
+en No window could be started.
+fr Aucune fenêtre n'a pu être ouverte.
+
+en classeur %s, on gui_toolkit %s. %s
+fr classeur %s, sur gui_toolkit %s. %s
+
+en The version is copied.
+fr Version copiée.
+
+en Theme: %s.
+fr Thème : %s.
+
+en Compact rows.
+fr Lignes compactes.
+
+en Comfortable rows.
+fr Lignes aérées.
+
+en Animations on.
+fr Animations activées.
+
+en Animations off.
+fr Animations désactivées.
+
+en Text size: %v.
+fr Taille du texte : %v.
+
+en The thumbnails are cleared.
+fr Miniatures effacées.
+
+en Recents
+fr Récents
+
+en Bookmarks
+fr Favoris
+
+en Storage
+fr Stockage
+
+en Network
+fr Réseau
+
+en Places
+fr Emplacements
+
+en %s: bookmark a folder
+fr %s : ajouter un dossier aux favoris
+
+en Drag it, or right-click it, to move the section
+fr Faites-la glisser, ou cliquez-droit dessus, pour déplacer la section
+
+en Move to the top
+fr Placer en haut
+
+en Move to the bottom
+fr Placer en bas
+
+en Close the section
+fr Fermer la section
+
+en Open the section
+fr Ouvrir la section
+
+en %s free of %s
+fr %s libres sur %s
+
+en Click a section's heading first: its keys move that one.
+fr Cliquez d'abord sur le titre d'une section : ses raccourcis déplacent celle-là.
+
+en Searching…
+fr Recherche…
+
+en No device found
+fr Aucun appareil trouvé
+
+en Open %s
+fr Ouvrir %s
+
+en Permissions
+fr Permissions
+
+en Attributes
+fr Attributs
+
+en Tab
+fr Onglet
+
+en A new panel at the right
+fr Un nouveau panneau à droite
+
+en A new panel below
+fr Un nouveau panneau en bas
+
+en To a window's edge: a window of its own
+fr Au bord de la fenêtre : une fenêtre à part
+
+en Undone: the rename.
+fr Annulé : le renommage.
+
+en Undone: the rename of several items.
+fr Annulé : le renommage de plusieurs éléments.
+
+en Undone: the new folder.
+fr Annulé : le nouveau dossier.
+
+en Undone: the new folder of several items.
+fr Annulé : le nouveau dossier de plusieurs éléments.
+
+en Undone: the new file.
+fr Annulé : le nouveau fichier.
+
+en Undone: the new file of several items.
+fr Annulé : le nouveau fichier de plusieurs éléments.
+
+en Undone: the copy.
+fr Annulé : la copie.
+
+en Undone: the copy of several items.
+fr Annulé : la copie de plusieurs éléments.
+
+en Undone: the move.
+fr Annulé : le déplacement.
+
+en Undone: the move of several items.
+fr Annulé : le déplacement de plusieurs éléments.
+
+en Undone: the move to the trash.
+fr Annulé : la mise à la corbeille.
+
+en Undone: the move to the trash of several items.
+fr Annulé : la mise à la corbeille de plusieurs éléments.
+
+en Done again: the rename.
+fr Rétabli : le renommage.
+
+en Done again: the rename of several items.
+fr Rétabli : le renommage de plusieurs éléments.
+
+en Done again: the new folder.
+fr Rétabli : le nouveau dossier.
+
+en Done again: the new folder of several items.
+fr Rétabli : le nouveau dossier de plusieurs éléments.
+
+en Done again: the new file.
+fr Rétabli : le nouveau fichier.
+
+en Done again: the new file of several items.
+fr Rétabli : le nouveau fichier de plusieurs éléments.
+
+en Done again: the copy.
+fr Rétabli : la copie.
+
+en Done again: the copy of several items.
+fr Rétabli : la copie de plusieurs éléments.
+
+en Done again: the move.
+fr Rétabli : le déplacement.
+
+en Done again: the move of several items.
+fr Rétabli : le déplacement de plusieurs éléments.
+
+en Done again: the move to the trash.
+fr Rétabli : la mise à la corbeille.
+
+en Done again: the move to the trash of several items.
+fr Rétabli : la mise à la corbeille de plusieurs éléments.
+
+en A copy or a move is running: undo once it has ended.
+fr Une copie ou un déplacement est en cours : annulez une fois terminé.
+
+en A change to files is being made: undo once it is done.
+fr Une modification de fichiers est en cours : annulez une fois terminée.
+
+en Nothing to undo.
+fr Rien à annuler.
+
+en A copy or a move is running: redo once it has ended.
+fr Une copie ou un déplacement est en cours : rétablissez une fois terminé.
+
+en Nothing to do again.
+fr Rien à rétablir.
+
+en The rename cannot be done again.
+fr Le renommage ne peut pas être rétabli.
+
+en %s cannot be made again.
+fr %s ne peut pas être recréé.
+
+en %s is there again: the rename cannot be undone.
+fr %s existe de nouveau : le renommage ne peut pas être annulé.
+
+en The rename cannot be undone.
+fr Le renommage ne peut pas être annulé.
+
+en %s is not empty now: it stays.
+fr %s n'est plus vide : il reste.
+
+en Locked: folders open in a new tab
+fr Verrouillé : les dossiers s'ouvrent dans un nouvel onglet
+
+en Every tab of the panel
+fr Tous les onglets du panneau
+
+en Name
+fr Nom
+
+en Type
+fr Type
+
+en Size
+fr Taille
+
+en The folders before
+fr Les dossiers précédents
+
+en Unlock the tab: folders open in it
+fr Déverrouiller l'onglet : les dossiers s'y ouvrent
+
+en Lock the tab: folders open in a new tab
+fr Verrouiller l'onglet : les dossiers s'ouvrent dans un nouvel onglet
+
+en The panel's menu
+fr Le menu du panneau
+
+en A middle click opens it in a new tab
+fr Un clic du milieu l'ouvre dans un nouvel onglet
+
+en    and %d more: type a few more letters
+en+    and %d more: type a few more letters
+fr    et %d autre : tapez quelques lettres de plus
+fr+    et %d autres : tapez quelques lettres de plus
+
+en Filter by %s
+fr Filtrer par %s
+
+en Try again
+fr Réessayer
+
+en This folder is empty
+fr Ce dossier est vide
+
+en No name matches
+fr Aucun nom ne correspond
+
+en Nothing here has the letters %q.
+fr Rien ici ne contient les lettres %q.
+
+en Clear the filter
+fr Effacer le filtre
+
+en No row fits the filters
+fr Aucune ligne ne passe les filtres
+
+en The types or the columns' funnels leave every row out.
+fr Les types ou les filtres des colonnes excluent toutes les lignes.
+
+en Show every row
+fr Afficher toutes les lignes
+
+en Only hidden files are here
+fr Il n'y a ici que des fichiers cachés
+
+en Show hidden files
+fr Afficher les fichiers cachés
+
+en Unfold the group
+fr Déplier le groupe
+
+en Fold the group
+fr Replier le groupe
+
+en The jobs: %d failed (%s)
+en+ The jobs: %d failed (%s)
+fr Les tâches : %d en échec (%s)
+fr+ Les tâches : %d en échec (%s)
+
+en Entries read so far
+fr Entrées lues jusqu'ici
+
+en Selected, and the size of their files
+fr Sélectionnés, et la taille de leurs fichiers
+
+en Folders shown, of all: a filter leaves some out
+fr Dossiers affichés, sur le total : un filtre en exclut
+
+en Files shown, of all: a filter leaves some out
+fr Fichiers affichés, sur le total : un filtre en exclut
+
+en The view: a click shows the slider (Ctrl+wheel, Ctrl+= and Ctrl+- too)
+fr La vue : un clic affiche le curseur (Ctrl+molette, Ctrl+= et Ctrl+- aussi)
+
+en Details
+fr Détails
+
+en Names
+fr Noms
+
+en Columns
+fr Colonnes
+
+en Small cards
+fr Petites cartes
+
+en Cards
+fr Cartes
+
+en Large cards
+fr Grandes cartes
+
+en Huge cards
+fr Très grandes cartes
+
+en The types shown: files, folders, extensions
+fr Les types affichés : fichiers, dossiers, extensions
+
+en Clear the filter, leave the search (Escape)
+fr Effacer le filtre, quitter la recherche (Échap)
+
+en In %s
+fr Dans %s
+
+en Deleted from %s
+fr Supprimé de %s
+
+en Close it here (Left)
+fr Le fermer ici (Gauche)
+
+en Open it here (Right)
+fr L'ouvrir ici (Droite)

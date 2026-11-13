@@ -20,6 +20,7 @@ import "core:fmt"
 import "core:slice"
 import "core:strings"
 import "gt:draw"
+import "gt:i18n"
 import "gt:platform"
 import tasks "gt:tasks"
 import "gt:ui"
@@ -282,9 +283,9 @@ spring :: proc(app: ^App, m: [2]f32, dir: string) {
 @(private = "file")
 file_ghost :: proc(app: ^App, m: [2]f32, effect: Maybe(platform.Drop_Effect), dir: string, em: f32) {
 	first := app.drag_paths[0]
-	name := len(app.drag_paths) == 1 ? fs.base(first) : fmt.tprintf("%d items", len(app.drag_paths))
+	name := len(app.drag_paths) == 1 ? fs.base(first) : fmt.tprintf(i18n.tr(len(app.drag_paths), "%d item", "%d items"), len(app.drag_paths))
 	what := ""
-	if e, ok := effect.?; ok { what = fmt.tprintf("%s to %s", e == .Move ? "Move" : "Copy", fs.base(dir)) }
+	if e, ok := effect.?; ok { what = fmt.tprintf(e == .Move ? i18n.tr("Move to %s") : i18n.tr("Copy to %s"), fs.base(dir)) }
 	ui.next({width = ui.children_sum(), height = ui.px(em * 2.2), axis = .X, cross = .Center,
 		bg = draw.hex(surfaces(app).raised), border = draw.hex(surfaces(app).edge), radius = em * 0.3 * corner_k()})
 	b := ui.build_box({.Floating_X, .Floating_Y, .Draw_Background, .Draw_Border}, "###file_ghost")

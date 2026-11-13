@@ -7,6 +7,7 @@ package classeur
 // is, or the reason it is not is said.
 
 import "core:strings"
+import "gt:i18n"
 import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
@@ -30,9 +31,9 @@ location_say :: proc(app: ^App, text: string, e: fs.Location_Error) {
 	switch e {
 	case .None, .Not_Mounted:
 	case .Unsupported:
-		say(app, "%s: this system reaches no such place by a path.", text)
+		say(app, i18n.tr("%s: this system reaches no such place by a path."), text)
 	case .Not_A_Location:
-		say(app, "%s: not a place classeur knows.", text)
+		say(app, i18n.tr("%s: not a place classeur knows."), text)
 	}
 }
 
@@ -66,7 +67,7 @@ share_open_start :: proc(app: ^App, text: string, tab: u64) {
 			if ok {
 				m.mounted = true
 				r, e = fs.location_resolve(m.text, context.temp_allocator)
-				if e == .Not_Mounted { why = "it is mounted, but classeur finds no folder for it" }
+				if e == .Not_Mounted { why = i18n.tr("it is mounted, but classeur finds no folder for it") }
 			}
 			m.why = strings.clone(why)
 		}
@@ -88,7 +89,7 @@ share_open_free :: proc(m: ^Share_Open) {
 @(private = "file")
 share_connecting :: proc(data: rawptr, word: u64) {
 	m := (^Share_Open)(data)
-	say(m.app, "Connecting to %s…", m.text)
+	say(m.app, i18n.tr("Connecting to %s…"), m.text)
 	app_frames(m.app)
 }
 

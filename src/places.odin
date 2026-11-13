@@ -5,6 +5,7 @@ package classeur
 // the new one comes.
 
 import "core:strings"
+import "gt:i18n"
 import "gt:platform"
 import tasks "gt:tasks"
 import "gt:ui"
@@ -17,15 +18,16 @@ Place :: struct {
 @(private = "file")
 Known :: struct { folder: platform.Known_Folder, name: string }
 
+// (a variable: i18n.later marks the names for the catalogue; tr as the worker names the places)
 @(private = "file")
-KNOWN :: [?]Known{
-	{.Home, "Home"},
-	{.Desktop, "Desktop"},
-	{.Documents, "Documents"},
-	{.Downloads, "Downloads"},
-	{.Pictures, "Pictures"},
-	{.Music, "Music"},
-	{.Videos, "Videos"},
+KNOWN := [?]Known{
+	{.Home, i18n.later("Home")},
+	{.Desktop, i18n.later("Desktop")},
+	{.Documents, i18n.later("Documents")},
+	{.Downloads, i18n.later("Downloads")},
+	{.Pictures, i18n.later("Pictures")},
+	{.Music, i18n.later("Music")},
+	{.Videos, i18n.later("Videos")},
 }
 
 // The places as a worker read them, on their way to the interface's thread.
@@ -61,7 +63,7 @@ places_run :: proc(data: rawptr) {
 			delete(path)
 			continue
 		}
-		append(&r.places, Place{name = strings.clone(k.name), path = path})
+		append(&r.places, Place{name = strings.clone(i18n.tr(k.name)), path = path})
 	}
 	// the root of the system (File Pilot's This PC) and the trash, as the system has them
 	for sp in fs.system_places(context.temp_allocator) {

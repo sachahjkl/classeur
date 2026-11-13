@@ -5,6 +5,7 @@ package classeur
 // what it does, its control; the search on the left finds them by their words. The themes are cards.
 
 import config "gt:config"
+import "gt:i18n"
 import lucide "gt:lucide"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
@@ -33,18 +34,19 @@ act_options :: proc(app: ^App) {
 
 // The pages in their order: the toolkit's standard groups (docs/settings.md) and classeur's own (files, open); the look
 // first, as the settings open on it.
-@(private = "file", rodata)
+// (not rodata: i18n.later marks the titles for the catalogue; options_page gives the page their translations)
+@(private = "file")
 OPTIONS_PAGES := [?]prefs_page.Page_Info{
-	{category = "appearance", title = "Appearance", icon = lucide.PALETTE},
-	{category = "window", title = "Window", icon = lucide.APP_WINDOW},
-	{category = "files", title = "Files", icon = lucide.FILE},
-	{category = "open", title = "Opening", icon = lucide.FOLDER_OPEN},
-	{category = "scrolling", title = "Scrolling", icon = lucide.MOUSE},
-	{category = "input", title = "Input", icon = lucide.KEYBOARD},
-	{category = "timing", title = "Delays and menus", icon = lucide.TIMER},
-	{category = "update", title = "Updates", icon = lucide.DOWNLOAD},
-	{category = "rendering", title = "Rendering", icon = lucide.MONITOR},
-	{category = "general", title = "General", icon = lucide.SETTINGS},
+	{category = "appearance", title = i18n.later("Appearance"), icon = lucide.PALETTE},
+	{category = "window", title = i18n.later("Window"), icon = lucide.APP_WINDOW},
+	{category = "files", title = i18n.later("Files"), icon = lucide.FILE},
+	{category = "open", title = i18n.later("Opening"), icon = lucide.FOLDER_OPEN},
+	{category = "scrolling", title = i18n.later("Scrolling"), icon = lucide.MOUSE},
+	{category = "input", title = i18n.later("Input"), icon = lucide.KEYBOARD},
+	{category = "timing", title = i18n.later("Delays and menus"), icon = lucide.TIMER},
+	{category = "update", title = i18n.later("Updates"), icon = lucide.DOWNLOAD},
+	{category = "rendering", title = i18n.later("Rendering"), icon = lucide.MONITOR},
+	{category = "general", title = i18n.later("General"), icon = lucide.SETTINGS},
 }
 
 options_build :: proc(app: ^App) {
@@ -79,10 +81,16 @@ SHOTS_BUILD :: #config(CLASSEUR_SHOTS, false)
 
 // The settings page's options: its build's, and the palette's list of the settings (palette.odin).
 options_page :: proc(app: ^App) -> prefs_page.Options {
+	// (the pages' titles in the person's language: the page shows them as given)
+	pages := make([]prefs_page.Page_Info, len(OPTIONS_PAGES), context.temp_allocator)
+	for p, i in OPTIONS_PAGES {
+		pages[i] = p
+		pages[i].title = i18n.tr(p.title)
+	}
 	return {
 		version = SHOTS_BUILD ? "" : "classeur " + APP_VERSION,
 		user = app,
-		pages = OPTIONS_PAGES[:],
+		pages = pages,
 		icon_font = app.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
 		file = SHOTS_BUILD ? "" : prefs_path(app),
 		changed = proc(user: rawptr, name: string) {

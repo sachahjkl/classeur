@@ -12,6 +12,7 @@ import "core:strings"
 import "core:sync"
 import "core:thread"
 import "gt:fsx"
+import "gt:i18n"
 import "gt:ui"
 import "fs"
 
@@ -22,8 +23,8 @@ Job_State :: enum u8 { Waiting, Counting, Running, Asking, Done, Failed, Cancell
 // What a name already taken at the destination becomes.
 Conflict :: enum u8 { Ask, Replace, Skip, Keep_Both }
 
-JOB_VERB := [Job_Kind]string{.Copy = "Copying", .Move = "Moving", .Trash = "Moving to the trash", .Delete = "Deleting", .Restore = "Putting back"}
-JOB_DONE := [Job_Kind]string{.Copy = "copied", .Move = "moved", .Trash = "moved to the trash", .Delete = "deleted", .Restore = "put back"}
+// What a job does, a label (i18n.later: tr where it is shown).
+JOB_VERB := [Job_Kind]string{.Copy = i18n.later("Copying"), .Move = i18n.later("Moving"), .Trash = i18n.later("Moving to the trash"), .Delete = i18n.later("Deleting"), .Restore = i18n.later("Putting back")}
 
 
 Job :: struct {
@@ -188,12 +189,12 @@ rate_text :: proc(bytes_per_second: f64, allocator := context.temp_allocator) ->
 // "12 s left", "2 min left", "1 h 5 min left" (rounded up: a minute left is not "0 min").
 eta_text :: proc(seconds: f64, allocator := context.temp_allocator) -> string {
 	s := int(math.ceil(max(seconds, 0)))
-	if s < 60 { return fmt.aprintf("%d s left", s, allocator = allocator) }
-	if s < 3600 { return fmt.aprintf("%d min left", (s + 59) / 60, allocator = allocator) }
+	if s < 60 { return fmt.aprintf(i18n.tr("%d s left"), s, allocator = allocator) }
+	if s < 3600 { return fmt.aprintf(i18n.tr("%d min left"), (s + 59) / 60, allocator = allocator) }
 	h, m := s / 3600, (s % 3600 + 59) / 60
 	if m == 60 { h, m = h + 1, 0 }
-	if m == 0 { return fmt.aprintf("%d h left", h, allocator = allocator) }
-	return fmt.aprintf("%d h %d min left", h, m, allocator = allocator)
+	if m == 0 { return fmt.aprintf(i18n.tr("%d h left"), h, allocator = allocator) }
+	return fmt.aprintf(i18n.tr("%d h %d min left"), h, m, allocator = allocator)
 }
 
 // Each frame, on the interface's thread: the speed steps from the bytes done (atomics: no lock, no disk). While the job
@@ -227,9 +228,9 @@ job_rate_fields :: proc(job: ^Job, now: f64) -> string {
 // The footer's line for a job that runs: "Copying 3 of 40 · name · 42 MB/s · 2 min left".
 job_status_text :: proc(job: ^Job, now: f64) -> string {
 	st := sync.atomic_load(&job.state)
-	if st == .Counting { return fmt.tprintf("%s: counting…", JOB_VERB[job.kind]) }
+	if st == .Counting { return fmt.tprintf(i18n.tr("%s: counting…"), i18n.tr(JOB_VERB[job.kind])) }
 	files, files_done := sync.atomic_load(&job.files_total), sync.atomic_load(&job.files_done)
-	return fmt.tprintf("%s %d of %d · %s%s", JOB_VERB[job.kind], min(files_done + 1, files), files, ui.text_shown(job_current(job)), job_rate_fields(job, now))
+	return fmt.tprintf(i18n.tr("%s %d of %d · %s%s"), i18n.tr(JOB_VERB[job.kind]), min(files_done + 1, files), files, ui.text_shown(job_current(job)), job_rate_fields(job, now))
 }
 
 job_current :: proc(job: ^Job, allocator := context.temp_allocator) -> string {
@@ -355,9 +356,16 @@ set_current :: proc(job: ^Job, name: string) {
 @(private = "file")
 job_error :: proc(job: ^Job, path: string, e: fs.Error) {
 	if e == .Cancelled { return }
-	verb := JOB_DONE[job.kind]
+	said := ""
+	switch job.kind {
+	case .Copy:    said = i18n.tr("%s cannot be copied: %s.")
+	case .Move:    said = i18n.tr("%s cannot be moved: %s.")
+	case .Trash:   said = i18n.tr("%s cannot be moved to the trash: %s.")
+	case .Delete:  said = i18n.tr("%s cannot be deleted: %s.")
+	case .Restore: said = i18n.tr("%s cannot be put back: %s.")
+	}
 	sync.mutex_lock(&job.mutex)
-	append(&job.errors, fmt.aprintf("%s cannot be %s: %s.", fs.base(path), verb, fs.ERROR_REASON[e]))
+	append(&job.errors, fmt.aprintf(said, fs.base(path), i18n.tr(fs.ERROR_REASON[e])))
 	sync.mutex_unlock(&job.mutex)
 }
 
@@ -415,7 +423,7 @@ copy_one :: proc(job: ^Job, from, target: string) -> (at: string, ok: bool) {
 	to := target
 	is_folder := info.kind == .Directory && .Link not_in info.flags
 	if is_folder && (to == from || strings.has_prefix(to, strings.concatenate({from, fs.SEPARATOR_STRING}, context.temp_allocator))) {
-		append_line(job, fmt.aprintf("%s cannot be copied into itself.", fs.base(from)))
+		append_line(job, fmt.aprintf(i18n.tr("%s cannot be copied into itself."), fs.base(from)))
 		return
 	}
 	set_current(job, fs.base(from))
@@ -574,12 +582,25 @@ job_ended :: proc(data: rawptr, word: u64) {
 	n := len(job.sources)
 	said := ""
 	switch st {
-	case .Done:      said = fmt.tprintf("%d item%s %s.", n, n == 1 ? "" : "s", JOB_DONE[job.kind])
+	case .Done:      said = fmt.tprintf(job_done_text(job.kind, n), n)
 	case .Failed:    said = job.errors[0]
-	case .Cancelled: said = fmt.tprintf("%s: cancelled.", JOB_VERB[job.kind])
+	case .Cancelled: said = fmt.tprintf(i18n.tr("%s: cancelled."), i18n.tr(JOB_VERB[job.kind]))
 	case .Waiting, .Counting, .Running, .Asking:
 	}
 	if said != "" { announce(app, st == .Done ? .Good : st == .Failed ? .Bad : .Info, "%s", said) }
 	job.ended_ms = ui.now_ms()
 	app_frames(app)
+}
+
+// What a job that ended well says: "%d items copied." (a whole sentence for each kind, its form for the count).
+@(private = "file")
+job_done_text :: proc(kind: Job_Kind, n: int) -> string {
+	switch kind {
+	case .Copy:    return i18n.tr(n, "%d item copied.", "%d items copied.")
+	case .Move:    return i18n.tr(n, "%d item moved.", "%d items moved.")
+	case .Trash:   return i18n.tr(n, "%d item moved to the trash.", "%d items moved to the trash.")
+	case .Delete:  return i18n.tr(n, "%d item deleted.", "%d items deleted.")
+	case .Restore: return i18n.tr(n, "%d item put back.", "%d items put back.")
+	}
+	return ""
 }

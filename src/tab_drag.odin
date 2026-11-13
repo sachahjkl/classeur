@@ -12,6 +12,7 @@ import "core:slice"
 import "core:strings"
 import "core:sync"
 import "gt:draw"
+import "gt:i18n"
 import "gt:render"
 import setup "gt:setup"
 import "gt:platform"
@@ -75,7 +76,7 @@ tab_ghost_slot :: proc(app: ^App, index: int) -> int {
 // The dragged tab's ghost in a row: its icon and its title, faint, a line around it.
 tab_ghost :: proc(app: ^App, width, em: f32) {
 	// (this window's tab, or another window's: its folder when the system gave it already, else a tab with no name)
-	path, title := app.tab_coming_path, app.tab_coming_path != "" ? fs.base(app.tab_coming_path) : "Tab"
+	path, title := app.tab_coming_path, app.tab_coming_path != "" ? fs.base(app.tab_coming_path) : i18n.tr("Tab")
 	if app.tab_drag.active {
 		t := find_tab(app, app.tab_drag.tab)
 		if t == nil { return }
@@ -333,7 +334,7 @@ tab_drag_overlay :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 3))
 				// (on a plate of the list's colour: legible over whatever the half covers)
 				ui.next({width = ui.text_size(em * 1.2), height = ui.px(em * 2.2), text_align = .Center, bg = draw.hex(surfaces(app).list), border = accent, radius = em * 0.3})
-				ui.build_box({.Draw_Background, .Draw_Border, .Draw_Text}, split == .Right ? "A new panel at the right###t" : "A new panel below###t")
+				ui.build_box({.Draw_Background, .Draw_Border, .Draw_Text}, fmt.tprintf("%s###t", split == .Right ? i18n.tr("A new panel at the right") : i18n.tr("A new panel below")))
 			}
 		}
 	}
@@ -359,7 +360,7 @@ tab_drag_overlay :: proc(app: ^App, em: f32) {
 		b := place(hint, {}, {}, "###tab_ghost_hint")
 		if ui.parent(b) {
 			ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 0.85)})
-			ui.label("To a window's edge: a window of its own###t")
+			ui.label(fmt.tprintf("%s###t", i18n.tr("To a window's edge: a window of its own")))
 		}
 	}
 }
@@ -444,7 +445,7 @@ tab_window_done :: proc(data: rawptr, word: u64) {
 	job := (^Tab_Window)(data)
 	defer tab_window_free(job)
 	app := job.app
-	if !job.ok { say(app, "No window could be started.") }
+	if !job.ok { say(app, i18n.tr("No window could be started.")) }
 	alone := len(app.panels) == 1 && len(app.panels[0].tabs) == 1
 	for p in app.panels {
 		for q, i in p.tabs {

@@ -15,6 +15,7 @@ import "core:time/timezone"
 import "core:time/datetime"
 import "core:time"
 import "core:unicode/utf8"
+import "gt:i18n"
 import "gt:ui"
 import "fs"
 
@@ -797,36 +798,37 @@ entry_rank :: proc(f: ^Folder, i: u32, by: Group_By, now: i64) -> (rank: int, ke
 	return rank_of(f, e, day, by, now)
 }
 
-// The group of an entry whose local day (by dates) is `day`.
+// The group of an entry whose local day (by dates) is `day`. Its key stays English (the folded groups are kept by it;
+// i18n.later marks it for the catalogue): the row's title is translated where it is shown.
 @(private = "file")
 rank_of :: proc(f: ^Folder, e: fs.Entry, day: i64, by: Group_By, now: i64) -> (rank: int, key: string) {
 	switch by {
 	case .None:
 	case .Type:
-		if e.kind == .Directory { return 0, "Folders" }
+		if e.kind == .Directory { return 0, i18n.later("Folders") }
 		ext := strings.to_upper(fs.extension(fs.base(e.name)), context.temp_allocator)
-		return 1, ext == "" ? "No extension" : ext
+		return 1, ext == "" ? i18n.later("No extension") : ext
 	case .Size:
-		if e.kind == .Directory { return 0, "Folders" }
+		if e.kind == .Directory { return 0, i18n.later("Folders") }
 		switch {
-		case e.size < 16 * 1024:           return 1, "Tiny (under 16 KB)"
-		case e.size < 1024 * 1024:         return 2, "Small (under 1 MB)"
-		case e.size < 128 * 1024 * 1024:   return 3, "Medium (under 128 MB)"
-		case e.size < 1024 * 1024 * 1024:  return 4, "Large (under 1 GB)"
+		case e.size < 16 * 1024:           return 1, i18n.later("Tiny (under 16 KB)")
+		case e.size < 1024 * 1024:         return 2, i18n.later("Small (under 1 MB)")
+		case e.size < 128 * 1024 * 1024:   return 3, i18n.later("Medium (under 128 MB)")
+		case e.size < 1024 * 1024 * 1024:  return 4, i18n.later("Large (under 1 GB)")
 		}
-		return 5, "Huge (1 GB and more)"
+		return 5, i18n.later("Huge (1 GB and more)")
 	case .Date:
 		if f.today_of != now || now == 0 { f.today_of, f.today = now, day_number(now, f.group_tz) }
 		today := f.today
 		switch {
-		case e.mtime == 0:         return 7, "No date"
-		case day >= today:         return 0, "Today"
-		case day == today - 1:     return 1, "Yesterday"
-		case day > today - 7:      return 2, "This week"
-		case day > today - 31:     return 3, "This month"
-		case day > today - 365:    return 4, "This year"
+		case e.mtime == 0:         return 7, i18n.later("No date")
+		case day >= today:         return 0, i18n.later("Today")
+		case day == today - 1:     return 1, i18n.later("Yesterday")
+		case day > today - 7:      return 2, i18n.later("This week")
+		case day > today - 31:     return 3, i18n.later("This month")
+		case day > today - 365:    return 4, i18n.later("This year")
 		}
-		return 5, "Older"
+		return 5, i18n.later("Older")
 	}
 	return 0, ""
 }

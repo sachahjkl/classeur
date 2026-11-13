@@ -9,6 +9,7 @@ import "core:fmt"
 import "core:strings"
 import config "gt:config"
 import "gt:draw"
+import "gt:i18n"
 import lucide "gt:lucide"
 import "gt:ui"
 import "fs"
@@ -18,8 +19,9 @@ Side_Section :: enum u8 { Recents, Bookmarks, Storage, Network, Places }
 // What a row of the sidebar is, for its menu: a recent and a bookmark have one more line.
 Side_Row_Kind :: enum u8 { Place, Recent, Bookmark }
 
-@(private = "file", rodata)
-SECTION_TITLES := [Side_Section]string{.Recents = "Recents", .Bookmarks = "Bookmarks", .Storage = "Storage", .Network = "Network", .Places = "Places"}
+// (not rodata: i18n.later marks them for the catalogue; tr where they are shown)
+@(private = "file")
+SECTION_TITLES := [Side_Section]string{.Recents = i18n.later("Recents"), .Bookmarks = i18n.later("Bookmarks"), .Storage = i18n.later("Storage"), .Network = i18n.later("Network"), .Places = i18n.later("Places")}
 @(private = "file", rodata)
 SECTION_ICONS := [Side_Section]string{.Recents = lucide.HISTORY, .Bookmarks = lucide.BOOKMARK, .Storage = lucide.HARD_DRIVE, .Network = lucide.NETWORK, .Places = lucide.FOLDER}
 
@@ -84,7 +86,7 @@ sidebar_build :: proc(app: ^App, em: f32) {
 								ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.8)), font_size = em * 0.85})
 								if ui.row(.Center) {
 									ui.spacer(ui.px(em * 2.6))
-									ui.label(fmt.tprintf("%s: bookmark a folder###bm_hint", command_keys(app, command_find("bookmark"))))
+									ui.label(fmt.tprintf("%s###bm_hint", fmt.tprintf(i18n.tr("%s: bookmark a folder"), command_keys(app, command_find("bookmark")))))
 								}
 							}
 						}
@@ -261,7 +263,7 @@ side_row_menu_build :: proc(app: ^App) {
 		switch app.side_row_kind {
 		case .Bookmark:
 			ui.menu_separator()
-			if ui.menu_item("Remove the bookmark###bm_remove", icon = lucide.BOOKMARK).clicked { bookmark_toggle(app, path) }
+			if ui.menu_item(fmt.tprintf("%s###bm_remove", i18n.tr("Remove the bookmark")), icon = lucide.BOOKMARK).clicked { bookmark_toggle(app, path) }
 		case .Recent:
 			ui.menu_separator()
 			menu_command(app, "recents_clear")
@@ -275,7 +277,7 @@ side_row_menu_build :: proc(app: ^App) {
 @(private = "file")
 side_item :: proc(id: string) -> bool {
 	c := command_find(id)
-	return c != nil && ui.menu_item(fmt.tprintf("%s###%s", c.title, c.id), icon = c.icon).clicked
+	return c != nil && ui.menu_item(fmt.tprintf("%s###%s", i18n.tr(c.title), c.id), icon = c.icon).clicked
 }
 
 @(private = "file")
@@ -307,7 +309,7 @@ section :: proc(app: ^App, s: Side_Section, em: f32) -> bool {
 		if ui.tags("weak") { glyph(app, SECTION_ICONS[s], em * 1.6) }
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###t", SECTION_TITLES[s]))
+		ui.label(fmt.tprintf("%s###t", i18n.tr(SECTION_TITLES[s])))
 		if ui.tags("weak") { glyph(app, open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, em * 1.6) }
 		ui.spacer(ui.px(em * 0.5))
 	}
@@ -320,7 +322,7 @@ section :: proc(app: ^App, s: Side_Section, em: f32) -> bool {
 	if sig.clicked && !(app.side_dragging && app.side_drag == s) { app.side_open[s] = !open }
 	if sig.clicked || sig.right_clicked { app.side_menu_of, app.side_touched = s, true }   // (the section the commands move)
 	if sig.right_clicked { side_menu_open(app, s) }
-	hover_tip(sig, "Drag it, or right-click it, to move the section")
+	hover_tip(sig, i18n.tr("Drag it, or right-click it, to move the section"))
 	return app.side_open[s]
 }
 
@@ -412,10 +414,10 @@ side_menu_build :: proc(app: ^App, em: f32) {
 		menu_command(app, "side_up", enabled = at > 0)
 		menu_command(app, "side_down", enabled = at < last)
 		ui.menu_separator()
-		if ui.menu_item("Move to the top", enabled = at > 0).clicked { side_move(app, s, 0) }
-		if ui.menu_item("Move to the bottom", enabled = at < last).clicked { side_move(app, s, last) }
+		if ui.menu_item(i18n.tr("Move to the top"), enabled = at > 0).clicked { side_move(app, s, 0) }
+		if ui.menu_item(i18n.tr("Move to the bottom"), enabled = at < last).clicked { side_move(app, s, last) }
 		ui.menu_separator()
-		if ui.menu_item(app.side_open[s] ? "Close the section" : "Open the section", icon = app.side_open[s] ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN).clicked { app.side_open[s] = !app.side_open[s] }
+		if ui.menu_item(app.side_open[s] ? i18n.tr("Close the section") : i18n.tr("Open the section"), icon = app.side_open[s] ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN).clicked { app.side_open[s] = !app.side_open[s] }
 		if s == .Network { menu_command(app, "network_find") }
 	}
 }
@@ -514,7 +516,7 @@ side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, c
 		}
 		ui.spacer(ui.px(em * 0.8))
 	}
-	hover_tip(sig, v.path, sp.total > 0 ? fmt.tprintf("%s free of %s", size_text(sp.free), size_text(sp.total)) : "")
+	hover_tip(sig, v.path, sp.total > 0 ? fmt.tprintf(i18n.tr("%s free of %s"), size_text(sp.free), size_text(sp.total)) : "")
 	return
 }
 
@@ -525,7 +527,7 @@ act_side_down :: proc(app: ^App) { side_step(app, 1) }
 @(private = "file")
 side_step :: proc(app: ^App, by: int) {
 	// (no section touched yet: none to move)
-	if !app.side_touched { say(app, "Click a section's heading first: its keys move that one."); return }
+	if !app.side_touched { say(app, i18n.tr("Click a section's heading first: its keys move that one.")); return }
 	s := app.side_menu_of
 	for x, i in app.side_order {
 		if x != s { continue }
@@ -551,9 +553,9 @@ side_devices :: proc(app: ^App, t: ^Tab, query: string, em: f32) {
 	}
 	note := ""
 	if app.devices_searching {
-		note = "Searching…"
+		note = i18n.tr("Searching…")
 	} else if len(app.devices) == 0 {
-		note = "No device found"
+		note = i18n.tr("No device found")
 	}
 	if note == "" || query != "" { return }
 	if ui.tags("weak") {
@@ -598,7 +600,7 @@ side_device_menu_build :: proc(app: ^App) {
 	if app.side_device_key == 0 { return }
 	if ui.ctx_menu(app.side_device_key) {
 		for u, i in app.side_device_uris {
-			if ui.menu_item(fmt.tprintf("Open %s###dev_open%d", ui.text_shown(u), i), icon = lucide.FOLDER_OPEN).clicked {
+			if ui.menu_item(fmt.tprintf("%s###dev_open%d", fmt.tprintf(i18n.tr("Open %s"), ui.text_shown(u)), i), icon = lucide.FOLDER_OPEN).clicked {
 				if t := current_tab(app); t != nil { tab_go(app, t, u) }
 			}
 		}

@@ -7,6 +7,7 @@ import "core:fmt"
 import "core:strings"
 import "core:sync"
 import config "gt:config"
+import "gt:i18n"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
 import "gt:render"
@@ -64,7 +65,7 @@ new_window_run :: proc(data: rawptr) {
 new_window_failed :: proc(data: rawptr, word: u64) {
 	job := (^New_Window)(data)
 	defer new_window_free(job)
-	say(job.app, "No window could be started.")
+	say(job.app, i18n.tr("No window could be started."))
 	app_frames(job.app)
 }
 
@@ -93,7 +94,7 @@ update_installed :: proc(app: ^App) -> bool { return app.updater != nil && updat
 // About classeur
 
 act_app_about :: proc(app: ^App) {
-	say(app, "classeur %s, on gui_toolkit %s. %s", APP_VERSION, ui.VERSION, SITE_URL)
+	say(app, i18n.tr("classeur %s, on gui_toolkit %s. %s"), APP_VERSION, ui.VERSION, SITE_URL)
 }
 
 act_app_website :: proc(app: ^App) { launch(app, .Open, SITE_URL) }
@@ -107,7 +108,7 @@ act_app_settings_folder :: proc(app: ^App) {
 
 act_app_version_copy :: proc(app: ^App) {
 	platform.set_clipboard(app.main.win, "classeur " + APP_VERSION)
-	announce(app, .Good, "The version is copied.")
+	announce(app, .Good, i18n.tr("The version is copied."))
 }
 
 ////////////////////////////////
@@ -126,7 +127,7 @@ theme_step :: proc(app: ^App, by: int) {
 	for t, i in list { if t.name == app.settings.theme { at = i } }
 	name := list[((at + by) % n + n) % n].name
 	pref_set_string(app, prefs_page.THEME_PREF, name)
-	say(app, "Theme: %s.", name)
+	say(app, i18n.tr("Theme: %s."), name)
 }
 
 act_app_density :: proc(app: ^App) {
@@ -136,14 +137,14 @@ act_app_density :: proc(app: ^App) {
 	} else {
 		pref_set_string(app, "appearance.density", fmt.tprintf("%v", DENSITY_COMPACT))
 	}
-	say(app, app.settings.compact ? "Compact rows." : "Comfortable rows.")
+	say(app, app.settings.compact ? i18n.tr("Compact rows.") : i18n.tr("Comfortable rows."))
 }
 
 // Never, or always: "system" (the default) leaves it to the system, which a key cannot tell, so it goes to never first.
 act_app_animations :: proc(app: ^App) {
 	off := app.settings.animations == "off"
 	pref_set_string(app, "appearance.animations", off ? "on" : "off")
-	say(app, off ? "Animations on." : "Animations off.")
+	say(app, off ? i18n.tr("Animations on.") : i18n.tr("Animations off."))
 }
 
 // The text's size by a point, within the setting's bounds.
@@ -155,7 +156,7 @@ act_app_text_smaller :: proc(app: ^App) { text_size_step(app, -TEXT_STEP) }
 act_app_text_reset :: proc(app: ^App) {
 	_ = config.reset(&app.prefs, prefs_page.FONT_SIZE_PREF)
 	settings_apply(app)
-	say(app, "Text size: %v.", app.settings.font_size)
+	say(app, i18n.tr("Text size: %v."), app.settings.font_size)
 }
 
 @(private = "file")
@@ -163,7 +164,7 @@ text_size_step :: proc(app: ^App, by: f32) {
 	size := clamp(app.settings.font_size + by, prefs_page.FONT_SIZE_MIN, prefs_page.FONT_SIZE_MAX)
 	if size == app.settings.font_size { return }
 	pref_set_string(app, prefs_page.FONT_SIZE_PREF, fmt.tprintf("%v", size))
-	say(app, "Text size: %v.", app.settings.font_size)
+	say(app, i18n.tr("Text size: %v."), app.settings.font_size)
 }
 
 @(private = "file")
@@ -201,6 +202,6 @@ act_app_thumbs_clear :: proc(app: ^App) {
 		if th.state == .Ready { render.destroy_texture(&app.shared.r, th.tex) }
 		delete(key)
 	}
-	announce(app, .Good, "The thumbnails are cleared.")
+	announce(app, .Good, i18n.tr("The thumbnails are cleared."))
 	app_frames(app)
 }

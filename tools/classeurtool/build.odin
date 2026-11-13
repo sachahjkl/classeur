@@ -60,6 +60,8 @@ run_check :: proc(args: []string) -> int {
 	if !changelog_check(p) { return 1 }
 	if !toolbox.check_scopes("src") { return 1 }
 	if !check_systems() { return 1 }
+	// (a text of the interface without its French fails here, not in front of a person)
+	if e := toolbox.i18n_catalogue(I18N.dirs, fmt.tprintf("%s/fr.txt", I18N.folder), "fr", true); e != "" { fmt.eprintln(e); return 1 }
 	if !toolbox.build_launcher(p) { return 1 }   // (classeur embeds it: odin check reads it)
 	if !toolbox.run(toolbox.odin_command(p, "check"), {echo = true}) { return 1 }
 	// (the whole program for Windows too, from any system: Windows code that does not compile fails the Linux job)

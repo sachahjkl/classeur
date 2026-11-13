@@ -18,6 +18,7 @@ import "core:strings"
 import "core:time"
 import "core:time/datetime"
 import "core:time/timezone"
+import "gt:i18n"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:ui"
@@ -181,10 +182,10 @@ batch_problems :: proc(b: ^Batch, news: []string) -> []string {
 	for n, i in news {
 		k := fs.name_key(n, context.temp_allocator)
 		switch {
-		case n == "":                                                      out[i] = "empty"
-		case strings.contains_any(n, fs.SEPARATOR_STRING) || n == "." || n == "..": out[i] = "not a name"
-		case seen[k] > 1:                                                  out[i] = "twice"
-		case k in b.taken:                                                 out[i] = "taken"
+		case n == "":                                                      out[i] = i18n.tr("empty")
+		case strings.contains_any(n, fs.SEPARATOR_STRING) || n == "." || n == "..": out[i] = i18n.tr("not a name")
+		case seen[k] > 1:                                                  out[i] = i18n.tr("twice")
+		case k in b.taken:                                                 out[i] = i18n.tr("taken")
 		}
 	}
 	return out
@@ -241,11 +242,11 @@ batch_done :: proc(data: rawptr, word: u64) {
 	app.steps_due -= 1
 	if t := find_tab(app, a.tab); t != nil { tab_load(app, t) }
 	if !a.done {
-		say(app, "The names could not all be given: nothing was renamed.")
+		say(app, i18n.tr("The names could not all be given: nothing was renamed."))
 		return
 	}
 	undo_push(app, .Rename, a.pairs)
-	announce(app, .Good, "%d item%s renamed.", len(a.pairs), len(a.pairs) == 1 ? "" : "s")
+	announce(app, .Good, i18n.tr(len(a.pairs), "%d item renamed.", "%d items renamed."), len(a.pairs))
 }
 
 batch_build :: proc(app: ^App, em: f32) {
@@ -262,12 +263,12 @@ batch_build :: proc(app: ^App, em: f32) {
 
 	if ui.modal("batch_rename", pw, &b.open, 0.1) {
 		if ui.style({width = ui.px(pw)}) {
-			if ui.dialog_header("batch_head", fmt.tprintf("Rename %d items", n), {icon = lucide.PENCIL, icon_font = app.icons, close = true}) {}
+			if ui.dialog_header("batch_head", fmt.tprintf(i18n.tr(n, "Rename %d item", "Rename %d items"), n), {icon = lucide.PENCIL, icon_font = app.icons, close = true}) {}
 			// (Enter in a field renames)
-			if batch_field_row(app, "Pattern", "###bpat", &b.pattern, "{name}", em, pw, focus = b.focus_due) { apply = true }
+			if batch_field_row(app, i18n.tr("Pattern"), "###bpat", &b.pattern, "{name}", em, pw, focus = b.focus_due) { apply = true }
 			b.focus_due = false
-			if batch_field_row(app, "Find", "###bfind", &b.find, "Text to replace", em, pw) { apply = true }
-			if batch_field_row(app, "Replace", "###brep", &b.replace, "With", em, pw) { apply = true }
+			if batch_field_row(app, i18n.tr("Find"), "###bfind", &b.find, i18n.tr("Text to replace"), em, pw) { apply = true }
+			if batch_field_row(app, i18n.tr("Replace"), "###brep", &b.replace, i18n.tr("With"), em, pw) { apply = true }
 			ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 2.6))})
 			if ui.row(.Center, id = "###batch_opts") {
 				ui.spacer(ui.px(em * 0.9))
@@ -275,11 +276,11 @@ batch_build :: proc(app: ^App, em: f32) {
 				casing := int(b.casing)
 				// (three equal parts: each word must fit a third)
 				ui.next({width = ui.px(em * 18), height = ui.px(ui.dense(em * 2.2))})
-				ui.segmented("###case", {"As is", "lower", "UPPER"}, &casing, tips = {"The case of each name kept", "Every letter in lower case", "Every letter in upper case"})
+				ui.segmented("###case", {i18n.tr("As is"), i18n.tr("lower"), i18n.tr("UPPER")}, &casing, tips = {i18n.tr("The case of each name kept"), i18n.tr("Every letter in lower case"), i18n.tr("Every letter in upper case")})
 				b.casing = Batch_Case(casing)
 				ui.spacer(ui.fill())
 				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-				if ui.button(len(b.list) > 0 ? "Pattern again###blist" : "Names from the clipboard###blist").clicked {
+				if ui.button(fmt.tprintf("%s###blist", len(b.list) > 0 ? i18n.tr("Pattern again") : i18n.tr("Names from the clipboard"))).clicked {
 					if len(b.list) > 0 {
 						for s in b.list { delete(s) }
 						clear(&b.list)
@@ -331,14 +332,14 @@ batch_build :: proc(app: ^App, em: f32) {
 			if ui.dialog_buttons("batch_buttons") {
 				if ui.tags("weak") {
 					ui.next({width = ui.text_size(em * 0.6), height = ui.px(ui.dense(em * 2.2)), font_size = em * 0.85})
-					ui.label(bad > 0 ? fmt.tprintf("%d name%s cannot be had.###bstate", bad, bad == 1 ? "" : "s") : "Esc: close###bstate")
+					ui.label(fmt.tprintf("%s###bstate", bad > 0 ? fmt.tprintf(i18n.tr(bad, "%d name cannot be had.", "%d names cannot be had."), bad) : i18n.tr("Esc: close")))
 				}
 				ui.spacer(ui.px(em * 0.6))
 				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-				if ui.button("Cancel###bcancel", intent = .Cancel).clicked { b.open = false }
+				if ui.button(fmt.tprintf("%s###bcancel", i18n.tr("Cancel")), intent = .Cancel).clicked { b.open = false }
 				ui.spacer(ui.px(em * 0.6))
 				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-				if ui.button("Rename (Enter)###bapply", intent = .Primary, disabled = bad > 0).clicked { apply = true }
+				if ui.button(fmt.tprintf("%s###bapply", i18n.tr("Rename (Enter)")), intent = .Primary, disabled = bad > 0).clicked { apply = true }
 			}
 		}
 	}

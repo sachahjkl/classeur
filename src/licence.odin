@@ -8,6 +8,7 @@ package classeur
 import "base:runtime"
 import "core:fmt"
 import "core:strings"
+import "gt:i18n"
 import licence "gt:licence"
 import lucide "gt:lucide"
 import "gt:platform"
@@ -95,9 +96,9 @@ licence_ask :: proc(app: ^App, act: Licence_Act, text: string) {
 		said := ""
 		switch {
 		case j.err != .None:  said = licence_error_words(j.err)
-		case j.act == .Remove: said = "The licence is removed."
+		case j.act == .Remove: said = i18n.tr("The licence is removed.")
 		case j.act != .Read && v.status.registered:
-			said = fmt.tprintf("Registered to %s. Thank you.", ui.text_shown(v.status.licence.name))
+			said = fmt.tprintf(i18n.tr("Registered to %s. Thank you."), ui.text_shown(v.status.licence.name))
 			ui.field_wipe(&v.key)
 		}
 		delete(v.said)
@@ -122,12 +123,12 @@ licence_job_free :: proc(j: ^Licence_Job) {
 @(private = "file")
 licence_error_words :: proc(e: licence.Error) -> string {
 	#partial switch e {
-	case .Empty:         return "Paste a key first."
-	case .Wrong_Product: return "This licence is not classeur's."
-	case .Bad_Signature: return "This key is not one the shop signed: check that it was copied whole."
-	case .No_Public_Key: return "This version of classeur accepts no licence yet."
-	case .Not_Read:      return "The licence file cannot be read."
-	case .Not_Written:   return "The licence cannot be written in classeur's folder."
+	case .Empty:         return i18n.tr("Paste a key first.")
+	case .Wrong_Product: return i18n.tr("This licence is not classeur's.")
+	case .Bad_Signature: return i18n.tr("This key is not one the shop signed: check that it was copied whole.")
+	case .No_Public_Key: return i18n.tr("This version of classeur accepts no licence yet.")
+	case .Not_Read:      return i18n.tr("The licence file cannot be read.")
+	case .Not_Written:   return i18n.tr("The licence cannot be written in classeur's folder.")
 	}
 	return licence.error_text(e)
 }
@@ -138,35 +139,35 @@ licence_section :: proc(app: ^App, em: f32) {
 	st := &v.status
 	ui.spacer(ui.px(em * 1.2))
 	ui.next({width = ui.fill(), text_pad = 0})
-	ui.label("Licence###lic_title")
+	ui.label(fmt.tprintf("%s###lic_title", i18n.tr("Licence")))
 	ui.hline(ui.fill())
 	ui.spacer(ui.px(em * 0.5))
 	switch {
 	case !v.known:
 		if ui.tags("weak") {
 			ui.next({width = ui.fill(), text_pad = 0})
-			ui.paragraph("Reading the licence…###lic_reading")
+			ui.paragraph(fmt.tprintf("%s###lic_reading", i18n.tr("Reading the licence…")))
 		}
 	case st.registered:
 		ui.next({width = ui.fill(), text_pad = 0})
 		edition := licence.edition_title(LICENCE, st.licence.edition)
-		ui.paragraph(fmt.tprintf("Registered to %s (%s). Thank you for supporting classeur.###lic_who", ui.text_shown(st.licence.name), edition))
+		ui.paragraph(fmt.tprintf("%s###lic_who", fmt.tprintf(i18n.tr("Registered to %s (%s). Thank you for supporting classeur."), ui.text_shown(st.licence.name), edition)))
 		if ui.tags("weak") {
 			ui.next({width = ui.fill(), text_pad = 0})
-			ui.paragraph(fmt.tprintf("Order %s, %s.###lic_order", ui.text_shown(st.licence.order), ui.text_shown(st.licence.date)))
+			ui.paragraph(fmt.tprintf("%s###lic_order", fmt.tprintf(i18n.tr("Order %s, %s."), ui.text_shown(st.licence.order), ui.text_shown(st.licence.date))))
 		}
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.children_sum(), height = ui.px(ui.dense(em * 2.2))})
 		if ui.row(.Center, {}, "###lic_registered") {
 			ui.next({width = ui.text_size(em * 1.2), height = ui.fill()})
-			if ui.button("Remove the licence###lic_remove", intent = .Danger, disabled = v.busy).clicked { licence_ask(app, .Remove, "") }
+			if ui.button(fmt.tprintf("%s###lic_remove", i18n.tr("Remove the licence")), intent = .Danger, disabled = v.busy).clicked { licence_ask(app, .Remove, "") }
 		}
 	case:
 		ui.next({width = ui.fill(), text_pad = 0})
-		ui.paragraph("Unregistered. classeur is free; a licence supports its work.###lic_none")
+		ui.paragraph(fmt.tprintf("%s###lic_none", i18n.tr("Unregistered. classeur is free; a licence supports its work.")))
 		ui.next({width = ui.children_sum(), height = ui.px(ui.dense(em * 2.0))})
 		if ui.row(.Center, {}, "###lic_buy_row") {
-			if ui.hint_action("###lic_buy", "Support classeur: buy a licence", lucide.HEART, app.icons, .Primary).clicked {
+			if ui.hint_action("###lic_buy", i18n.tr("Support classeur: buy a licence"), lucide.HEART, app.icons, .Primary).clicked {
 				ui.open(LICENCE_PRICING_URL, .Url)
 			}
 		}
@@ -174,17 +175,17 @@ licence_section :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.2))})
 		if ui.row(.Center, {}, "###lic_enter") {
 			ui.next({width = ui.fill(), height = ui.fill()})
-			entered := ui.line_edit("###lic_key", &v.key, "Paste the key of your licence", secret = true).committed
+			entered := ui.line_edit("###lic_key", &v.key, i18n.tr("Paste the key of your licence"), secret = true).committed
 			ui.spacer(ui.px(em * 0.5))
 			ui.next({width = ui.text_size(em * 1.2), height = ui.fill()})
 			key := strings.trim_space(ui.field_string(&v.key))
-			if ui.button("Register###lic_register", intent = .Primary, disabled = v.busy || key == "").clicked || (entered && key != "") {
+			if ui.button(fmt.tprintf("%s###lic_register", i18n.tr("Register")), intent = .Primary, disabled = v.busy || key == "").clicked || (entered && key != "") {
 				licence_ask(app, .Install, key)
 			}
 			ui.spacer(ui.px(em * 0.5))
 			ui.next({width = ui.text_size(em * 1.2), height = ui.fill()})
-			if ui.button("Choose a file…###lic_file", disabled = v.busy).clicked {
-				d := licence.file_dialog(LICENCE, "Choose a licence file", "classeur licence")
+			if ui.button(fmt.tprintf("%s###lic_file", i18n.tr("Choose a file…")), disabled = v.busy).clicked {
+				d := licence.file_dialog(LICENCE, i18n.tr("Choose a licence file"), i18n.tr("classeur licence"))
 				ui.file_dialog(&app.main.state, .Open, d, proc(r: platform.Dialog_Result, user: rawptr) {
 					if r.status != .Chosen || len(r.paths) == 0 { return }
 					licence_ask((^App)(user), .Install_File, r.paths[0])   // (copied: the result is freed after this call)

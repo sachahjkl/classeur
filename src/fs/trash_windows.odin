@@ -10,6 +10,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 import win "core:sys/windows"
+import "gt:i18n"
 
 foreign import kernel32 "system:Kernel32.lib"
 foreign import advapi32 "system:Advapi32.lib"
@@ -42,7 +43,7 @@ list_trash :: proc(l: ^Listing, path: string) -> (e: Error, done: bool) {
 }
 
 // What a tab of the Recycle Bin is called (its path says nothing to a person); "": not the Recycle Bin.
-trash_title :: proc(path: string) -> string { return path == RECYCLE_BIN ? "Recycle Bin" : "" }
+trash_title :: proc(path: string) -> string { return path == RECYCLE_BIN ? i18n.tr("Recycle Bin") : "" }
 
 // Every item of the person's Recycle Bins, named by its original name, dated when it was deleted. A name is made
 // unique as a folder's are ("a 2.txt" for a second "a.txt"): the rows, the selection and the cursor go by names.

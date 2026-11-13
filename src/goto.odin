@@ -12,6 +12,7 @@ import "core:fmt"
 import "core:math"
 import "core:slice"
 import "core:strings"
+import "gt:i18n"
 import lucide "gt:lucide"
 import tasks "gt:tasks"
 import "gt:ui"
@@ -58,7 +59,7 @@ act_goto_popup :: proc(app: ^App) {
 Goto_Row :: struct {
 	path:   string,
 	label:  string,     // what the row shows (the fuzzy ranges are on it)
-	kind:   string,     // "Recent", "Bookmark", "Place", "Folder"
+	kind:   string,     // "Recent", "Bookmark", "Place", "Folder" (in the person's language: only shown)
 	icon:   string,
 	score:  int,
 	ranges: []ui.Fuzzy_Range,
@@ -147,7 +148,7 @@ goto_rows :: proc(app: ^App, text: string) -> []Goto_Row {
 			for n in g.names {
 				if !app.show_hidden && strings.has_prefix(n, ".") && !strings.has_prefix(rest, ".") { continue }
 				score, ranges, ok := ui.fuzzy_score(rest, n)
-				if ok { append(&rows, Goto_Row{fs.join(dir, n, context.temp_allocator), n, "Folder", lucide.FOLDER, score, ranges}) }
+				if ok { append(&rows, Goto_Row{fs.join(dir, n, context.temp_allocator), n, i18n.tr("Folder"), lucide.FOLDER, score, ranges}) }
 			}
 		}
 		slice.stable_sort_by(rows[:], proc(a, b: Goto_Row) -> bool { return a.score > b.score })
@@ -162,12 +163,12 @@ goto_rows :: proc(app: ^App, text: string) -> []Goto_Row {
 		seen[path] = true
 		append(rows, Goto_Row{path, label, kind, icon, score, ranges})
 	}
-	for p in app.recents { add(&rows, &seen, app, text, p, "Recent", lucide.HISTORY) }
-	for p in app.bookmarks { add(&rows, &seen, app, text, p, "Bookmark", lucide.BOOKMARK) }
-	for p in app.places { add(&rows, &seen, app, text, p.path, "Place", lucide.HOME) }
+	for p in app.recents { add(&rows, &seen, app, text, p, i18n.tr("Recent"), lucide.HISTORY) }
+	for p in app.bookmarks { add(&rows, &seen, app, text, p, i18n.tr("Bookmark"), lucide.BOOKMARK) }
+	for p in app.places { add(&rows, &seen, app, text, p.path, i18n.tr("Place"), lucide.HOME) }
 	if t := current_tab(app); t != nil && text != "" {
 		for e in t.folder.listing.entries {
-			if e.kind == .Directory { add(&rows, &seen, app, text, fs.join(t.path, e.name, context.temp_allocator), "Folder", lucide.FOLDER) }
+			if e.kind == .Directory { add(&rows, &seen, app, text, fs.join(t.path, e.name, context.temp_allocator), i18n.tr("Folder"), lucide.FOLDER) }
 		}
 	}
 	if text != "" { slice.stable_sort_by(rows[:], proc(a, b: Goto_Row) -> bool { return a.score > b.score }) }
@@ -286,7 +287,7 @@ goto_build :: proc(app: ^App) {
 			if n == 0 {
 				if ui.tags("weak") {
 					ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 3.5)), text_align = .Center})
-					ui.label(fs.looks_like_path(text) ? "No folder there has these letters. Enter goes to the path typed.###goto_none" : "No folder has these letters.###goto_none")
+					ui.label(fmt.tprintf("%s###goto_none", fs.looks_like_path(text) ? i18n.tr("No folder there has these letters. Enter goes to the path typed.") : i18n.tr("No folder has these letters.")))
 				}
 			}
 			ui.hline(ui.px(pw))
@@ -295,7 +296,7 @@ goto_build :: proc(app: ^App) {
 				ui.spacer(ui.px(em * 0.9))
 				if ui.tags("weak") {
 					ui.next({width = ui.fill(), height = ui.pct(1), font_size = math.round(em * 0.85)})
-					ui.label("Up, Down: choose   Tab: complete the path   Enter: go   Esc: close###goto_help")
+					ui.label(fmt.tprintf("%s###goto_help", i18n.tr("Up, Down: choose   Tab: complete the path   Enter: go   Esc: close")))
 				}
 			}
 		}

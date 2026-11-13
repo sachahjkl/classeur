@@ -5,6 +5,7 @@ package fs
 import "core:fmt"
 import "core:strings"
 import win "core:sys/windows"
+import "gt:i18n"
 
 foreign import kernel32 "system:Kernel32.lib"
 
@@ -35,7 +36,7 @@ volumes :: proc(allocator := context.allocator) -> []Volume {
 		if GetVolumeInformationW(wroot, &name[0], len(name), nil, nil, nil, nil, 0) {
 			label, _ = win.wstring_to_utf8(cstring16(&name[0]), -1, context.temp_allocator)
 		}
-		if label == "" { label = kind == DRIVE_REMOVABLE ? "Removable drive" : kind == DRIVE_REMOTE ? "Network drive" : "Local disk" }
+		if label == "" { label = kind == DRIVE_REMOVABLE ? i18n.tr("Removable drive") : kind == DRIVE_REMOTE ? i18n.tr("Network drive") : i18n.tr("Local disk") }
 		append(&out, Volume{
 			path = strings.clone(root, allocator),
 			label = fmt.aprintf("%s (%c:)", label, 'A' + i, allocator = allocator),

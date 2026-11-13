@@ -8,6 +8,7 @@ package classeur
 
 import "core:fmt"
 import "core:sync"
+import "gt:i18n"
 import lucide "gt:lucide"
 import "gt:ui"
 import "fs"
@@ -57,16 +58,41 @@ jobs_progress :: proc(app: ^App) -> (t: f32, running: bool) {
 job_retry :: proc(app: ^App, job: ^Job) {
 	retry := job_add(app, job.kind, job.sources, job.dest, targets = job.targets)
 	retry.undoing, retry.redoing = job.undoing, job.redoing
-	say(app, "%s again.", JOB_VERB[job.kind])
+	say(app, i18n.tr("%s again."), i18n.tr(JOB_VERB[job.kind]))
 }
 
 // What a job is about: its first item, and how many more.
 @(private = "file")
 job_title :: proc(job: ^Job) -> string {
-	if len(job.sources) == 0 { return JOB_VERB[job.kind] }
-	more := len(job.sources) > 1 ? fmt.tprintf(" and %d more", len(job.sources) - 1) : ""
-	to := job.dest != "" ? fmt.tprintf(" to %s", fs.base(job.dest)) : ""
-	return fmt.tprintf("%s %s%s%s", JOB_VERB[job.kind], fs.base(job.sources[0]), more, to)
+	if len(job.sources) == 0 { return i18n.tr(JOB_VERB[job.kind]) }
+	// (a whole sentence for each kind, with or without more items and a destination: a language orders them its way)
+	name, more, to := fs.base(job.sources[0]), len(job.sources) - 1, fs.base(job.dest)
+	switch job.kind {
+	case .Copy:
+		switch {
+		case more > 0 && to != "": return fmt.tprintf(i18n.tr(more, "Copying %s and %d more to %s", "Copying %s and %d more to %s"), name, more, to)
+		case more > 0:             return fmt.tprintf(i18n.tr(more, "Copying %s and %d more", "Copying %s and %d more"), name, more)
+		case to != "":             return fmt.tprintf(i18n.tr("Copying %s to %s"), name, to)
+		}
+		return fmt.tprintf(i18n.tr("Copying %s"), name)
+	case .Move:
+		switch {
+		case more > 0 && to != "": return fmt.tprintf(i18n.tr(more, "Moving %s and %d more to %s", "Moving %s and %d more to %s"), name, more, to)
+		case more > 0:             return fmt.tprintf(i18n.tr(more, "Moving %s and %d more", "Moving %s and %d more"), name, more)
+		case to != "":             return fmt.tprintf(i18n.tr("Moving %s to %s"), name, to)
+		}
+		return fmt.tprintf(i18n.tr("Moving %s"), name)
+	case .Trash:
+		if more > 0 { return fmt.tprintf(i18n.tr(more, "Moving to the trash %s and %d more", "Moving to the trash %s and %d more"), name, more) }
+		return fmt.tprintf(i18n.tr("Moving to the trash %s"), name)
+	case .Delete:
+		if more > 0 { return fmt.tprintf(i18n.tr(more, "Deleting %s and %d more", "Deleting %s and %d more"), name, more) }
+		return fmt.tprintf(i18n.tr("Deleting %s"), name)
+	case .Restore:
+		if more > 0 { return fmt.tprintf(i18n.tr(more, "Putting back %s and %d more", "Putting back %s and %d more"), name, more) }
+		return fmt.tprintf(i18n.tr("Putting back %s"), name)
+	}
+	return ""
 }
 
 jobs_view_build :: proc(app: ^App, em: f32) {
@@ -84,10 +110,10 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.9))
 			if ui.tags("weak") { glyph(app, lucide.LAYERS_2, em * 1.6) }
 			ui.next({width = ui.fill(), height = ui.pct(1)})
-			ui.label(n == 0 ? "No job yet###jobs_title" : fmt.tprintf("Jobs: %d###jobs_title", n))
+			ui.label(fmt.tprintf("%s###jobs_title", n == 0 ? i18n.tr("No job yet") : fmt.tprintf(i18n.tr("Jobs: %d"), n)))
 			// (the jobs go on: the panel alone goes, the footer's button brings it back)
 			ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 1.9))})
-			if ui.button("Background###jobs_bg").clicked { v.open = false }
+			if ui.button(fmt.tprintf("%s###jobs_bg", i18n.tr("Background"))).clicked { v.open = false }
 			ui.spacer(ui.px(em * 0.9))
 		}
 		ui.hline(ui.px(w))
@@ -106,13 +132,13 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 						ui.label(fmt.tprintf("%s###what", ui.text_shown(job_title(job))))
 						state := ""
 						switch st {
-						case .Waiting:   state = "waiting"
-						case .Counting:  state = "counting…"
-						case .Running:   state = fmt.tprintf("%d of %d%s", sync.atomic_load(&job.files_done), sync.atomic_load(&job.files_total), job_rate_fields(job, ui.now_ms()))
-						case .Asking:    state = "asks"
-						case .Done:      state = "done"
-						case .Failed:    state = fmt.tprintf("%d failed", len(job.errors))
-						case .Cancelled: state = "cancelled"
+						case .Waiting:   state = i18n.tr("waiting")
+						case .Counting:  state = i18n.tr("counting…")
+						case .Running:   state = fmt.tprintf(i18n.tr("%d of %d%s"), sync.atomic_load(&job.files_done), sync.atomic_load(&job.files_total), job_rate_fields(job, ui.now_ms()))
+						case .Asking:    state = i18n.tr("asks")
+						case .Done:      state = i18n.tr("done")
+						case .Failed:    state = fmt.tprintf(i18n.tr(len(job.errors), "%d failed", "%d failed"), len(job.errors))
+						case .Cancelled: state = i18n.tr("a job's state", "cancelled")
 						}
 						if ui.tags("weak") {
 							ui.next({width = ui.text_size(em * 0.6), height = ui.pct(1)})
@@ -125,12 +151,12 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 							ui.progress("###bar", total > 0 ? clamp(f32(f64(done) / f64(total)), 0, 1) : 0, st == .Counting)
 							ui.spacer(ui.px(em * 0.4))
 							ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 1.9))})
-							if ui.button("Cancel###cancel").clicked { job_cancel(job) }
+							if ui.button(fmt.tprintf("%s###cancel", i18n.tr("Cancel"))).clicked { job_cancel(job) }
 						}
 						if st == .Failed || st == .Cancelled {
 							ui.spacer(ui.px(em * 0.4))
 							ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 1.9))})
-							if ui.button("Retry###retry", intent = .Primary).clicked { job_retry(app, job) }
+							if ui.button(fmt.tprintf("%s###retry", i18n.tr("Retry")), intent = .Primary).clicked { job_retry(app, job) }
 						}
 						ui.spacer(ui.px(em * 0.9))
 					}
@@ -139,7 +165,7 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 					for e, i in job.errors {
 						if i == 3 {
 							ui.next({width = ui.px(w), height = ui.px(ui.dense(em * 1.7)), font_size = em * 0.85})
-							if ui.tags("weak") { ui.label(fmt.tprintf("    and %d more###more", len(job.errors) - 3)) }
+							if ui.tags("weak") { ui.label(fmt.tprintf("%s###more", fmt.tprintf(i18n.tr(len(job.errors) - 3, "    and %d more", "    and %d more"), len(job.errors) - 3))) }
 							break
 						}
 						ui.next({width = ui.px(w), height = ui.px(ui.dense(em * 1.7)), font_size = em * 0.85, fg = ui.color("bad text")})
@@ -154,7 +180,7 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 			ui.spacer(ui.px(em * 0.9))
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), height = ui.pct(1), font_size = em * 0.85})
-				ui.label(n > JOBS_VIEW_ROWS ? fmt.tprintf("The last %d of %d   Esc: to the background###jobs_help", JOBS_VIEW_ROWS, n) : "They run on in the background   Esc: hide###jobs_help")
+				ui.label(fmt.tprintf("%s###jobs_help", n > JOBS_VIEW_ROWS ? fmt.tprintf(i18n.tr("The last %d of %d   Esc: to the background"), JOBS_VIEW_ROWS, n) : i18n.tr("They run on in the background   Esc: hide")))
 			}
 		}
 	}

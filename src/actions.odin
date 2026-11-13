@@ -6,6 +6,7 @@ import "core:fmt"
 import "core:strings"
 import "core:sync"
 import "gt:desktop"
+import "gt:i18n"
 import "gt:platform"
 import tasks "gt:tasks"
 import "gt:ui"
@@ -106,7 +107,7 @@ open_system :: proc(app: ^App, path: string, in_archive: bool) {
 			if !ui.post(&job.app.main.state, proc(data: rawptr, word: u64) {
 				job := (^Take_Out)(data)
 				defer { delete(job.path); delete(job.out); free(job) }
-				if job.out == "" { say(job.app, "%s cannot be taken out of its archive.", fs.base(job.path)); return }
+				if job.out == "" { say(job.app, i18n.tr("%s cannot be taken out of its archive."), fs.base(job.path)); return }
 				open_system(job.app, job.out, false)
 			}, job) { delete(job.path); delete(job.out); free(job) }
 		}, job)
@@ -164,9 +165,9 @@ launch_failed :: proc(data: rawptr, word: u64) {
 	l := (^Launch)(data)
 	defer launch_free(l)
 	switch l.kind {
-	case .Open:      say(l.app, "No application opens %s.", fs.base(l.path))
-	case .Open_With: say(l.app, "%s cannot start.", l.name)
-	case .Terminal:  say(l.app, "No terminal was found: set $TERMINAL.")
+	case .Open:      say(l.app, i18n.tr("No application opens %s."), fs.base(l.path))
+	case .Open_With: say(l.app, i18n.tr("%s cannot start."), l.name)
+	case .Terminal:  say(l.app, i18n.tr("No terminal was found: set $TERMINAL."))
 	}
 	app_frames(l.app)
 }
@@ -374,7 +375,7 @@ act_rename :: proc(app: ^App) {
 	if read_only_here(app, t) { return }
 	// (the search of every folder below: its names are paths, renamed from their own folders only)
 	if t.folder.flat {
-		say(app, "Rename from the item's own folder: the search lists items of several folders.")
+		say(app, i18n.tr("Rename from the item's own folder: the search lists items of several folders."))
 		return
 	}
 	// several items: batch rename (batch.odin)
@@ -425,7 +426,7 @@ rename_commit :: proc(app: ^App, step := 0) {
 	to := strings.trim_space(ui.field_string(&r.field))
 	if to != fs.base(r.name) && to != "" {
 		if strings.contains_any(to, fs.SEPARATOR_STRING) || to == "." || to == ".." {
-			say(app, "A name cannot hold %s.", fs.SEPARATOR_STRING)
+			say(app, i18n.tr("A name cannot hold %s."), fs.SEPARATOR_STRING)
 			ui.field_select_all(&r.field)
 			r.refused, r.focus_due = true, true
 			return
@@ -541,9 +542,9 @@ rename_done :: proc(data: rawptr, word: u64) {
 	if waits { r.waiting = 0 }
 	if a.taken || a.err != .None {
 		if a.taken {
-			say(app, "%s is already there.", a.to)
+			say(app, i18n.tr("%s is already there."), a.to)
 		} else {
-			say(app, "%s cannot be renamed: %s.", fs.base(a.name), fs.ERROR_REASON[a.err])
+			say(app, i18n.tr("%s cannot be renamed: %s."), fs.base(a.name), i18n.tr(fs.ERROR_REASON[a.err]))
 		}
 		if waits {
 			ui.field_select_all(&r.field)
@@ -607,9 +608,9 @@ make_ask_free :: proc(a: ^Make_Ask) {
 @(private = "file")
 make_run :: proc(data: rawptr) {
 	a := (^Make_Ask)(data)
-	name := a.folder ? "New folder" : "New file.txt"
+	name := a.folder ? i18n.tr("New folder") : i18n.tr("New file.txt")
 	for n := 2; fs.exists(fs.join(a.dir, name, context.temp_allocator)); n += 1 {
-		name = a.folder ? fmt.tprintf("New folder %d", n) : fmt.tprintf("New file %d.txt", n)
+		name = a.folder ? fmt.tprintf(i18n.tr("New folder %d"), n) : fmt.tprintf(i18n.tr("New file %d.txt"), n)
 	}
 	path := fs.join(a.dir, name, context.temp_allocator)
 	a.err = a.folder ? fs.make_folder(path) : fs.make_file(path)
@@ -627,7 +628,7 @@ made_done :: proc(data: rawptr, word: u64) {
 	answer_came(app)
 	app.steps_due -= 1
 	if a.err != .None {
-		say(app, a.folder ? "The folder cannot be made here: %s." : "The file cannot be made here: %s.", fs.ERROR_REASON[a.err])
+		say(app, a.folder ? i18n.tr("The folder cannot be made here: %s.") : i18n.tr("The file cannot be made here: %s."), i18n.tr(fs.ERROR_REASON[a.err]))
 		return
 	}
 	path := fs.join(a.dir, a.name, context.temp_allocator)
@@ -670,7 +671,7 @@ act_copy_path :: proc(app: ^App) {
 	}
 	if len(targets) == 0 { strings.write_string(&b, t.path) }
 	platform.set_clipboard(app.main.win, strings.to_string(b))
-	announce(app, .Good, len(targets) > 1 ? "%d paths copied." : "The path is copied.", len(targets))
+	announce(app, .Good, len(targets) > 1 ? i18n.tr(len(targets), "%d path copied.", "%d paths copied.") : i18n.tr("The path is copied."), len(targets))
 }
 
 ////////////////////////////////
@@ -678,7 +679,7 @@ act_copy_path :: proc(app: ^App) {
 
 act_toggle_hidden :: proc(app: ^App) {
 	pref_set_bool(app, "files.show_hidden", !app.show_hidden)
-	say(app, app.show_hidden ? "Hidden files are shown." : "Hidden files are hidden.")
+	say(app, app.show_hidden ? i18n.tr("Hidden files are shown.") : i18n.tr("Hidden files are hidden."))
 }
 
 act_toggle_sidebar :: proc(app: ^App) { app.sidebar = !app.sidebar }
@@ -727,7 +728,7 @@ clipboard_put :: proc(app: ^App, cut: bool) {
 	// (what is cut is drawn dimmed until it is pasted: what was cut before is not any more)
 	cut_forget(app)
 	if cut { for p in paths { if p not_in app.cut { app.cut[strings.clone(p)] = true } } }
-	announce(app, .Good, "%d item%s %s.", len(paths), len(paths) == 1 ? "" : "s", cut ? "cut: paste them to move them" : "copied")
+	announce(app, .Good, cut ? i18n.tr(len(paths), "%d item cut: paste them to move them.", "%d items cut: paste them to move them.") : i18n.tr(len(paths), "%d item copied.", "%d items copied."), len(paths))
 }
 
 // The paths cut forgotten: none is drawn dimmed.
@@ -789,7 +790,7 @@ paste_answer :: proc(app: ^App, r: platform.Clipboard_Reply) {
 	defer delete(dir)
 	app.paste = {}
 	if !r.ok || len(r.files) == 0 {
-		say(app, "The clipboard holds no files.")
+		say(app, i18n.tr("The clipboard holds no files."))
 		return
 	}
 	// (a cut, here or in another file manager, moves; once moved, the files are no longer where the clipboard says)
@@ -801,7 +802,7 @@ paste_answer :: proc(app: ^App, r: platform.Clipboard_Reply) {
 @(private = "file")
 to_other_panel :: proc(app: ^App, kind: Job_Kind) {
 	t := current_tab(app)
-	if t == nil || len(app.panels) < 2 { say(app, "There is no other panel."); return }
+	if t == nil || len(app.panels) < 2 { say(app, i18n.tr("There is no other panel.")); return }
 	other := panel_tab(app.panels[(app.focus + 1) % len(app.panels)])
 	if other == nil || other.path == t.path { return }
 	job_add(app, kind, target_paths(t), other.path)
@@ -848,7 +849,7 @@ shows_trash :: proc(t: ^Tab) -> bool {
 act_put_back :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
-	if !shows_trash(t) { say(app, "Put back works in the trash (trash:///)."); return }
+	if !shows_trash(t) { say(app, i18n.tr("Put back works in the trash (trash:///).")); return }
 	paths := target_paths(t)
 	if len(paths) == 0 { return }
 	job_add(app, .Restore, paths)
@@ -858,9 +859,9 @@ act_put_back :: proc(app: ^App) {
 act_empty_trash :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
-	if !shows_trash(t) { say(app, "Open the trash (trash:///) to empty it."); return }
+	if !shows_trash(t) { say(app, i18n.tr("Open the trash (trash:///) to empty it.")); return }
 	entries := t.folder.listing.entries
-	if len(entries) == 0 { say(app, "The trash is empty."); return }
+	if len(entries) == 0 { say(app, i18n.tr("The trash is empty.")); return }
 	paths := make([]string, len(entries), context.temp_allocator)
 	names := make([]string, len(entries), context.temp_allocator)
 	for i in 0 ..< len(entries) {
@@ -882,12 +883,12 @@ bookmark_toggle :: proc(app: ^App, path: string) {
 		if p == path {
 			delete(p)
 			ordered_remove(&app.bookmarks, i)
-			announce(app, .Good, "Bookmark removed.")
+			announce(app, .Good, i18n.tr("Bookmark removed."))
 			return
 		}
 	}
 	append(&app.bookmarks, strings.clone(path))
-	announce(app, .Good, "%s is bookmarked.", fs.base(path))
+	announce(app, .Good, i18n.tr("%s is bookmarked."), fs.base(path))
 }
 
 act_bookmark :: proc(app: ^App) { if t := current_tab(app); t != nil { bookmark_toggle(app, t.path) } }
@@ -914,7 +915,7 @@ act_recents_clear :: proc(app: ^App) {
 // `path` on the clipboard, as text (a place of the sidebar).
 path_to_clipboard :: proc(app: ^App, path: string) {
 	platform.set_clipboard(app.main.win, path)
-	announce(app, .Good, "The path is copied.")
+	announce(app, .Good, i18n.tr("The path is copied."))
 }
 act_lock :: proc(app: ^App) { if t := current_tab(app); t != nil { t.locked = !t.locked } }
 
@@ -958,7 +959,7 @@ act_copy_name :: proc(app: ^App) {
 	}
 	if len(targets) == 0 { return }
 	platform.set_clipboard(app.main.win, strings.to_string(b))
-	announce(app, .Good, len(targets) > 1 ? "%d names copied." : "The name is copied.", len(targets))
+	announce(app, .Good, len(targets) > 1 ? i18n.tr(len(targets), "%d name copied.", "%d names copied.") : i18n.tr("The name is copied."), len(targets))
 }
 
 // In the search of every folder below: the folder of the item at the cursor, the item at the cursor there.
@@ -992,6 +993,6 @@ tab_pick :: proc(app: ^App, i: int) {
 // thread).
 read_only_here :: proc(app: ^App, t: ^Tab) -> bool {
 	if !t.in_archive { return false }
-	say(app, "%s", fs.ERROR_TEXT[.Read_Only])
+	say(app, "%s", i18n.tr(fs.ERROR_TEXT[.Read_Only]))
 	return true
 }

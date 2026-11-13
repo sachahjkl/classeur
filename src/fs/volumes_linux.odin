@@ -5,10 +5,11 @@ package fs
 
 import "core:os"
 import "core:strings"
+import "gt:i18n"
 
 volumes :: proc(allocator := context.allocator) -> []Volume {
 	out := make([dynamic]Volume, allocator)
-	append(&out, Volume{path = strings.clone("/", allocator), label = strings.clone("File system", allocator)})
+	append(&out, Volume{path = strings.clone("/", allocator), label = strings.clone(i18n.tr("File system"), allocator)})
 	data, err := os.read_entire_file("/proc/self/mountinfo", context.temp_allocator)
 	if err != nil { return out[:] }
 	text := string(data)

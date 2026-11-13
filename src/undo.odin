@@ -14,6 +14,7 @@ package classeur
 import "core:fmt"
 import "core:slice"
 import "core:strings"
+import "gt:i18n"
 import "gt:ui"
 import "fs"
 
@@ -26,8 +27,31 @@ Undo_Step :: struct {
 
 UNDO_KEPT :: 100
 
+// What an undo and a redo say, whole sentences ([1]: of several items). (i18n.later: tr where they are said.)
 @(private = "file")
-UNDO_SAID := [Undo_Kind]string{.Rename = "rename", .New_Folder = "new folder", .New_File = "new file", .Copy = "copy", .Move = "move", .Trash = "move to the trash"}
+UNDONE_SAID := [Undo_Kind][2]string{
+	.Rename = {i18n.later("Undone: the rename."), i18n.later("Undone: the rename of several items.")},
+	.New_Folder = {i18n.later("Undone: the new folder."), i18n.later("Undone: the new folder of several items.")},
+	.New_File = {i18n.later("Undone: the new file."), i18n.later("Undone: the new file of several items.")},
+	.Copy = {i18n.later("Undone: the copy."), i18n.later("Undone: the copy of several items.")},
+	.Move = {i18n.later("Undone: the move."), i18n.later("Undone: the move of several items.")},
+	.Trash = {i18n.later("Undone: the move to the trash."), i18n.later("Undone: the move to the trash of several items.")},
+}
+@(private = "file")
+REDONE_SAID := [Undo_Kind][2]string{
+	.Rename = {i18n.later("Done again: the rename."), i18n.later("Done again: the rename of several items.")},
+	.New_Folder = {i18n.later("Done again: the new folder."), i18n.later("Done again: the new folder of several items.")},
+	.New_File = {i18n.later("Done again: the new file."), i18n.later("Done again: the new file of several items.")},
+	.Copy = {i18n.later("Done again: the copy."), i18n.later("Done again: the copy of several items.")},
+	.Move = {i18n.later("Done again: the move."), i18n.later("Done again: the move of several items.")},
+	.Trash = {i18n.later("Done again: the move to the trash."), i18n.later("Done again: the move to the trash of several items.")},
+}
+
+@(private = "file")
+undo_said :: proc(redo: bool, kind: Undo_Kind, n: int) -> string {
+	t := redo ? REDONE_SAID : UNDONE_SAID
+	return i18n.tr(t[kind][n > 1 ? 1 : 0])
+}
 
 // A step done by the person: what could be done again is forgotten.
 undo_push :: proc(app: ^App, kind: Undo_Kind, pairs: [][2]string, redoing := false) {
@@ -81,17 +105,17 @@ job_running :: proc(app: ^App) -> bool {
 
 act_undo :: proc(app: ^App) {
 	if job_running(app) {
-		say(app, "A copy or a move is running: undo once it has ended.")
+		say(app, i18n.tr("A copy or a move is running: undo once it has ended."))
 		return
 	}
 	// (a rename or a new folder on the edits' worker: its step comes with its answer; an undo now would take the one
 	// before it)
 	if app.steps_due > 0 {
-		say(app, "A change to files is being made: undo once it is done.")
+		say(app, i18n.tr("A change to files is being made: undo once it is done."))
 		return
 	}
 	if len(app.undo) == 0 {
-		say(app, "Nothing to undo.")
+		say(app, i18n.tr("Nothing to undo."))
 		return
 	}
 	step := pop(&app.undo)
@@ -118,16 +142,16 @@ act_undo :: proc(app: ^App) {
 		job := job_add(app, .Restore, in_trash, undoing = true)
 		job.redo_step = step
 	}
-	announce(app, .Good, "Undone: the %s%s.", UNDO_SAID[step.kind], n > 1 ? " of several items" : "")
+	announce(app, .Good, "%s", undo_said(false, step.kind, n))
 }
 
 act_redo :: proc(app: ^App) {
 	if job_running(app) {
-		say(app, "A copy or a move is running: redo once it has ended.")
+		say(app, i18n.tr("A copy or a move is running: redo once it has ended."))
 		return
 	}
 	if len(app.redo) == 0 {
-		say(app, "Nothing to do again.")
+		say(app, i18n.tr("Nothing to do again."))
 		return
 	}
 	step := pop(&app.redo)
@@ -151,7 +175,7 @@ act_redo :: proc(app: ^App) {
 		job := job_add(app, .Trash, befores)
 		job.redoing = true
 	}
-	announce(app, .Good, "Done again: the %s%s.", UNDO_SAID[step.kind], n > 1 ? " of several items" : "")
+	announce(app, .Good, "%s", undo_said(true, step.kind, n))
 }
 
 // An undo or a redo of a rename, a new folder or a new file, on its way to the edits' worker and back.
@@ -184,24 +208,24 @@ undo_run :: proc(data: rawptr) {
 	pairs := a.step.pairs
 	switch {
 	case a.redo && a.step.kind == .Rename:
-		if !renames_swap(pairs, back = false) { a.why = strings.clone("The rename cannot be done again.") }
+		if !renames_swap(pairs, back = false) { a.why = strings.clone(i18n.tr("The rename cannot be done again.")) }
 	case a.redo:
 		e := a.step.kind == .New_Folder ? fs.make_folder(pairs[0][1]) : fs.make_file(pairs[0][1])
-		if e != .None { a.why = fmt.aprintf("%s cannot be made again.", fs.base(pairs[0][1])) }
+		if e != .None { a.why = fmt.aprintf(i18n.tr("%s cannot be made again."), fs.base(pairs[0][1])) }
 	case a.step.kind == .Rename:
 		// (a batch: every name back, the last renamed first)
 		for p in pairs {
 			if fs.exists(p[0]) && !slice.contains(afters_of(pairs), p[0]) {
-				a.why = fmt.aprintf("%s is there again: the rename cannot be undone.", fs.base(p[0]))
+				a.why = fmt.aprintf(i18n.tr("%s is there again: the rename cannot be undone."), fs.base(p[0]))
 				break
 			}
 		}
-		if a.why == "" && !renames_swap(pairs, back = true) { a.why = strings.clone("The rename cannot be undone.") }
+		if a.why == "" && !renames_swap(pairs, back = true) { a.why = strings.clone(i18n.tr("The rename cannot be undone.")) }
 	case:
 		path := pairs[0][1]
 		info, _ := fs.stat(path)
 		if (a.step.kind == .New_File && info.size > 0) || fs.remove(path) != .None {
-			a.why = fmt.aprintf("%s is not empty now: it stays.", fs.base(path))
+			a.why = fmt.aprintf(i18n.tr("%s is not empty now: it stays."), fs.base(path))
 		}
 	}
 	if !ui.post(&a.app.main.state, undo_done, a) { undo_ask_free(a) }
@@ -223,13 +247,13 @@ undo_done :: proc(data: rawptr, word: u64) {
 	if a.redo {
 		undo_push(app, kind, a.step.pairs, redoing = true)
 		undo_reveal(app, a.step.pairs[0][1])
-		announce(app, .Good, "Done again: the %s%s.", UNDO_SAID[kind], n > 1 ? " of several items" : "")
+		announce(app, .Good, "%s", undo_said(true, kind, n))
 		return
 	}
 	undo_reveal(app, kind == .Rename ? a.step.pairs[0][0] : a.step.pairs[0][1])
 	append(&app.redo, a.step)
 	a.step = {}   // (the redo stack's now)
-	announce(app, .Good, "Undone: the %s%s.", UNDO_SAID[kind], n > 1 ? " of several items" : "")
+	announce(app, .Good, "%s", undo_said(false, kind, n))
 }
 
 @(private = "file")

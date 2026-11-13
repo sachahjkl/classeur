@@ -12,6 +12,7 @@ import "core:strings"
 import "core:unicode/utf8"
 import desktop "gt:desktop"
 import "gt:draw"
+import "gt:i18n"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:render"
@@ -125,7 +126,7 @@ props_free :: proc(p: ^fs.Properties) {
 
 // Its edge: dragged from INSPECTOR_MIN_PX to most of the panel, folded to a strip, saved when let go.
 inspector_pane_options :: proc(app: ^App) -> ui.Pane_Options {
-	return ui.Pane_Options{side = .After, default_size = INSPECTOR_DEFAULT_PX, min_size = INSPECTOR_MIN_PX, collapsible = true, title = "Inspector",
+	return ui.Pane_Options{side = .After, default_size = INSPECTOR_DEFAULT_PX, min_size = INSPECTOR_MIN_PX, collapsible = true, title = i18n.tr("Inspector"),
 		user = app, on_save = proc(user: rawptr, p: ^ui.Pane) {
 			app := (^App)(user)
 			config.set_int(&app.prefs, config.ref_of(&app.prefs, "inspector.width"), i64(p.size[.X]))
@@ -172,9 +173,9 @@ inspector_ask :: proc(app: ^App, path: string, e: fs.Entry) {
 preview_caption :: proc(name: string) -> string {
 	switch strings.to_lower(fs.extension(name), context.temp_allocator) {
 	case "pdf":
-		return "First page"
+		return i18n.tr("First page")
 	case "mp4", "m4v", "mkv", "webm", "mov", "avi", "wmv", "flv", "mpg", "mpeg", "ogv", "3gp", "ts", "mts", "m2ts":
-		return "A frame of the video"
+		return i18n.tr("A frame of the video")
 	}
 	return ""
 }
@@ -329,13 +330,13 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 			inspector_head(app, t.path, true, name, "", em)
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), height = ui.px(em * 4), text_align = .Center})
-				ui.label(len(t.folder.shown) == 0 ? "This folder is empty.###insp_nothing" : "Nothing selected.###insp_nothing")
+				ui.label(fmt.tprintf("%s###insp_nothing", len(t.folder.shown) == 0 ? i18n.tr("This folder is empty.") : i18n.tr("Nothing selected.")))
 			}
 			return
 		}
 		// what it is: its icon, its name, its size, its pixels (a picture) and its date
 		size := e.size >= 0 ? size_text(e.size) : ""
-		if m, ok := measure_of(app, t, e^); ok { size = fmt.tprintf("%s · %d folders · %d files", size_text(m.bytes), m.folders, m.files) }
+		if m, ok := measure_of(app, t, e^); ok { size = fmt.tprintf("%s · %s · %s", size_text(m.bytes), fmt.tprintf(i18n.tr(int(m.folders), "%d folders", "%d folders"), m.folders), fmt.tprintf(i18n.tr(int(m.files), "%d files", "%d files"), m.files)) }
 		if insp.ready && insp.kind == .Picture && insp.pixels.x > 0 { size = fmt.tprintf("%s · %d × %d", size, insp.pixels.x, insp.pixels.y) }
 		meta := fmt.tprintf("%s · %s · %s", type_text(app, e^), size, date_text(app, e.mtime))
 		inspector_head(app, fs.join(t.path, e.name, context.temp_allocator), e.kind == .Directory, fs.base(e.name), meta, em)
@@ -343,7 +344,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 		if !insp.ready {
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), height = ui.px(em * 4), text_align = .Center})
-				ui.label("Reading…###insp_wait")
+				ui.label(fmt.tprintf("%s###insp_wait", i18n.tr("Reading…")))
 			}
 			return
 		}
@@ -391,7 +392,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 				if insp.cut {
 					if ui.tags("weak") {
 						ui.next({width = ui.fill(), height = ui.px(em * 3), text_align = .Center, font_size = em * 0.86})
-						ui.label(fmt.tprintf("The first %s are shown.###insp_cut", size_text(INSPECTOR_TEXT_BYTES)))
+						ui.label(fmt.tprintf("%s###insp_cut", fmt.tprintf(i18n.tr("The first %s are shown."), size_text(INSPECTOR_TEXT_BYTES))))
 					}
 				}
 			}
@@ -423,20 +424,20 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 				if n > INSPECTOR_SUMMARY_ROWS {
 					if ui.tags("weak") {
 						ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0)), text_pad = em * 3.0})
-						ui.label(fmt.tprintf("and %d more###insp_more", n - INSPECTOR_SUMMARY_ROWS))
+						ui.label(fmt.tprintf("%s###insp_more", fmt.tprintf(i18n.tr(n - INSPECTOR_SUMMARY_ROWS, "and %d more", "and %d more"), n - INSPECTOR_SUMMARY_ROWS)))
 					}
 				}
 				if len(insp.listing.entries) == 0 {
 					if ui.tags("weak") {
 						ui.next({width = ui.fill(), height = ui.px(em * 4), text_align = .Center})
-						ui.label("This folder is empty.###insp_empty")
+						ui.label(fmt.tprintf("%s###insp_empty", i18n.tr("This folder is empty.")))
 					}
 				}
 			}
 		case .Other, .None:
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), height = ui.px(em * 4), text_align = .Center})
-				ui.label("No preview for this kind of file.###insp_none")
+				ui.label(fmt.tprintf("%s###insp_none", i18n.tr("No preview for this kind of file.")))
 			}
 		}
 	}
@@ -511,10 +512,10 @@ INSPECTOR_SUMMARY_ROWS :: 200   // the rows a list of the pane names (the select
 inspector_summary :: proc(app: ^App, t: ^Tab, em: f32) {
 	s := summary_update(app, t)
 	parts := make([dynamic]string, context.temp_allocator)
-	if s.folders > 0 { append(&parts, fmt.tprintf("%d %s", s.folders, s.folders == 1 ? "folder" : "folders")) }
-	if s.files > 0 { append(&parts, fmt.tprintf("%d %s", s.files, s.files == 1 ? "file" : "files")) }
+	if s.folders > 0 { append(&parts, fmt.tprintf(i18n.tr(s.folders, "%d folder", "%d folders"), s.folders)) }
+	if s.files > 0 { append(&parts, fmt.tprintf(i18n.tr(s.files, "%d file", "%d files"), s.files)) }
 	append(&parts, size_text(s.bytes))
-	inspector_head(app, "", false, fmt.tprintf("%d items", s.count), strings.join(parts[:], " · ", context.temp_allocator), em)
+	inspector_head(app, "", false, fmt.tprintf(i18n.tr(s.count, "%d item", "%d items"), s.count), strings.join(parts[:], " · ", context.temp_allocator), em)
 	ui.next({width = ui.fill(), height = ui.fill()})
 	if ui.scroll_y("###insp_items") {
 		inspector_scroll_keys(app, ui.parent_box(), em)
@@ -533,7 +534,7 @@ inspector_summary :: proc(app: ^App, t: ^Tab, em: f32) {
 		if s.count > len(s.rows) {
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0)), text_pad = em * 3.0})
-				ui.label(fmt.tprintf("and %d more###insp_more", s.count - len(s.rows)))
+				ui.label(fmt.tprintf("%s###insp_more", fmt.tprintf(i18n.tr(s.count - len(s.rows), "and %d more", "and %d more"), s.count - len(s.rows))))
 			}
 		}
 	}
@@ -598,12 +599,12 @@ inspector_props :: proc(app: ^App, t: ^Tab, e: fs.Entry, em: f32) {
 	ui.next({width = ui.fill(), height = ui.children_sum(), axis = .Y})
 	if ui.column(.Start, {.Draw_Side_Bottom}, "###insp_props") {
 		ui.spacer(ui.px(em * 0.3))
-		line(app, "###p_where", "Where", home_path(app, fs.parent(insp.path)), em, mono = true)
-		line(app, "###p_modified", "Modified", date_text(app, e.mtime), em)
-		if p.created != 0 { line(app, "###p_created", "Created", date_text(app, p.created), em) }
-		if p.accessed != 0 { line(app, "###p_accessed", "Accessed", date_text(app, p.accessed), em) }
-		line(app, "###p_perm", PERMISSIONS_WORD, p.permissions, em, mono = true)
-		line(app, "###p_owner", "Owner", p.owner, em, mono = true)
+		line(app, "###p_where", i18n.tr("Where"), home_path(app, fs.parent(insp.path)), em, mono = true)
+		line(app, "###p_modified", i18n.tr("Modified"), date_text(app, e.mtime), em)
+		if p.created != 0 { line(app, "###p_created", i18n.tr("Created"), date_text(app, p.created), em) }
+		if p.accessed != 0 { line(app, "###p_accessed", i18n.tr("Accessed"), date_text(app, p.accessed), em) }
+		line(app, "###p_perm", i18n.tr(PERMISSIONS_WORD), p.permissions, em, mono = true)
+		line(app, "###p_owner", i18n.tr("Owner"), p.owner, em, mono = true)
 		ui.spacer(ui.px(em * 0.3))
 	}
 }

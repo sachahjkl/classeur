@@ -18,6 +18,7 @@ import crash "gt:crash"
 import "gt:devtools"
 import "gt:font"
 import "gt:host"
+import "gt:i18n"
 import "gt:instance"
 import tk_log "gt:log"
 import lucide "gt:lucide"
@@ -124,6 +125,7 @@ App :: struct {
 	jobs_view:   Jobs_View,         // the jobs' window (jobs_view.odin)
 	tab_drag:    Tab_Drag,          // a tab dragged (tab_drag.odin)
 	columns:      ui.Table_Layout,  // the details' columns: their order, the ones shown, their widths (view.columns)
+	column_defs:  [Detail]ui.Table_Column,   // DETAIL_COLUMNS, their titles in the person's language (the table's columns)
 	columns_menu_key: ui.Key,
 	columns_menu_tab: u64,          // the tab whose header's menu is open (its sort is the menu's)
 	zoom_slider_key: ui.Key,        // the zoom's slider over the footer (view_panel.odin)
@@ -358,8 +360,10 @@ app_open :: proc(o: Open_Options) -> ^App {
 	h.state.icon_font = app.icons   // (the menus' icons are the commands' Lucide ones; the widgets keep the toolkit's marks)
 	h.after_input = FRAMES_AFTER_INPUT
 	dnd_start(app)
-	ui.table_layout_init(&app.columns, detail_columns())   // (before the preferences: they say its columns)
+	ui.table_layout_init(&app.columns, detail_columns(app))   // (before the preferences: they say its columns)
 	prefs_open(app)   // (and h.partial_redraw: rendering.partial_redraw)
+	// (the language is known once the preferences are read: the columns' titles in it)
+	for &c in app.column_defs { c.title = i18n.tr(c.title) }
 	h.params = app_params
 	h.input = app_input
 	app.devtools = devtools.start_from_env(win, APP_NAME)

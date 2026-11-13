@@ -7,6 +7,7 @@ package fs
 import "core:os"
 import "core:strings"
 import "core:sys/linux"
+import "gt:i18n"
 
 // The folder gvfs mounts its shares under ("" when there is no runtime folder).
 gvfs_dir :: proc(allocator := context.temp_allocator) -> string {
@@ -87,11 +88,11 @@ find_mounted :: proc(u: Uri, allocator := context.allocator) -> (path: string, o
 // agent when the share wants one. ok = false: `why` says what gio said.
 share_mount :: proc(uri: string, allocator := context.temp_allocator) -> (ok: bool, why: string) {
 	state, stdout, stderr, err := os.process_exec({command = {"gio", "mount", uri}}, context.temp_allocator)
-	if err != nil { return false, strings.clone("gio is not there: gvfs mounts the shares", allocator) }
+	if err != nil { return false, strings.clone(i18n.tr("gio is not there: gvfs mounts the shares"), allocator) }
 	if state.exited && state.exit_code == 0 { return true, "" }
 	msg := strings.trim_space(string(stderr))
 	if msg == "" { msg = strings.trim_space(string(stdout)) }
-	if msg == "" { msg = "gio mount failed" }
+	if msg == "" { msg = i18n.tr("gio mount failed") }
 	return false, strings.clone(msg, allocator)
 }
 

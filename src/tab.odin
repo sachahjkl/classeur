@@ -7,6 +7,7 @@ package classeur
 import "core:strings"
 import "core:sync"
 import "core:time"
+import "gt:i18n"
 import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
@@ -160,7 +161,7 @@ tab_destroy :: proc(t: ^Tab) {
 }
 
 tab_title :: proc(app: ^App, t: ^Tab) -> string {
-	if t.path == app.home { return "Home" }
+	if t.path == app.home { return i18n.tr("Home") }
 	// (a share's root is named by its URI's label, asked with the folder's read: never here, each frame)
 	if t.share_root != "" && t.share_root == t.path { return t.share_label }
 	if n := fs.trash_title(t.path); n != "" { return n }

@@ -8,6 +8,7 @@ package classeur
 import "core:fmt"
 import "core:strings"
 import config "gt:config"
+import "gt:i18n"
 import lucide "gt:lucide"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
@@ -33,9 +34,9 @@ palette_open :: proc(app: ^App) {
 	p.recording = -1
 }
 
-// The groups of the commands, in the palette's order, and the group of each (by its id).
-@(rodata)
-COMMAND_GROUPS := [?]string{"Go", "Tabs and panels", "Files", "Selection", "View", "Find", "Program"}
+// The groups of the commands, in the palette's order, and the group of each (by its id). (Not rodata: i18n.later marks
+// them for the catalogue; tr where they are shown.)
+COMMAND_GROUPS := [?]string{i18n.later("Go"), i18n.later("Tabs and panels"), i18n.later("Files"), i18n.later("Selection"), i18n.later("View"), i18n.later("Find"), i18n.later("Program")}
 
 command_group :: proc(id: string) -> int {
 	has :: strings.has_prefix
@@ -82,7 +83,8 @@ palette_list :: proc(app: ^App) -> (l: Palette_List) {
 	order := make([dynamic]int, context.temp_allocator)
 	keys := make([dynamic]string, context.temp_allocator)
 	// (Tab 1 to Last tab would take nine lines of every search: they show once "tab" is typed)
-	tabs := strings.has_prefix(strings.to_lower(strings.trim_space(ui.field_string(&app.palette.field)), context.temp_allocator), "tab")
+	// (the word in the person's language: the titles they search are)
+	tabs := strings.has_prefix(strings.to_lower(strings.trim_space(ui.field_string(&app.palette.field)), context.temp_allocator), i18n.tr("palette: the word that shows Tab 1 to Last tab", "tab"))
 	for g in 0 ..< len(COMMAND_GROUPS) {
 		for &c, i in COMMANDS {
 			if command_group(c.id) != g || (!tabs && tab_pick_command(c.id)) { continue }
@@ -91,7 +93,7 @@ palette_list :: proc(app: ^App) -> (l: Palette_List) {
 			tags := make([dynamic]string, context.temp_allocator)
 			append(&tags, ..c.tags)
 			for alias, id in app.keymap.aliases { if id == c.id { append(&tags, alias) } }
-			append(&cmds, ui.Command{label = c.title, group = COMMAND_GROUPS[g], icon = c.icon, keys = c.keys, tags = tags[:]})
+			append(&cmds, ui.Command{label = i18n.tr(c.title), group = i18n.tr(COMMAND_GROUPS[g]), icon = c.icon, keys = c.keys, tags = tags[:]})
 			append(&order, i)
 			append(&keys, command_keys(app, &c))
 		}
@@ -100,7 +102,7 @@ palette_list :: proc(app: ^App) -> (l: Palette_List) {
 	append(&cmds, ..settings)
 	l.commands, l.order, l.settings = cmds[:], order[:], names
 	l.opts.keys = keys[:]
-	l.opts.foot = "Enter: run   Ctrl+Enter: a key of your own   Alt+Enter: the letters typed, its alias"
+	l.opts.foot = i18n.tr("Enter: run   Ctrl+Enter: a key of your own   Alt+Enter: the letters typed, its alias")
 	// (the commands run last, by their line)
 	recent := make([dynamic]int, context.temp_allocator)
 	for id in strings.split(config.string_of(&app.prefs, "palette.recent"), ",", context.temp_allocator) {
@@ -128,7 +130,7 @@ shortcuts_build :: proc(app: ^App) {
 				if command_group(c.id) != g { continue }
 				keys := c.keys
 				if b, ok := app.keymap.custom[c.id]; ok { keys = b.chords }
-				append(&list, ui.Command{label = c.title, group = COMMAND_GROUPS[g], icon = c.icon, keys = keys})
+				append(&list, ui.Command{label = i18n.tr(c.title), group = i18n.tr(COMMAND_GROUPS[g]), icon = c.icon, keys = keys})
 			}
 		}
 	}
@@ -164,7 +166,7 @@ palette_build :: proc(app: ^App) {
 		needle := strings.trim_space(ui.field_string(&p.field))
 		if needle != "" {
 			keymap_alias(app, needle, c.id)
-			say(app, "%s: an alias of %s.", needle, c.title)
+			say(app, i18n.tr("%s: an alias of %s."), needle, i18n.tr(c.title))
 		}
 		p.open = true
 	case:
@@ -197,7 +199,7 @@ palette_recorder :: proc(app: ^App) {
 				keep = true
 			case key == .Backspace && mods == {} && p.count == 0:
 				keymap_unbind(app, c.id)
-				say(app, "%s: its own keys again.", c.title)
+				say(app, i18n.tr("%s: its own keys again."), i18n.tr(c.title))
 				cancel = true
 			case:
 				if p.count == 2 { p.count = 0; p.chords = {} }
@@ -205,32 +207,32 @@ palette_recorder :: proc(app: ^App) {
 				p.count += 1
 			}
 		}
-		if ui.dialog_header("rec_title", fmt.tprintf("Keys for %s", ui.text_shown(c.title)), {icon = lucide.KEYBOARD, icon_font = app.icons, close = true}) {}
+		if ui.dialog_header("rec_title", fmt.tprintf(i18n.tr("Keys for %s"), ui.text_shown(i18n.tr(c.title))), {icon = lucide.KEYBOARD, icon_font = app.icons, close = true}) {}
 		if ui.dialog_body("rec_body") {
 			if ui.tags("weak") {
 				ui.next({width = ui.fill()})
-				ui.paragraph("Press them: two for a sequence. Backspace first gives it its own keys again.###rec_help")
+				ui.paragraph(fmt.tprintf("%s###rec_help", i18n.tr("Press them: two for a sequence. Backspace first gives it its own keys again.")))
 			}
 			ui.spacer(ui.px(em * 0.8))
 			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.6))})
 			if ui.row(.Center, id = "###rec_keys") {
 				ui.spacer(ui.fill())
-				ui.kbd(p.count == 0 ? "Press the keys…" : binding_text(Binding{p.chords}))
+				ui.kbd(p.count == 0 ? i18n.tr("Press the keys…") : binding_text(Binding{p.chords}))
 				ui.spacer(ui.fill())
 			}
 		}
 		if ui.dialog_buttons("rec_buttons") {
 			ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-			if ui.button("Cancel###rec_cancel", intent = .Cancel).clicked { cancel = true }
+			if ui.button(fmt.tprintf("%s###rec_cancel", i18n.tr("Cancel")), intent = .Cancel).clicked { cancel = true }
 			ui.spacer(ui.px(em * 0.6))
 			ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-			if ui.button("Keep (Enter)###rec_keep", intent = .Primary, disabled = p.count == 0).clicked { keep = true }
+			if ui.button(fmt.tprintf("%s###rec_keep", i18n.tr("Keep (Enter)")), intent = .Primary, disabled = p.count == 0).clicked { keep = true }
 		}
 	}
 	switch {
 	case keep && p.count > 0:
 		keymap_bind(app, c.id, Binding{p.chords})
-		say(app, "%s: %s.", c.title, binding_text(Binding{p.chords}))
+		say(app, "%s: %s.", i18n.tr(c.title), binding_text(Binding{p.chords}))
 		palette_recorder_end(app)
 	case cancel || !open:
 		palette_recorder_end(app)

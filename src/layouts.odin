@@ -9,6 +9,7 @@ import "core:fmt"
 import "core:os"
 import "core:slice"
 import "core:strings"
+import "gt:i18n"
 import lucide "gt:lucide"
 import "gt:platform"
 import store "gt:store"
@@ -81,14 +82,14 @@ layout_save :: proc(app: ^App, name: string) {
 			delete(x.text)
 			x.text = strings.clone(strings.to_string(b))
 			layouts_save(app)
-			announce(app, .Good, "Layout %s saved again.", name)
+			announce(app, .Good, i18n.tr("Layout %s saved again."), name)
 			return
 		}
 	}
 	append(&l.list, Layout{strings.clone(name), strings.clone(strings.to_string(b))})
 	slice.sort_by(l.list[:], proc(a, b: Layout) -> bool { return a.name < b.name })
 	layouts_save(app)
-	announce(app, .Good, "Layout %s saved.", name)
+	announce(app, .Good, i18n.tr("Layout %s saved."), name)
 }
 
 // Opens the layout `name` in place of the panels shown.
@@ -116,7 +117,7 @@ layout_delete :: proc(app: ^App, name: string) {
 		delete(x.text)
 		ordered_remove(&l.list, i)
 		layouts_save(app)
-		announce(app, .Good, "Layout %s deleted.", name)
+		announce(app, .Good, i18n.tr("Layout %s deleted."), name)
 		return
 	}
 }
@@ -124,14 +125,14 @@ layout_delete :: proc(app: ^App, name: string) {
 act_layout_save :: proc(app: ^App) {
 	l := &app.layouts
 	l.naming = true
-	ui.field_set(&l.field, fmt.tprintf("Layout %d", len(l.list) + 1))
+	ui.field_set(&l.field, fmt.tprintf(i18n.tr("Layout %d"), len(l.list) + 1))
 	ui.field_select_all(&l.field)
 }
 
 act_layout_open :: proc(app: ^App) {
 	l := &app.layouts
 	if len(l.list) == 0 {
-		say(app, "No layout is saved: Ctrl+Alt+S saves the panels shown.")
+		say(app, i18n.tr("No layout is saved: Ctrl+Alt+S saves the panels shown."))
 		return
 	}
 	if l.menu_key == 0 { l.menu_key = ui.key_from_string(0, "classeur_layouts_menu") }
@@ -149,7 +150,7 @@ layouts_build :: proc(app: ^App, em: f32) {
 			if ui.menu_item(fmt.tprintf("%s###lay%d", ui.text_shown(x.name), i), icon = lucide.LAYOUT_GRID).clicked { open = x.name }
 		}
 		ui.menu_separator()
-		if ui.menu_submenu("Delete a layout") {
+		if ui.menu_submenu(i18n.tr("Delete a layout")) {
 			for x, i in l.list {
 				if ui.menu_item(fmt.tprintf("%s###del%d", ui.text_shown(x.name), i)).clicked { layout_delete(app, strings.clone(x.name, context.temp_allocator)) }
 			}
@@ -159,9 +160,9 @@ layouts_build :: proc(app: ^App, em: f32) {
 	if !l.naming { return }
 	// (Enter in the field saves; an empty name saves nothing and keeps the question open)
 	answer := ui.prompt("layout_name", &l.naming, &l.field, {
-		title = "Save the panels shown as a layout",
-		note = "Its name: Ctrl+Alt+L lists the layouts to open one again in place of the panels.",
-		placeholder = "The layout's name", act = "Save",
+		title = i18n.tr("Save the panels shown as a layout"),
+		note = i18n.tr("Its name: Ctrl+Alt+L lists the layouts to open one again in place of the panels."),
+		placeholder = i18n.tr("The layout's name"), act = i18n.tr("Save"),
 	})
 	if answer == .Confirmed {
 		name := strings.trim_space(ui.field_string(&l.field))

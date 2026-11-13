@@ -5,6 +5,7 @@ package fs
 
 import "core:mem/virtual"
 import "core:strings"
+import "gt:i18n"
 
 Kind :: enum u8 {
 	File,
@@ -43,32 +44,32 @@ Error :: enum u8 {
 	Other,
 }
 
-// What a listing's error says in the list.
+// What a listing's error says in the list. (i18n.later: the catalogue's; tr where it is shown.)
 ERROR_TEXT := [Error]string {
 	.None         = "",
-	.Not_Found    = "This folder does not exist.",
-	.Denied       = "You do not have the permission to read this folder.",
-	.Not_A_Folder = "This is not a folder.",
-	.Exists       = "The name is taken.",
-	.Cross_Volume = "This is on another volume.",
-	.No_Space     = "The volume is full.",
-	.Cancelled    = "Cancelled.",
-	.Read_Only    = "An archive is read only: copy what is in it out of it.",
-	.Other        = "This folder cannot be read.",
+	.Not_Found    = i18n.later("This folder does not exist."),
+	.Denied       = i18n.later("You do not have the permission to read this folder."),
+	.Not_A_Folder = i18n.later("This is not a folder."),
+	.Exists       = i18n.later("The name is taken."),
+	.Cross_Volume = i18n.later("This is on another volume."),
+	.No_Space     = i18n.later("The volume is full."),
+	.Cancelled    = i18n.later("Cancelled."),
+	.Read_Only    = i18n.later("An archive is read only: copy what is in it out of it."),
+	.Other        = i18n.later("This folder cannot be read."),
 }
 
-// What an error says after a file's name ("cannot be copied: ...").
+// What an error says after a file's name ("cannot be copied: ..."). (i18n.later: tr where it is shown.)
 ERROR_REASON := [Error]string {
 	.None         = "",
-	.Not_Found    = "it is not there",
-	.Denied       = "permission denied",
-	.Not_A_Folder = "it is not a folder",
-	.Exists       = "the name is taken",
-	.Cross_Volume = "it is on another volume",
-	.No_Space     = "the volume is full",
-	.Cancelled    = "cancelled",
-	.Read_Only    = "an archive is read only",
-	.Other        = "the system refused",
+	.Not_Found    = i18n.later("it is not there"),
+	.Denied       = i18n.later("permission denied"),
+	.Not_A_Folder = i18n.later("it is not a folder"),
+	.Exists       = i18n.later("the name is taken"),
+	.Cross_Volume = i18n.later("it is on another volume"),
+	.No_Space     = i18n.later("the volume is full"),
+	.Cancelled    = i18n.later("cancelled"),
+	.Read_Only    = i18n.later("an archive is read only"),
+	.Other        = i18n.later("the system refused"),
 }
 
 // What a long operation (a copy) reports as it goes, and how it is stopped. Both are called on the thread that copies.

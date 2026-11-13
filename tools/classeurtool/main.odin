@@ -55,6 +55,9 @@ LICENCE_TOOL :: toolbox.Licence_Tool{
 	paddle   = {name = "Classeur Licence", description = "A personal, perpetual licence of classeur that supports its work.", amounts = "supporter=2900", currency = "EUR"},
 }
 
+// The program's catalogues: the texts of its code (src and its packages), one file per language in i18n/.
+I18N :: toolbox.I18n_Catalogues{dirs = {"src"}, folder = "i18n"}
+
 // The commands (main_test checks them).
 commands :: proc() -> []toolbox.Command {
 	p := project()
@@ -69,6 +72,7 @@ commands :: proc() -> []toolbox.Command {
 		r[0], r[1], r[2],
 		toolbox.Command{name = "update", usage = "keygen <file> | pubkey | manifest <program> <version> - <out> | verify <manifest> -: classeur's update key and manifests", run = proc(args: []string) -> int { return toolbox.update_command(classeur_update.PRODUCT, args) }},
 		changelog.command(p),
+		toolbox.i18n_command(I18N),
 		l[0], l[1],
 		toolbox.Command{name = "shop", usage = ": the shop's six pages written into site/ from shop() (shop.odin): again after it changes", run = run_shop},
 		tk_site.command({meta = site_meta(), pages = {version_mark = VERSION_MARK, downloads = SITE_DOWNLOADS[:]}, extra = site_downloads}),

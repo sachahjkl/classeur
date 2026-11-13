@@ -11,6 +11,7 @@ import config "gt:config"
 import "core:strings"
 import "core:slice"
 import "gt:draw"
+import "gt:i18n"
 import lucide "gt:lucide"
 import "gt:ui"
 import "fs"
@@ -53,17 +54,20 @@ ROW_FIXED_EM  :: 7
 // view.column_widths), the same in every panel; each tab keeps its own sort.
 Detail :: enum u8 { Name, Modified, Type, Folders, Files, Size }
 
-@(rodata)
+// (not rodata: i18n.later marks the titles for the catalogue; app_open gives the table its translated copy)
 DETAIL_COLUMNS := [Detail]ui.Table_Column{
-	.Name     = {title = "Name", width = 0},
-	.Modified = {title = "Modified", width = COL_MODIFIED_EM, descending_first = true},
-	.Type     = {title = "Type", width = COL_TYPE_EM},
-	.Folders  = {title = "Folders", width = COL_COUNT_EM, number = true, unsorted = true},
-	.Files    = {title = "Files", width = COL_COUNT_EM, number = true, unsorted = true},
-	.Size     = {title = "Size", width = COL_SIZE_EM, number = true},
+	.Name     = {title = i18n.later("Name"), width = 0},
+	.Modified = {title = i18n.later("Modified"), width = COL_MODIFIED_EM, descending_first = true},
+	.Type     = {title = i18n.later("Type"), width = COL_TYPE_EM},
+	.Folders  = {title = i18n.later("Folders"), width = COL_COUNT_EM, number = true, unsorted = true},
+	.Files    = {title = i18n.later("Files"), width = COL_COUNT_EM, number = true, unsorted = true},
+	.Size     = {title = i18n.later("Size"), width = COL_SIZE_EM, number = true},
 }
-// (the table's columns: a slice of the table of Detail)
-detail_columns :: proc() -> []ui.Table_Column { return slice.enumerated_array(&DETAIL_COLUMNS) }
+// (the table's columns: the app's copy of the table of Detail, whose titles app_open translates)
+detail_columns :: proc(app: ^App) -> []ui.Table_Column {
+	app.column_defs = DETAIL_COLUMNS
+	return slice.enumerated_array(&app.column_defs)
+}
 
 @(rodata)
 DETAIL_KEYS := [Detail]string{.Name = "name", .Modified = "modified", .Type = "type", .Folders = "folders", .Files = "files", .Size = "size"}
@@ -211,12 +215,12 @@ toolbar :: proc(app: ^App, p: ^Panel, t: ^Tab, index: int, em: f32) {
 			if icon_action(app, "back", lucide.ARROW_LEFT, command_tip(app, "back"), em, len(t.back) > 0) { tab_back(app, t) }
 			if icon_action(app, "forward", lucide.ARROW_RIGHT, command_tip(app, "forward"), em, len(t.forward) > 0) { tab_forward(app, t) }
 			if icon_action(app, "up", lucide.ARROW_UP, command_tip(app, "up"), em, fs.parent(t.path) != "") { tab_up(app, t) }
-			if icon_action(app, "history", lucide.CHEVRON_DOWN, "The folders before", em, len(t.back) > 0) {
+			if icon_action(app, "history", lucide.CHEVRON_DOWN, i18n.tr("The folders before"), em, len(t.back) > 0) {
 				app.focus = index
 				history_menu_open(app, t, ui.parent_box().rect)
 			}
 			vrule(em)
-			if icon_action(app, "lock", lucide.LOCK, t.locked ? "Unlock the tab: folders open in it" : "Lock the tab: folders open in a new tab", em, on = t.locked) { t.locked = !t.locked }
+			if icon_action(app, "lock", lucide.LOCK, t.locked ? i18n.tr("Unlock the tab: folders open in it") : i18n.tr("Lock the tab: folders open in a new tab"), em, on = t.locked) { t.locked = !t.locked }
 			marked := slice.contains(app.bookmarks[:], t.path)
 			if icon_action(app, "bookmark", lucide.BOOKMARK, command_tip(app, "bookmark"), em, on = marked) { bookmark_toggle(app, t.path) }
 			vrule(em)
@@ -228,7 +232,7 @@ toolbar :: proc(app: ^App, p: ^Panel, t: ^Tab, index: int, em: f32) {
 			crumbs(app, t, em)
 		}
 		if ui.tags("weak") {
-			if icon_action(app, fmt.tprintf("panelmenu%d", index), lucide.ELLIPSIS, "The panel's menu", em) {
+			if icon_action(app, fmt.tprintf("panelmenu%d", index), lucide.ELLIPSIS, i18n.tr("The panel's menu"), em) {
 				app.focus = index
 				panel_menu_open(app, ui.mouse_pos())
 			}
@@ -276,7 +280,7 @@ crumbs :: proc(app: ^App, t: ^Tab, em: f32) {
 			drop_zone(app, sig.box.rect, c.path)
 			if app.drop_hover == c.path { drop_mark(sig.box) }
 			if sig.clicked && !last { tab_go(app, t, c.path) }
-			hover_tip(sig, home_path(app, c.path), last ? "" : "A middle click opens it in a new tab")
+			hover_tip(sig, home_path(app, c.path), last ? "" : i18n.tr("A middle click opens it in a new tab"))
 			if sig.middle_clicked { tab_open(app, current_panel(app), c.path, current_panel(app).active + 1) }
 		}
 		ui.spacer(ui.fill())
@@ -366,7 +370,7 @@ address_field :: proc(app: ^App, t: ^Tab, em: f32) {
 		if len(rows) > n {
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.7)), font_size = em * 0.85})
-				ui.label(fmt.tprintf("   and %d more: type a few more letters###sugg_more", len(rows) - n))
+				ui.label(fmt.tprintf("%s###sugg_more", fmt.tprintf(i18n.tr(len(rows) - n, "   and %d more: type a few more letters", "   and %d more: type a few more letters"), len(rows) - n)))
 			}
 		}
 	}
@@ -424,7 +428,7 @@ header :: proc(app: ^App, t: ^Tab, em: f32) -> ui.Key {
 			h := (^Head)(user)
 			d := Detail(k)
 			if DETAIL_COLUMNS[d].unsorted { return }
-			column_funnel(h.app, h.t, DETAIL_SORT[d], DETAIL_COLUMNS[d].title, hot, em)
+			column_funnel(h.app, h.t, DETAIL_SORT[d], i18n.tr(DETAIL_COLUMNS[d].title), hot, em)
 		},
 	})
 	if ev.sorted { header_sort_apply(app, l, f) }   // (the third click leaves no sort: the names' order)
@@ -443,7 +447,7 @@ column_funnel :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key, title: string, hot: 
 	active := column_filtered(&t.folder, key)
 	if active || hot {
 		if !active { ui.push_tags("weak") }
-		if icon_action(app, fmt.tprintf("filter_%s", title), lucide.FILTER, fmt.tprintf("Filter by %s", title), em * 0.8, on = active) {
+		if icon_action(app, fmt.tprintf("filter_%s", title), lucide.FILTER, fmt.tprintf(i18n.tr("Filter by %s"), title), em * 0.8, on = active) {
 			column_filter_open(app, t, key)
 		}
 		if !active { ui.pop_tags() }
@@ -576,11 +580,11 @@ empty_state :: proc(app: ^App, t: ^Tab, em: f32) -> bool {
 	e: ui.Empty_State
 	switch c {
 	case .Reading:
-	case .Error:   e = {icon = lucide.ALERT_CIRCLE, title = fs.ERROR_TEXT[f.listing.error], actions = {{text = "Go up", icon = lucide.ARROW_UP, intent = .Primary}, {text = "Try again", icon = lucide.REFRESH_CW}}}
-	case .Empty:   e = {icon = lucide.FOLDER_OPEN, title = "This folder is empty", actions = {{text = "New folder", icon = lucide.FOLDER_PLUS, intent = .Primary}, {text = "Paste", icon = lucide.CLIPBOARD_PASTE}}}
-	case .Filter:  e = {icon = lucide.FOLDER_SEARCH, title = "No name matches", note = fmt.tprintf("Nothing here has the letters %q.", f.filter), actions = {{text = "Clear the filter", icon = lucide.X, intent = .Primary}}}
-	case .Funnels: e = {icon = lucide.FILTER, title = "No row fits the filters", note = "The types or the columns' funnels leave every row out.", actions = {{text = "Show every row", icon = lucide.FILTER, intent = .Primary}}}
-	case .Hidden:  e = {icon = lucide.EYE_OFF, title = "Only hidden files are here", actions = {{text = "Show hidden files", icon = lucide.EYE, intent = .Primary}}}
+	case .Error:   e = {icon = lucide.ALERT_CIRCLE, title = i18n.tr(fs.ERROR_TEXT[f.listing.error]), actions = {{text = i18n.tr("Go up"), icon = lucide.ARROW_UP, intent = .Primary}, {text = i18n.tr("Try again"), icon = lucide.REFRESH_CW}}}
+	case .Empty:   e = {icon = lucide.FOLDER_OPEN, title = i18n.tr("This folder is empty"), actions = {{text = i18n.tr("New folder"), icon = lucide.FOLDER_PLUS, intent = .Primary}, {text = i18n.tr("Paste"), icon = lucide.CLIPBOARD_PASTE}}}
+	case .Filter:  e = {icon = lucide.FOLDER_SEARCH, title = i18n.tr("No name matches"), note = fmt.tprintf(i18n.tr("Nothing here has the letters %q."), f.filter), actions = {{text = i18n.tr("Clear the filter"), icon = lucide.X, intent = .Primary}}}
+	case .Funnels: e = {icon = lucide.FILTER, title = i18n.tr("No row fits the filters"), note = i18n.tr("The types or the columns' funnels leave every row out."), actions = {{text = i18n.tr("Show every row"), icon = lucide.FILTER, intent = .Primary}}}
+	case .Hidden:  e = {icon = lucide.EYE_OFF, title = i18n.tr("Only hidden files are here"), actions = {{text = i18n.tr("Show hidden files"), icon = lucide.EYE, intent = .Primary}}}
 	}
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	empty := ui.build_box({.Clickable}, "###empty")
@@ -588,7 +592,7 @@ empty_state :: proc(app: ^App, t: ^Tab, em: f32) -> bool {
 		if c == .Reading {
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), height = ui.px(em * 5), text_align = .Center})
-				ui.label("Reading…###msg")
+				ui.label(fmt.tprintf("%s###msg", i18n.tr("Reading…")))
 			}
 		} else {
 			a := ui.empty_state("folder_empty", e)
@@ -681,13 +685,13 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, names_only: bool, em: f32
 						ui.next({height = ui.px(head * 0.8)})
 						glyph(app, folded ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN, em * 1.3)
 						ui.next({width = ui.fill(), height = ui.px(head * 0.8), font_size = em * 0.9})
-						ui.label(fmt.tprintf("%s###g", title))
+						ui.label(fmt.tprintf("%s###g", i18n.tr(title)))   // (the key stays English: the folded groups are kept by it)
 						ui.pop_tags()
 						if gsig.clicked {
 							fold = strings.clone(title, context.temp_allocator)   // (after the rows: they are being built)
 							clicked = true
 						}
-						hover_tip(gsig, folded ? "Unfold the group" : "Fold the group")
+						hover_tip(gsig, folded ? i18n.tr("Unfold the group") : i18n.tr("Fold the group"))
 					}
 					if !folded {
 						ui.next({width = ui.fill(), height = ui.fill()})
@@ -1053,7 +1057,7 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 					ui.label(fmt.tprintf("%d%%###jobs_pct", int(t * 100)))
 				}
 				if ui.tags("weak") {
-					if icon_action(app, "jobs", lucide.LAYERS_2, failed > 0 ? fmt.tprintf("The jobs: %d failed (%s)", failed, command_keys(app, command_find("jobs"))) : command_tip(app, "jobs"), em, on = failed > 0) { act_jobs(app) }
+					if icon_action(app, "jobs", lucide.LAYERS_2, failed > 0 ? fmt.tprintf(i18n.tr(failed, "The jobs: %d failed (%s)", "The jobs: %d failed (%s)"), failed, command_keys(app, command_find("jobs"))) : command_tip(app, "jobs"), em, on = failed > 0) { act_jobs(app) }
 				}
 				if b := ui.box_from_key(ui.key_from_string(ui.parent_box().key, "###jobs")); b != nil { app.jobs_view.anchor = b.rect }
 			}
@@ -1064,16 +1068,16 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 			if ui.style({font_size = em * 0.92}) {
 				// (counted when the rows change: folder_refilter)
 				folders, files, folders_shown, files_shown := f.folders, f.files, f.folders_shown, f.files_shown
-				if t.walk != nil { stat(app, "walk", lucide.LOADER, fmt.tprintf("%s…", count_text(i64(tab_walked(t)))), "Entries read so far", em) }
+				if t.walk != nil { stat(app, "walk", lucide.LOADER, fmt.tprintf("%s…", count_text(i64(tab_walked(t)))), i18n.tr("Entries read so far"), em) }
 				if f.count > 0 {
 					bytes, _ := folder_selection_size(f)
-					stat(app, "sel", lucide.LAYERS_2, bytes > 0 ? fmt.tprintf("%d · %s", f.count, size_text(bytes)) : fmt.tprintf("%d", f.count), "Selected, and the size of their files", em)
+					stat(app, "sel", lucide.LAYERS_2, bytes > 0 ? fmt.tprintf("%d · %s", f.count, size_text(bytes)) : fmt.tprintf("%d", f.count), i18n.tr("Selected, and the size of their files"), em)
 				}
-				stat(app, "fol", lucide.FOLDER, shown_count_text(folders_shown, folders), folders_shown < folders ? "Folders shown, of all: a filter leaves some out" : "Folders", em, lit = folders_shown < folders)
-				stat(app, "fil", lucide.FILE, shown_count_text(files_shown, files), files_shown < files ? "Files shown, of all: a filter leaves some out" : "Files", em, lit = files_shown < files)
+				stat(app, "fol", lucide.FOLDER, shown_count_text(folders_shown, folders), folders_shown < folders ? i18n.tr("Folders shown, of all: a filter leaves some out") : i18n.tr("Folders"), em, lit = folders_shown < folders)
+				stat(app, "fil", lucide.FILE, shown_count_text(files_shown, files), files_shown < files ? i18n.tr("Files shown, of all: a filter leaves some out") : i18n.tr("Files"), em, lit = files_shown < files)
 				if t.has_space && t.space.total > 0 {
 					used := 100 - int(100 * f64(t.space.free) / f64(t.space.total))
-					stat(app, "disk", lucide.HARD_DRIVE, fmt.tprintf("%d%%", used), fmt.tprintf("%s free of %s", size_text(t.space.free), size_text(t.space.total)), em)
+					stat(app, "disk", lucide.HARD_DRIVE, fmt.tprintf("%d%%", used), fmt.tprintf(i18n.tr("%s free of %s"), size_text(t.space.free), size_text(t.space.total)), em)
 				}
 				ui.spacer(ui.px(em * 0.5))
 				zoom_pill(app, t, em)
@@ -1130,7 +1134,7 @@ zoom_pill :: proc(app: ^App, t: ^Tab, em: f32) {
 	sig := ui.signal(b)
 	if sig.clicked { zoom_slider_open(app, t, b.rect) }
 	if sig.right_clicked { tab_set_zoom(app, t, max(t.zoom - 1, 0)) }
-	hover_tip(sig, "The view: a click shows the slider (Ctrl+wheel, Ctrl+= and Ctrl+- too)")
+	hover_tip(sig, i18n.tr("The view: a click shows the slider (Ctrl+wheel, Ctrl+= and Ctrl+- too)"))
 }
 
 @(private = "file")
@@ -1159,8 +1163,8 @@ slider_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 }
 
 // What each step of the zoom is called, and its icon.
-@(rodata)
-ZOOM_NAMES := [?]string{"Details", "Names", "Columns", "Small cards", "Cards", "Large cards", "Huge cards"}
+// (not rodata: i18n.later marks them for the catalogue; tr where they are shown)
+ZOOM_NAMES := [?]string{i18n.later("Details"), i18n.later("Names"), i18n.later("Columns"), i18n.later("Small cards"), i18n.later("Cards"), i18n.later("Large cards"), i18n.later("Huge cards")}
 @(rodata)
 ZOOM_ICONS := [?]string{lucide.TABLE_2, lucide.LIST, lucide.COLUMNS_2, lucide.LAYOUT_GRID, lucide.LAYOUT_GRID, lucide.IMAGE, lucide.IMAGE}
 
@@ -1213,7 +1217,7 @@ zoom_slider_build :: proc(app: ^App, em: f32) {
 						if !on { ui.pop_tags() }
 						ui.spacer(ui.px(em * 0.3))
 						ui.next({width = ui.fill(), height = ui.pct(1)})
-						ui.label(fmt.tprintf("%s###zn", ZOOM_NAMES[step]))
+						ui.label(fmt.tprintf("%s###zn", i18n.tr(ZOOM_NAMES[step])))
 						ui.push_tags("weak")
 						ui.next({width = ui.text_size(em * 0.5), height = ui.pct(1), font_size = em * 0.85})
 						ui.label(fmt.tprintf("%d%%###zp", ZOOMS[step].percent))
@@ -1308,7 +1312,7 @@ filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 		}
 		if res.committed { act_open(app) }
 		if ui.tags("weak") {
-			if icon_action(app, "types", lucide.FILTER, "The types shown: files, folders, extensions", em, on = folder_types_filtered(&t.folder)) {
+			if icon_action(app, "types", lucide.FILTER, i18n.tr("The types shown: files, folders, extensions"), em, on = folder_types_filtered(&t.folder)) {
 				types_menu_open(app, t)
 			}
 			if icon_action(app, "flat", lucide.FOLDER_TREE, command_tip(app, "flat"), em, on = t.flat) {
@@ -1318,7 +1322,7 @@ filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 			}
 			// (the field's own cross empties it; this one leaves the search of every folder below, its letters with it)
 			if t.flat {
-				if icon_action(app, "filter_clear", lucide.X, "Clear the filter, leave the search (Escape)", em) {
+				if icon_action(app, "filter_clear", lucide.X, i18n.tr("Clear the filter, leave the search (Escape)"), em) {
 					ui.field_clear(&t.filter)
 					if t.flat { t.flat = false; tab_load(app, t) }
 				}
@@ -1348,7 +1352,7 @@ home_crumbs :: proc(app: ^App, t: ^Tab) -> []fs.Crumb {
 	home := fs.crumbs(app.home)
 	if len(home) == 0 || len(parts) < len(home) || parts[len(home) - 1].path != app.home { return parts }
 	out := parts[len(home) - 1:]
-	out[0].name = "Home"
+	out[0].name = i18n.tr("Home")
 	return out
 }
 
@@ -1389,8 +1393,8 @@ entry_tip :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, sig: ui.Signal) {
 	if !ui.hovered_for(sig) { return }
 	name := fs.base(e.name)
 	where_ := ""
-	if t.folder.flat && fs.parent(e.name) != "" { where_ = fmt.tprintf("In %s", home_path(app, fs.join(t.path, fs.parent(e.name), context.temp_allocator))) }
-	if x, ok := fs.entry_trashed(&t.folder.listing, e); ok && x.from != "" { where_ = fmt.tprintf("Deleted from %s", home_path(app, x.from)) }
+	if t.folder.flat && fs.parent(e.name) != "" { where_ = fmt.tprintf(i18n.tr("In %s"), home_path(app, fs.join(t.path, fs.parent(e.name), context.temp_allocator))) }
+	if x, ok := fs.entry_trashed(&t.folder.listing, e); ok && x.from != "" { where_ = fmt.tprintf(i18n.tr("Deleted from %s"), home_path(app, x.from)) }
 	facts := e.kind == .Directory ? fmt.tprintf("%s · %s", type_text(app, e^), date_text(app, e.mtime)) : fmt.tprintf("%s · %s · %s", type_text(app, e^), size_text(e.size), date_text(app, e.mtime))
 	hover_tip(sig, name, facts, where_)
 }
@@ -1404,7 +1408,7 @@ tree_lead :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, em: f32) {
 	if e.kind == .Directory {
 		open := tab_tree_is_open(t, e.name)
 		if ui.tags("weak") {
-			if icon_action(app, fmt.tprintf("tree_%s", e.name), open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, open ? "Close it here (Left)" : "Open it here (Right)", em * 0.8) {
+			if icon_action(app, fmt.tprintf("tree_%s", e.name), open ? lucide.CHEVRON_DOWN : lucide.CHEVRON_RIGHT, open ? i18n.tr("Close it here (Left)") : i18n.tr("Open it here (Right)"), em * 0.8) {
 				tab_tree_toggle(app, t, strings.clone(e.name, context.temp_allocator))
 			}
 		}

@@ -7,6 +7,7 @@ package classeur
 import "core:fmt"
 import "core:strings"
 import "core:sync"
+import "gt:i18n"
 import lucide "gt:lucide"
 import "gt:ui"
 import "fs"
@@ -66,10 +67,10 @@ CRASH_WIDTH_EM :: 34
 crash_build :: proc(app: ^App, em: f32) {
 	if !app.crash_asking { return }
 	if ui.modal("crash_report", em * CRASH_WIDTH_EM, &app.crash_asking) {
-		if ui.dialog_header("crash_title", "classeur stopped unexpectedly", {icon = lucide.BUG, icon_font = app.icons, close = true}) {}
+		if ui.dialog_header("crash_title", i18n.tr("classeur stopped unexpectedly"), {icon = lucide.BUG, icon_font = app.icons, close = true}) {}
 		if ui.dialog_body("crash_body") {
 			ui.next({width = ui.fill()})
-			ui.paragraph("Its last session ended without closing. What happened is written in a report on this computer; nothing was sent anywhere.###crash_note")
+			ui.paragraph(fmt.tprintf("%s###crash_note", i18n.tr("Its last session ended without closing. What happened is written in a report on this computer; nothing was sent anywhere.")))
 			ui.spacer(ui.px(em * 0.6))
 			if ui.tags("weak") {
 				ui.next({width = ui.fill(), font = app.mono})
@@ -77,12 +78,12 @@ crash_build :: proc(app: ^App, em: f32) {
 			}
 		}
 		if ui.dialog_buttons("crash_buttons") {
-			if ui.button_icon("crash_copy", lucide.COPY, "Copy its path", icon_font = app.icons).clicked {
+			if ui.button_icon("crash_copy", lucide.COPY, i18n.tr("Copy its path"), icon_font = app.icons).clicked {
 				ui.window_clipboard_set(app.crash_report)
-				announce(app, .Good, "The report's path is copied.")
+				announce(app, .Good, i18n.tr("The report's path is copied."))
 			}
 			ui.spacer(ui.px(em * 0.6))
-			if ui.button_icon("crash_open", lucide.FILE_TEXT, "Open the report (Enter)", icon_font = app.icons, intent = .Primary).clicked || ui.key_press(.Return) {
+			if ui.button_icon("crash_open", lucide.FILE_TEXT, i18n.tr("Open the report (Enter)"), icon_font = app.icons, intent = .Primary).clicked || ui.key_press(.Return) {
 				ui.open(app.crash_report)
 				app.crash_asking = false
 			}
@@ -97,12 +98,12 @@ confirm_build :: proc(app: ^App, em: f32) {
 	if !c.open || len(c.paths) == 0 { c.open = false; return }
 	n := len(c.paths)
 	names := c.names[:]
-	title := n == 1 ? fmt.tprintf("Delete %s for good?", names[0]) : fmt.tprintf("Delete %d items for good?", n)
-	note := n == 1 ? "It does not go to the trash: this cannot be undone." : "They do not go to the trash: this cannot be undone."
-	act := "Delete"
+	title := n == 1 ? fmt.tprintf(i18n.tr("Delete %s for good?"), names[0]) : fmt.tprintf(i18n.tr(n, "Delete %d item for good?", "Delete %d items for good?"), n)
+	note := n == 1 ? i18n.tr("It does not go to the trash: this cannot be undone.") : i18n.tr("They do not go to the trash: this cannot be undone.")
+	act := i18n.tr("Delete")
 	if c.trash {
-		title, act = "Empty the trash?", "Empty the trash"
-		note = n == 1 ? "Its item is deleted for good: this cannot be undone." : fmt.tprintf("Its %d items are deleted for good: this cannot be undone.", n)
+		title, act = i18n.tr("Empty the trash?"), i18n.tr("Empty the trash")
+		note = n == 1 ? i18n.tr("Its item is deleted for good: this cannot be undone.") : fmt.tprintf(i18n.tr(n, "Its %d item is deleted for good: this cannot be undone.", "Its %d items are deleted for good: this cannot be undone."), n)
 	}
 	if ui.confirm("confirm_delete", &c.open, {title = title, note = note, lines = names, act = act}) == .Confirmed {
 		job_add(app, .Delete, c.paths[:])
@@ -138,37 +139,37 @@ conflict_build :: proc(app: ^App, em: f32) {
 	}
 	answer := Conflict.Ask
 	if ui.modal("conflict", em * CONFLICT_WIDTH_EM, &v.open) {
-		title := fmt.tprintf("%s is already in %s", ui.text_shown(fs.base(job.ask_name)), ui.text_shown(fs.base(fs.parent(job.ask_name))))
+		title := fmt.tprintf(i18n.tr("%s is already in %s"), ui.text_shown(fs.base(job.ask_name)), ui.text_shown(fs.base(fs.parent(job.ask_name))))
 		if ui.dialog_header("title", title, {icon = lucide.FILES, icon_font = app.icons, close = true}) {}
 		if ui.dialog_body("body") {
 			// (the two files side by side, as the job read them: which to keep is seen before it is chosen)
 			sync.mutex_lock(&job.mutex)
 			there, coming := job.ask_there, job.ask_coming
 			sync.mutex_unlock(&job.mutex)
-			conflict_file_line(app, "There", there, coming, em, "###there")
-			conflict_file_line(app, job.kind == .Move ? "Moved" : job.kind == .Restore ? "Put back" : "Copied", coming, there, em, "###coming")
+			conflict_file_line(app, i18n.tr("There"), there, coming, em, "###there")
+			conflict_file_line(app, job.kind == .Move ? i18n.tr("Moved") : job.kind == .Restore ? i18n.tr("the file coming, put back from the trash", "Put back") : i18n.tr("Copied"), coming, there, em, "###coming")
 			ui.spacer(ui.px(em * 0.4))
 			if ui.tags("weak") {
 				ui.next({width = ui.fill()})
-				ui.paragraph("Replace it, keep both (the new one numbered), or skip it.###text")
+				ui.paragraph(fmt.tprintf("%s###text", i18n.tr("Replace it, keep both (the new one numbered), or skip it.")))
 			}
 			ui.spacer(ui.px(em * 0.6))
 			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0))})
-			if ui.row(.Center) { ui.checkbox("###all", "Do the same for the next ones", &v.all) }
+			if ui.row(.Center) { ui.checkbox("###all", i18n.tr("Do the same for the next ones"), &v.all) }
 		}
 		if ui.dialog_buttons("buttons") {
 			bw :: proc(em: f32) { ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))}) }
 			bw(em)
-			if ui.button("Cancel the job###cancel", intent = .Cancel).clicked { job_cancel(job); v.open = false }
+			if ui.button(fmt.tprintf("%s###cancel", i18n.tr("Cancel the job")), intent = .Cancel).clicked { job_cancel(job); v.open = false }
 			ui.spacer(ui.px(em * 0.6))
 			bw(em)
-			if ui.button("Skip###skip").clicked { answer = .Skip }
+			if ui.button(fmt.tprintf("%s###skip", i18n.tr("Skip"))).clicked { answer = .Skip }
 			ui.spacer(ui.px(em * 0.6))
 			bw(em)
-			if ui.button("Keep both (Enter)###both", intent = .Primary).clicked || ui.key_press(.Return) { answer = .Keep_Both }
+			if ui.button(fmt.tprintf("%s###both", i18n.tr("Keep both (Enter)")), intent = .Primary).clicked || ui.key_press(.Return) { answer = .Keep_Both }
 			ui.spacer(ui.px(em * 0.6))
 			bw(em)
-			if ui.button("Replace###replace", intent = .Danger).clicked { answer = .Replace }
+			if ui.button(fmt.tprintf("%s###replace", i18n.tr("Replace")), intent = .Danger).clicked { answer = .Replace }
 		}
 	}
 	// (Escape closes it: the file is skipped)
@@ -183,7 +184,7 @@ conflict_build :: proc(app: ^App, em: f32) {
 // the newer of the two.
 @(private = "file")
 conflict_file_line :: proc(app: ^App, word: string, f, other: fs.Info, em: f32, id: string) {
-	what := f.kind == .Directory ? "Folder" : size_text(f.size)
+	what := f.kind == .Directory ? i18n.tr("Folder") : size_text(f.size)
 	text := what
 	if date := date_text(app, f.mtime); date != "" { text = fmt.tprintf("%s · %s", what, date) }
 	ui.next({width = ui.fill(), height = ui.px(em * 1.5)})
@@ -193,7 +194,7 @@ conflict_file_line :: proc(app: ^App, word: string, f, other: fs.Info, em: f32, 
 		if other.mtime != 0 && f.mtime > other.mtime {
 			ui.spacer(ui.px(em * 0.3))
 			ui.next({width = ui.text_size(0, 0), height = ui.pct(1), fg = ui.color("accent")})
-			ui.label("· newer###newer")
+			ui.label(fmt.tprintf("%s###newer", i18n.tr("· newer")))
 		}
 	}
 }

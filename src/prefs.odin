@@ -8,20 +8,22 @@ import vmem "core:mem/virtual"
 import "core:strings"
 import config "gt:config"
 import "gt:font"
+import "gt:i18n"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
 
 // classeur's own preferences. The look, the text, the scrolling, the hand's feel, the updates and the desktop are the
-// toolkit's standard ones (prefs_page.standard_register, docs/settings.md of gui_toolkit): one name per concept.
+// toolkit's standard ones (prefs_page.standard_register, docs/settings.md of gui_toolkit): one name per concept. The
+// descriptions shown are marked by i18n.later for the catalogue (a hidden one is never shown).
 PREF_DEFS := [?]config.Def{
-	{name = "appearance.alternating_rows", tags = {"zebra", "stripes"}, description = "Paints every other row a shade lighter, to tell the rows apart.", kind = .Bool, default = {b = false}},
-	{name = "appearance.inactive_opacity", tags = {"dim", "panels", "focus"}, description = "Dims the contents of the panels that do not have the keyboard, so that the one that has it stands out.", kind = .Float, default = {f = 0.8}, min = 0.3, max = 1, bounded = true},
-	{name = "files.show_extensions", tags = {"suffix", "names"}, description = "Shows the extensions of the files' names.", kind = .Bool, default = {b = true}},
-	{name = "files.show_hidden", tags = {"dotfiles", "hidden"}, description = "Shows the hidden files (their names start with a dot; on Windows, their attribute).", kind = .Bool, default = {b = false}},
-	{name = "files.folders_first", tags = {"directories", "sort", "order"}, description = "Lists the folders before the files, whatever the sort.", kind = .Bool, default = {b = true}},
-	{name = "files.date_format", tags = {"dates", "time", "modified", "relative"}, description = "How the dates read: 2026-11-09 21:40; Today 21:40, Yesterday, the weekday for the last week, then 9 Nov 2026; or 9 Nov 2026 21:40.", kind = .String, default = {s = "ISO"}, choices = {"ISO", "relative", "day month year"}},
-	{name = "files.measure_folders", tags = {"size", "du", "count"}, description = "Measures the folders shown: what they hold all the way down, in the Folders, Files and Size columns.", kind = .Bool, default = {b = true}},
+	{name = "appearance.alternating_rows", tags = {"zebra", "stripes"}, description = i18n.later("Paints every other row a shade lighter, to tell the rows apart."), kind = .Bool, default = {b = false}},
+	{name = "appearance.inactive_opacity", tags = {"dim", "panels", "focus"}, description = i18n.later("Dims the contents of the panels that do not have the keyboard, so that the one that has it stands out."), kind = .Float, default = {f = 0.8}, min = 0.3, max = 1, bounded = true},
+	{name = "files.show_extensions", tags = {"suffix", "names"}, description = i18n.later("Shows the extensions of the files' names."), kind = .Bool, default = {b = true}},
+	{name = "files.show_hidden", tags = {"dotfiles", "hidden"}, description = i18n.later("Shows the hidden files (their names start with a dot; on Windows, their attribute)."), kind = .Bool, default = {b = false}},
+	{name = "files.folders_first", tags = {"directories", "sort", "order"}, description = i18n.later("Lists the folders before the files, whatever the sort."), kind = .Bool, default = {b = true}},
+	{name = "files.date_format", tags = {"dates", "time", "modified", "relative"}, description = i18n.later("How the dates read: 2026-11-09 21:40; Today 21:40, Yesterday, the weekday for the last week, then 9 Nov 2026; or 9 Nov 2026 21:40."), kind = .String, default = {s = "ISO"}, choices = {"ISO", "relative", "day month year"}},
+	{name = "files.measure_folders", tags = {"size", "du", "count"}, description = i18n.later("Measures the folders shown: what they hold all the way down, in the Folders, Files and Size columns."), kind = .Bool, default = {b = true}},
 	{name = "view.columns", description = "The columns of the details shown after the name, in their order.", kind = .String, default = {s = DETAIL_COLUMNS_DEFAULT}, hidden = true},
 	{name = "view.column_widths", description = "The widths of the details' columns the person changed (ems).", kind = .String, default = {s = ""}, hidden = true},
 	{name = "keys.custom", description = "The person's keys of the commands (palette: Ctrl+Enter).", kind = .String, default = {s = ""}, hidden = true},
@@ -31,8 +33,11 @@ PREF_DEFS := [?]config.Def{
 	{name = "inspector.width", description = "The inspector's width as last dragged (logical pixels).", kind = .Int, default = {i = INSPECTOR_DEFAULT_PX}, hidden = true},
 	{name = "side.order", description = "The sidebar's sections in their order.", kind = .String, default = {s = "recents,bookmarks,storage,network,places"}, hidden = true},
 	{name = "palette.recent", description = "The commands run last from the palette.", kind = .String, default = {s = ""}, hidden = true},
-	{name = "open.single_click", tags = {"click", "double click"}, description = "Opens an item with one click instead of two.", kind = .Bool, default = {b = false}},
+	{name = "open.single_click", tags = {"click", "double click"}, description = i18n.later("Opens an item with one click instead of two."), kind = .Bool, default = {b = false}},
 }
+
+// classeur's texts in other languages (docs/i18n.md of gui_toolkit), embedded: `classeurtool i18n fr` writes them.
+CATALOGUES :: []i18n.Catalog{{"fr", #load("../i18n/fr.txt", string)}}
 
 // classeur's look where it differs from the toolkit's (prefs_page.STANDARD_DEFAULTS): dark, flat, squarer, smaller text.
 @(private = "file")
@@ -103,7 +108,12 @@ prefs_open :: proc(app: ^App) {
 		if r := config.ref_of(&app.prefs, name); r != config.NO_REF { config.entry(&app.prefs, r).def.hidden = true }
 	}
 	config.register(&app.prefs, PREF_DEFS[:])
-	if !app.headless { config.load_file(&app.prefs, prefs_file(), .User) }
+	if !app.headless {
+		config.load_file(&app.prefs, prefs_file(), .User)
+		// (general.language read, before any text is formatted for the window; the tests stay in English whatever the
+		// machine's language: they compare the texts)
+		prefs_page.language_start(&app.prefs, CATALOGUES)
+	}
 	// (the person's own themes, beside the preferences; none in the tests)
 	themes_path := ""
 	if !app.headless { themes_path = themes_file() }
@@ -151,7 +161,7 @@ fonts_apply :: proc(app: ^App) {
 // the interface's thread never waits for the disk; many changes, one write).
 prefs_tidy :: proc(app: ^App) {
 	config.user_writer_save(&app.prefs_writer, &app.prefs)
-	if config.user_writer_failed(&app.prefs_writer) { say(app, "The settings cannot be written to %s", prefs_path(app)) }
+	if config.user_writer_failed(&app.prefs_writer) { say(app, i18n.tr("The settings cannot be written to %s"), prefs_path(app)) }
 }
 
 // The values where the program reads them, the program changed to follow them.

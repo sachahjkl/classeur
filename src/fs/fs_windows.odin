@@ -5,6 +5,7 @@ package fs
 
 import "core:strings"
 import win "core:sys/windows"
+import "gt:i18n"
 
 foreign import kernel32 "system:Kernel32.lib"
 
@@ -101,12 +102,12 @@ properties_native :: proc(path: string) -> (p: Properties, ok: bool) {
 	p.created, p.accessed = filetime_ns(data.ftCreationTime), filetime_ns(data.ftLastAccessTime)
 	words := make([dynamic]string, context.temp_allocator)
 	a := data.dwFileAttributes
-	if a & win.FILE_ATTRIBUTE_READONLY != 0 { append(&words, "Read only") }
-	if a & win.FILE_ATTRIBUTE_HIDDEN != 0 { append(&words, "Hidden") }
-	if a & win.FILE_ATTRIBUTE_SYSTEM != 0 { append(&words, "System") }
-	if a & win.FILE_ATTRIBUTE_ARCHIVE != 0 { append(&words, "Archive") }
-	if a & win.FILE_ATTRIBUTE_COMPRESSED != 0 { append(&words, "Compressed") }
-	if a & win.FILE_ATTRIBUTE_ENCRYPTED != 0 { append(&words, "Encrypted") }
+	if a & win.FILE_ATTRIBUTE_READONLY != 0 { append(&words, i18n.tr("Read only")) }
+	if a & win.FILE_ATTRIBUTE_HIDDEN != 0 { append(&words, i18n.tr("Hidden")) }
+	if a & win.FILE_ATTRIBUTE_SYSTEM != 0 { append(&words, i18n.tr("System")) }
+	if a & win.FILE_ATTRIBUTE_ARCHIVE != 0 { append(&words, i18n.tr("Archive")) }
+	if a & win.FILE_ATTRIBUTE_COMPRESSED != 0 { append(&words, i18n.tr("Compressed")) }
+	if a & win.FILE_ATTRIBUTE_ENCRYPTED != 0 { append(&words, i18n.tr("Encrypted")) }
 	p.permissions = strings.join(words[:], ", ", context.temp_allocator)
 	return p, true
 }
