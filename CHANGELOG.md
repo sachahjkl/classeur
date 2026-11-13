@@ -3,6 +3,15 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.18.0] - 2026-11-13
+
+### Added
+- **A long copy says when it ends, even behind other windows**: a copy, move or delete that lasted long enough to show in the jobs' view, ended while classeur is not the window in front, is told by a notification of the system.
+
+### Changed
+- **Every context menu has a search field**: typing in an open menu keeps the items with those letters.
+- **The buttons of an empty folder have their icons**: New folder, Paste, Go up, Try again and the others, under an empty folder or a filter that hides every row, show an icon, the first one highlighted.
+
 ## [0.17.2] - 2026-11-12
 
 ### Fixed
@@ -405,6 +414,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.18.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.18.0
 [0.17.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.17.2
 [0.17.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.17.1
 [0.17.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.17.0
