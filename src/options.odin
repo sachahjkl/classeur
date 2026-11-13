@@ -32,11 +32,12 @@ act_options :: proc(app: ^App) {
 	if o.open { prefs_page.focus_search(&o.page) }
 }
 
-// The pages in their order: the toolkit's standard groups (docs/settings.md) and classeur's own (files, open); the look
-// first, as the settings open on it.
+// The pages in their order: the toolkit's standard groups (docs/settings.md) and classeur's own (files, open); General
+// first, as in every program of the family, so the settings open on it.
 // (not rodata: i18n.later marks the titles for the catalogue; the page translates them where it shows them)
 @(private = "file")
 OPTIONS_PAGES := [?]prefs_page.Page_Info{
+	{category = "general", title = i18n.later("General"), icon = lucide.SETTINGS},
 	{category = "appearance", title = i18n.later("Appearance"), icon = lucide.PALETTE},
 	{category = "window", title = i18n.later("Window"), icon = lucide.APP_WINDOW},
 	{category = "files", title = i18n.later("Files"), icon = lucide.FILE},
@@ -46,7 +47,6 @@ OPTIONS_PAGES := [?]prefs_page.Page_Info{
 	{category = "timing", title = i18n.later("Delays and menus"), icon = lucide.TIMER},
 	{category = "update", title = i18n.later("Updates"), icon = lucide.DOWNLOAD},
 	{category = "rendering", title = i18n.later("Rendering"), icon = lucide.MONITOR},
-	{category = "general", title = i18n.later("General"), icon = lucide.SETTINGS},
 }
 
 options_build :: proc(app: ^App) {
@@ -104,9 +104,6 @@ options_page :: proc(app: ^App) -> prefs_page.Page_Options {
 		updater = app.updater,
 		restart = proc(user: rawptr) { updates_restart((^App)(user)) },
 		themes = themes(app), themes_light = app.theme_shown.light, themes_file = &app.themes_file,
-		page_foot = proc(user: rawptr, category: string, em: f32) {
-			if category == "general" { licence_section((^App)(user), em) }
-		},
-		install = &app.install, diagnostics = &app.main,
+		licence = &app.licence, install = &app.install, diagnostics = &app.main,
 	}
 }

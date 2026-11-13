@@ -21,7 +21,8 @@ size_text :: proc(n: i64, allocator := context.temp_allocator) -> string {
 		v /= 1024
 		u += 1
 	}
-	return v < 10 ? fmt.aprintf("%.1f %s", v, units[u], allocator = allocator) : fmt.aprintf("%.0f %s", v, units[u], allocator = allocator)
+	// (the language's decimal mark: "3,1 Mo" in French)
+	return fmt.aprintf("%s %s", i18n.decimal(v, v < 10 ? 1 : 0), units[u], allocator = allocator)
 }
 
 // How the dates read (files.date_format).
@@ -122,8 +123,8 @@ type_text :: proc(app: ^App, e: fs.Entry, allocator := context.temp_allocator) -
 count_text :: proc(n: i64, allocator := context.temp_allocator) -> string {
 	switch {
 	case n < 1000:      return fmt.aprintf("%d", n, allocator = allocator)
-	case n < 10_000:    return fmt.aprintf("%.1fK", f64(n) / 1000, allocator = allocator)
+	case n < 10_000:    return fmt.aprintf("%sK", i18n.decimal(f64(n) / 1000, 1), allocator = allocator)
 	case n < 1_000_000: return fmt.aprintf("%dK", n / 1000, allocator = allocator)
 	}
-	return fmt.aprintf("%.1fM", f64(n) / 1_000_000, allocator = allocator)
+	return fmt.aprintf("%sM", i18n.decimal(f64(n) / 1_000_000, 1), allocator = allocator)
 }

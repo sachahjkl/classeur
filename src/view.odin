@@ -74,7 +74,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 		// (the sidebar's width held in the window's room first: the title bar's parts are worked out from it)
 		app.sidebar_px = clamp(app.sidebar_px, SIDEBAR_MIN_PX, max(min(SIDEBAR_MAX_PX, app.room - PANELS_MIN_PX), SIDEBAR_MIN_PX))
 		build_top(app, em)
-		crash_bar.bar(&app.crash_bar, {name = "Classeur", version = APP_VERSION, repository = "sachahjkl/classeur"})
+		crash_bar.bar(&app.crash_bar, {name = "classeur", version = APP_VERSION, repository = "sachahjkl/classeur"})
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.row() { build_body(app, em) }
 	}

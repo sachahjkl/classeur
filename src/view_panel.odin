@@ -1052,7 +1052,7 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 				// (while jobs run: their progress beside the button that shows them)
 				if t, running := jobs_progress(app); running {
 					ui.next({width = ui.text_size(em * 0.3), height = ui.pct(1)})
-					ui.label(fmt.tprintf("%d%%###jobs_pct", int(t * 100)))
+					ui.label(fmt.tprintf("%s###jobs_pct", i18n.percent(f64(int(t * 100)) / 100)))
 				}
 				if ui.tags("weak") {
 					if icon_action(app, "jobs", lucide.LAYERS_2, failed > 0 ? fmt.tprintf(i18n.tr(failed, "The jobs: %d failed (%s)", "The jobs: %d failed (%s)"), failed, command_keys(app, command_find("jobs"))) : command_tip(app, "jobs"), em, on = failed > 0) { act_jobs(app) }
@@ -1075,7 +1075,7 @@ footer :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 				stat(app, "fil", lucide.FILE, shown_count_text(files_shown, files), files_shown < files ? i18n.tr("Files shown, of all: a filter leaves some out") : i18n.tr("Files"), em, lit = files_shown < files)
 				if t.has_space && t.space.total > 0 {
 					used := 100 - int(100 * f64(t.space.free) / f64(t.space.total))
-					stat(app, "disk", lucide.HARD_DRIVE, fmt.tprintf("%d%%", used), fmt.tprintf(i18n.tr("%s free of %s"), size_text(t.space.free), size_text(t.space.total)), em)
+					stat(app, "disk", lucide.HARD_DRIVE, i18n.percent(f64(used) / 100), fmt.tprintf(i18n.tr("%s free of %s"), size_text(t.space.free), size_text(t.space.total)), em)
 				}
 				ui.spacer(ui.px(em * 0.5))
 				zoom_pill(app, t, em)
@@ -1126,7 +1126,7 @@ zoom_pill :: proc(app: ^App, t: ^Tab, em: f32) {
 		ui.spacer(ui.fill())
 		glyph(app, ZOOM_ICONS[clamp(t.zoom, 0, len(ZOOMS) - 1)], em * 1.3, fg)
 		ui.next({width = ui.text_size(em * 0.15), height = ui.pct(1), fg = fg})
-		ui.label(fmt.tprintf("%d%%###pct", z.percent))
+		ui.label(fmt.tprintf("%s###pct", i18n.percent(f64(z.percent) / 100)))
 		ui.spacer(ui.fill())
 	}
 	sig := ui.signal(b)
@@ -1216,7 +1216,7 @@ zoom_slider_build :: proc(app: ^App, em: f32) {
 						ui.label(fmt.tprintf("%s###zn", i18n.tr(ZOOM_NAMES[step])))
 						ui.push_tags("weak")
 						ui.next({width = ui.text_size(em * 0.5), height = ui.pct(1), font_size = em * 0.85})
-						ui.label(fmt.tprintf("%d%%###zp", ZOOMS[step].percent))
+						ui.label(fmt.tprintf("%s###zp", i18n.percent(f64(ZOOMS[step].percent) / 100)))
 						ui.pop_tags()
 					}
 					if on { ui.pop_tags() }
@@ -1290,7 +1290,7 @@ filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 		}
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		res: ui.Edit_Result
-		if ui.tags("bare") { res = ui.line_edit("###filter", &t.filter, {placeholder = "Filter...", clearable = !t.flat}) }
+		if ui.tags("bare") { res = ui.line_edit("###filter", &t.filter, {placeholder = i18n.tr("Filter…"), clearable = !t.flat}) }
 		note_text_field(app, key)
 		if t.focus_due == .Filter {
 			ui.set_focus(key)

@@ -160,6 +160,9 @@ fr Revenir au modèle
 en Names from the clipboard
 fr Noms du presse-papiers
 
+en {name} the name without its extension · {ext} the extension · {n} a number from 1 ({n:3}: 001) · {date} the date modified · {time} its time · {id} a short id of its own
+fr {name} : le nom sans son extension · {ext} : l'extension · {n} : un numéro à partir de 1 ({n:3} : 001) · {date} : la date de modification · {time} : son heure · {id} : un identifiant court, propre à chaque élément
+
 en %d name cannot be had.
 en+ %d names cannot be had.
 fr %d nom est impossible.
@@ -325,7 +328,7 @@ en Move section down
 fr Descendre la section
 
 en Find network devices
-fr Chercher les appareils du réseau
+fr Rechercher les appareils du réseau
 
 en Move tab to window
 fr Déplacer l'onglet dans une fenêtre
@@ -370,10 +373,10 @@ en Grid view
 fr Vue en grille
 
 en Zoom in
-fr Agrandir
+fr Zoom avant
 
 en Zoom out
-fr Réduire
+fr Zoom arrière
 
 en Sort by name
 fr Trier par nom
@@ -526,7 +529,7 @@ en Default text size
 fr Taille du texte par défaut
 
 en Reload all folders
-fr Relire tous les dossiers
+fr Actualiser tous les dossiers
 
 en Reset the layout
 fr Réinitialiser la disposition
@@ -535,12 +538,12 @@ en Clear thumbnails
 fr Effacer les miniatures
 
 en Delete %s for good?
-fr Supprimer %s définitivement ?
+fr Supprimer définitivement « %s » ?
 
 en Delete %d item for good?
 en+ Delete %d items for good?
-fr Supprimer %d élément définitivement ?
-fr+ Supprimer %d éléments définitivement ?
+fr Supprimer définitivement %d élément ?
+fr+ Supprimer définitivement %d éléments ?
 
 en It does not go to the trash: this cannot be undone.
 fr Il ne va pas à la corbeille : impossible d'annuler.
@@ -854,7 +857,7 @@ en Local disk
 fr Disque local
 
 en Recent
-fr Récent
+fr Récents
 
 en Bookmark
 fr Favori
@@ -1148,66 +1151,6 @@ fr Nom de la disposition
 en Save
 fr Enregistrer
 
-en The licence is removed.
-fr La licence est retirée.
-
-en Registered to %s. Thank you.
-fr Enregistré au nom de %s. Merci.
-
-en Paste a key first.
-fr Collez d'abord une clé.
-
-en This licence is not classeur's.
-fr Cette licence n'est pas celle de classeur.
-
-en This key is not one the shop signed: check that it was copied whole.
-fr Cette clé n'a pas été signée par la boutique : vérifiez qu'elle a été copiée en entier.
-
-en This version of classeur accepts no licence yet.
-fr Cette version de classeur n'accepte pas encore de licence.
-
-en The licence file cannot be read.
-fr Le fichier de licence ne peut pas être lu.
-
-en The licence cannot be written in classeur's folder.
-fr La licence ne peut pas être écrite dans le dossier de classeur.
-
-en Licence
-fr Licence
-
-en Reading the licence…
-fr Lecture de la licence…
-
-en Registered to %s (%s). Thank you for supporting classeur.
-fr Enregistré au nom de %s (%s). Merci de soutenir classeur.
-
-en Order %s, %s.
-fr Commande %s, %s.
-
-en Remove the licence
-fr Retirer la licence
-
-en Unregistered. classeur is free; a licence supports its work.
-fr Non enregistré. classeur est gratuit ; une licence soutient son travail.
-
-en Support classeur: buy a licence
-fr Soutenez classeur : achetez une licence
-
-en Paste the key of your licence
-fr Collez la clé de votre licence
-
-en Register
-fr Enregistrer la licence
-
-en Choose a file…
-fr Choisir un fichier…
-
-en Choose a licence file
-fr Choisir un fichier de licence
-
-en classeur licence
-fr Licence classeur
-
 en %s: this system reaches no such place by a path.
 fr %s : ce système n'atteint pas ce genre d'emplacement par un chemin.
 
@@ -1267,6 +1210,9 @@ fr Aucune application
 en %s (default)
 fr %s (par défaut)
 
+en General
+fr Général
+
 en Appearance
 fr Apparence
 
@@ -1294,9 +1240,6 @@ fr Mises à jour
 en Rendering
 fr Rendu
 
-en General
-fr Général
-
 en Go
 fr Aller
 
@@ -1314,7 +1257,7 @@ en tab
 fr onglet
 
 en Enter: run   Ctrl+Enter: a key of your own   Alt+Enter: the letters typed, its alias
-fr Entrée : exécuter   Ctrl+Entrée : un raccourci à vous   Alt+Entrée : les lettres tapées, son alias
+fr Entrée : exécuter   Ctrl+Entrée : choisir ses touches   Alt+Entrée : en faire un alias
 
 en %s: an alias of %s.
 fr %s : un alias de %s.
@@ -1410,7 +1353,7 @@ en Opens an item with one click instead of two.
 fr Ouvre un élément en un clic au lieu de deux.
 
 en The settings cannot be written to %s
-fr Les réglages ne peuvent pas être écrits dans %s
+fr Les réglages ne peuvent pas être enregistrés dans %s
 
 en No window could be started.
 fr Aucune fenêtre n'a pu être ouverte.
@@ -1459,6 +1402,9 @@ fr Emplacements
 
 en %s: bookmark a folder
 fr %s : ajouter un dossier aux favoris
+
+en Filter…
+fr Filtrer…
 
 en Drag it, or right-click it, to move the section
 fr Faites-la glisser, ou cliquez-droit dessus, pour déplacer la section
@@ -1593,16 +1539,16 @@ en Done again: the move to the trash of several items.
 fr Rétabli : la mise à la corbeille de plusieurs éléments.
 
 en A copy or a move is running: undo once it has ended.
-fr Une copie ou un déplacement est en cours : annulez une fois terminé.
+fr Une copie ou un déplacement est en cours : attendez la fin pour annuler.
 
 en A change to files is being made: undo once it is done.
-fr Une modification de fichiers est en cours : annulez une fois terminée.
+fr Une modification de fichiers est en cours : attendez la fin pour annuler.
 
 en Nothing to undo.
 fr Rien à annuler.
 
 en A copy or a move is running: redo once it has ended.
-fr Une copie ou un déplacement est en cours : rétablissez une fois terminé.
+fr Une copie ou un déplacement est en cours : attendez la fin pour rétablir.
 
 en Nothing to do again.
 fr Rien à rétablir.

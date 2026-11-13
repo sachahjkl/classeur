@@ -4,6 +4,7 @@ package classeur
 // each change made in the options (options.odin). `settings_apply` copies classeur's values where the program reads
 // them; the toolkit's standard ones go to the toolkit by themselves (prefs_page.standard_watch).
 
+import "core:log"
 import vmem "core:mem/virtual"
 import "core:strings"
 import config "gt:config"
@@ -79,7 +80,7 @@ prefs_path :: proc(app: ^App) -> string {
 
 // The registry with the user's file read in (headless: the defaults alone, the person's file untouched). (Read on this
 // thread: at the start, before the window is shown and the first frame.)
-prefs_open :: proc(app: ^App) {
+prefs_open :: proc(app: ^App, pref_args: []string = nil) {
 	app.prefs = config.prefs_make()
 	// (the toolkit's standard preferences first: their descriptions live in prefs_words, as long as the registry)
 	_ = vmem.arena_init_growing(&app.prefs_words)
@@ -97,8 +98,11 @@ prefs_open :: proc(app: ^App) {
 		if r := config.ref_of(&app.prefs, name); r != config.NO_REF { config.entry(&app.prefs, r).def.hidden = true }
 	}
 	config.register(&app.prefs, PREF_DEFS[:])
+	if !app.headless { config.load_file(&app.prefs, prefs_file(), .User) }
+	// (the command line's over the file, for this run: its layer is not written back)
+	_, pref_problems := config.apply_args(&app.prefs, pref_args, context.temp_allocator)
+	for p in pref_problems { log.warn(p) }
 	if !app.headless {
-		config.load_file(&app.prefs, prefs_file(), .User)
 		// (general.language read, before any text is formatted for the window; the tests stay in English whatever the
 		// machine's language: they compare the texts)
 		prefs_page.language_start(&app.prefs, CATALOGUES)

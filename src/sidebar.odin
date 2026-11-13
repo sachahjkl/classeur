@@ -83,10 +83,15 @@ sidebar_build :: proc(app: ^App, em: f32) {
 						side_bookmarks(app, t, query, here, em)
 						if len(app.bookmarks) == 0 && query == "" {
 							if ui.tags("weak") {
-								ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 1.8)), font_size = em * 0.85})
-								if ui.row(.Center) {
-									ui.spacer(ui.px(em * 2.6))
-									ui.label(fmt.tprintf("%s###bm_hint", fmt.tprintf(i18n.tr("%s: bookmark a folder"), command_keys(app, command_find("bookmark")))))
+								// (a paragraph: a narrow sidebar or a longer language wraps the hint instead of cutting it)
+								if ui.style({font_size = em * 0.85}) {
+									ui.next({width = ui.fill(), height = ui.children_sum()})
+									if ui.row() {
+										ui.spacer(ui.px(em * 2.6))
+										ui.next({width = ui.fill()})
+										ui.paragraph(fmt.tprintf("%s###bm_hint", fmt.tprintf(i18n.tr("%s: bookmark a folder"), command_keys(app, command_find("bookmark")))))
+										ui.spacer(ui.px(em * 0.6))
+									}
 								}
 							}
 						}
@@ -282,7 +287,7 @@ side_item :: proc(id: string) -> bool {
 side_filter :: proc(app: ^App, em: f32) {
 	// (the toolkit's band over a list, as tall as the panels' toolbars: their lines meet across the window)
 	ui.next({height = ui.px(ui.dense(em * TOOLBAR_EM))})
-	res := ui.search_band("side_filter", &app.side_filter, {placeholder = "Filter...", clearable = true})
+	res := ui.search_band("side_filter", &app.side_filter, {placeholder = i18n.tr("Filter…"), clearable = true})
 	note_text_field(app, res.box.key)
 	if res.cancelled { ui.line_edit_clear(&app.side_filter) }
 }

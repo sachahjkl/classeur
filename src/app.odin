@@ -149,7 +149,7 @@ App :: struct {
 	standard:    prefs_page.Standard_Watch,   // the toolkit's standard settings applied as they change (prefs.odin)
 	themes_file: prefs_page.Themes_File,      // the program's themes and the person's own (themes.txt): the themes shown
 	options:     Options,
-	licence:     Licence_View,      // who supports classeur (licence.odin): the settings' General page
+	licence:     prefs_page.Licence,   // who supports classeur (licence.odin): the settings' Licence page
 	inspector:   Inspector,         // the pane of Space (inspector.odin)           // the options' list (options.odin)
 	drop_zones:      [dynamic]Drop_Zone,   // where a drop goes, noted by this frame (dnd.odin)
 	drop_zones_last: [dynamic]Drop_Zone,   // and by the last one (what a drop is tested against)
@@ -214,10 +214,11 @@ Open_Options :: struct {
 	home:     string,     // "": the person's (the tests give theirs)
 	session:  string,     // the session file ("": the person's; headless: none)
 	standalone: bool,     // a window of a torn-off tab: no session read or written
+	pref_args: []string,  // the command line's `--pref name=value`: for this run only, over the person's file
 }
 
 // `standalone`: a window of a tab torn off another (classeur --window): it owns nothing (no instance, no session).
-app_run :: proc(folders: []string, setup_asked := false, standalone := false) -> int {
+app_run :: proc(folders: []string, setup_asked := false, standalone := false, pref_args: []string = nil) -> int {
 	// one window per person: a second start hands its folders to the first, which opens them in tabs, and ends
 	outcome := instance.Outcome.Other_Instance
 	owner: instance.Owner
@@ -243,7 +244,7 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 		crash.begin_session()
 		report, _ = crash.last_report(context.temp_allocator)
 	}
-	app := app_open({folders = folders, standalone = standalone})
+	app := app_open({folders = folders, standalone = standalone, pref_args = pref_args})
 	if app == nil {
 		if outcome == .First { instance.owner_stop(&owner) }
 		if !standalone { crash.end_session() }
@@ -354,7 +355,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 
 	platform.set_app_id(APP_NAME)
 	size := o.size != {} ? o.size : WINDOW_SIZE
-	if !host.host_open(&app.main, &app.shared, {title = "Classeur", size = size, integrated_title = !o.headless, headless = o.headless}, view_build, app) {
+	if !host.host_open(&app.main, &app.shared, {title = "classeur", size = size, integrated_title = !o.headless, headless = o.headless}, view_build, app) {
 		log.error("classeur: no window")
 		free(app)
 		return nil
@@ -370,7 +371,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	h.after_input = FRAMES_AFTER_INPUT
 	dnd_start(app)
 	ui.table_layout_init(&app.columns, detail_columns(app))   // (before the preferences: they say its columns)
-	prefs_open(app)   // (and h.partial_redraw: rendering.partial_redraw)
+	prefs_open(app, o.pref_args)   // (and h.partial_redraw: rendering.partial_redraw)
 	prefs_page.install_init(&app.install, &app.prefs, setup_options())
 	h.params = app_params
 	h.input = app_input

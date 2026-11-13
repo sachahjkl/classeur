@@ -274,9 +274,13 @@ batch_build :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.9))
 				// (the case: one of three, the toolkit's segmented control)
 				casing := int(b.casing)
-				// (three equal parts: each word must fit a third)
-				ui.next({width = ui.px(em * 18), height = ui.px(ui.dense(em * 2.2))})
-				ui.segmented("###case", {i18n.tr("As is"), i18n.tr("lower"), i18n.tr("UPPER")}, &casing, tips = {i18n.tr("The case of each name kept"), i18n.tr("Every letter in lower case"), i18n.tr("Every letter in upper case")})
+				// (three equal parts: each one as wide as the widest word, so that a language's longer word widens the
+				// control instead of being cut)
+				case_labels := [3]string{i18n.tr("As is"), i18n.tr("lower"), i18n.tr("UPPER")}
+				widest: f32
+				for l in case_labels { widest = max(widest, ui.text_width(ui.top_style().font, em, l)) }
+				ui.next({width = ui.px(max(em * 18, 3 * (widest + em * 1.6) + em * 0.5)), height = ui.px(ui.dense(em * 2.2))})
+				ui.segmented("###case", case_labels[:], &casing, tips = {i18n.tr("The case of each name kept"), i18n.tr("Every letter in lower case"), i18n.tr("Every letter in upper case")})
 				b.casing = Batch_Case(casing)
 				ui.spacer(ui.fill())
 				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
@@ -292,11 +296,16 @@ batch_build :: proc(app: ^App, em: f32) {
 				ui.spacer(ui.px(em * 0.9))
 			}
 			if ui.tags("weak") {
-				ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 1.8)), font_size = em * 0.85})
-				if ui.row(.Center, id = "###batch_help") {
-					ui.spacer(ui.px(em * 0.9))
-					ui.next({width = ui.fill(), height = ui.pct(1)})
-					ui.label("{name} {ext} {n} {n:3} {date} {time} {id}###bhelp")
+				// (the fields stay as typed in every language; what each one gives is said in the language in use, as a
+				// paragraph that wraps)
+				if ui.style({font_size = em * 0.85}) {
+					ui.next({width = ui.px(pw), height = ui.children_sum()})
+					if ui.row(.Start, id = "###batch_help") {
+						ui.spacer(ui.px(em * 0.9))
+						ui.next({width = ui.fill()})
+						ui.paragraph(fmt.tprintf("%s###bhelp", i18n.tr("{name} the name without its extension · {ext} the extension · {n} a number from 1 ({n:3}: 001) · {date} the date modified · {time} its time · {id} a short id of its own")))
+						ui.spacer(ui.px(em * 0.9))
+					}
 				}
 			}
 			ui.hline(ui.px(pw))

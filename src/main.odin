@@ -5,6 +5,7 @@ package classeur
 import "core:fmt"
 import "core:os"
 import "core:path/filepath"
+import "core:strings"
 import "gt:process"
 import setup "gt:setup"
 
@@ -24,6 +25,7 @@ USAGE :: `classeur: a file manager
   classeur --status           what is installed, and whether classeur runs (exit 0 installed, 2 to repair,
                               1 not installed)
   classeur version
+  --pref name=value           a preference for this run only
 `
 
 main :: proc() {
@@ -35,8 +37,21 @@ run :: proc(given: []string) -> int {
 	cmd, args := setup.command_of(given)
 	if setup.command_alone(cmd) { return setup.command_run(cmd, setup_options(), process.console_write) }
 	folders := make([dynamic]string, context.temp_allocator)
+	// (the toolkit's `--pref name=value`, as every program takes it: kept for the registry, which app_run makes, and
+	// never read as a folder)
+	pref_args := make([dynamic]string, context.temp_allocator)
 	setup_asked, standalone := cmd == .Setup, false
-	for a in args {
+	for i := 0; i < len(args); i += 1 {
+		a := args[i]
+		if a == "--pref" && i + 1 < len(args) {
+			append(&pref_args, a, args[i + 1])
+			i += 1
+			continue
+		}
+		if strings.has_prefix(a, "--pref=") {
+			append(&pref_args, a)
+			continue
+		}
 		switch a {
 		case "--window":
 			standalone = true
@@ -52,5 +67,5 @@ run :: proc(given: []string) -> int {
 		abs, err := filepath.abs(a, context.temp_allocator)
 		append(&folders, err == nil ? abs : a)
 	}
-	return app_run(folders[:], setup_asked, standalone)
+	return app_run(folders[:], setup_asked, standalone, pref_args[:])
 }
