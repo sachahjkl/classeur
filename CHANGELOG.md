@@ -3,6 +3,11 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.19.1] - 2026-11-13
+
+### Fixed
+- **The Windows download is there again**: 0.19.0 had no Windows archive (its build stopped on a check that read the files with Windows line endings). This version has it.
+
 ## [0.19.0] - 2026-11-13
 
 ### Added
@@ -434,6 +439,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.19.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.19.1
 [0.19.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.19.0
 [0.18.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.18.0
 [0.17.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.17.2
