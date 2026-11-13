@@ -8,7 +8,7 @@ import "gt:i18n"
 import lucide "gt:lucide"
 import "gt:ui"
 
-// A key and its modifiers: the toolkit's (its names, ui.chord_text, ui.key_name).
+// A key and its modifiers: the toolkit's (its names, ui.chord_text, platform.key_text).
 Shortcut :: ui.Chord
 
 Command :: struct {

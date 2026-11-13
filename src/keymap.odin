@@ -55,14 +55,15 @@ binding_text :: proc(b: Binding, allocator := context.temp_allocator) -> string 
 	return fmt.aprintf("%s, %s", ui.chord_text(b.chords[0], context.temp_allocator), ui.chord_text(b.chords[1], context.temp_allocator), allocator = allocator)
 }
 
-// "Ctrl+Shift+P" back to a chord (the toolkit's names, ui.key_name; the modifiers in any order); ok = false for a key it
+// "Ctrl+Shift+P" back to a chord (the toolkit's names, platform.key_text; the modifiers in any order); ok = false for a key it
 // does not know.
 shortcut_parse :: proc(text: string) -> (s: Shortcut, ok: bool) {
 	t := strings.trim_space(text)
 	// (the key's name at the end, the longest that fits: "Num +" holds a '+', as "Ctrl++" would)
 	best := ""
 	for k in platform.Key {
-		name := ui.key_name(k)
+		if k == .Shift || k == .Ctrl || k == .Alt { continue }   // (a modifier is no chord's key)
+		name := platform.key_text(k)
 		if name == "" || !strings.has_suffix(t, name) || len(name) <= len(best) { continue }
 		rest := t[:len(t) - len(name)]
 		if rest != "" && !strings.has_suffix(rest, "+") { continue }
