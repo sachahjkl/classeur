@@ -52,7 +52,7 @@ LICENCE_TOOL :: toolbox.Licence_Tool{
 	product  = classeur_licence.PRODUCT,
 	dev_seed = DEV_SEED,
 	hint     = "Open this file with classeur (Settings > General > Licence > Choose a file), or paste the key there.",
-	paddle   = {name = "Classeur Licence", description = "A personal, perpetual licence of classeur that supports its work.", amounts = "supporter=2900", currency = "EUR"},
+	paddle   = {name = "classeur licence", description = "A personal, perpetual licence of classeur that supports its work.", amounts = "supporter=2900", currency = "EUR"},
 }
 
 // The program's catalogues: the texts of its code (src and its packages), one file per language in i18n/.

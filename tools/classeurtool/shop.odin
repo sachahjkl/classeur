@@ -2,7 +2,7 @@ package classeurtool
 
 // shop: the six pages of classeur's shop (pricing, thanks, terms, refunds, privacy, imprint) written into site/ from
 // shop(), the toolkit's template pages filled (gt:site licence_pages). They are files of the site's sources, published as
-// they are by `site build`; run it again when shop() changes. Until it has Paddle's client token, the price ids and the
+// they are by `site build`; run it again when shop() changes. Until it has Paddle's client token, the price id and the
 // licence Worker's address, the buy button says "Coming soon" (docs/licence.md of gui_toolkit, "What the maintainer does
 // at the end").
 
@@ -12,21 +12,17 @@ import "core:strings"
 import tk_site "gt:site"
 import classeur_licence "../../src/licence"
 
-// The prices of the buttons: the price ids are what `classeurtool paddle -apply` prints ("": not made yet).
-@(rodata)
-SHOP_PRICES := [?]tk_site.Shop_Price{
-	{edition = "supporter", price_id = "", label = "Buy the licence"},
-}
-
 shop :: proc() -> tk_site.Shop {
 	return {
 		name           = "classeur",
-		product_title  = "Classeur Licence",
+		icon           = "../img/logo.png",
+		product_title  = "classeur licence",
 		price          = "29&nbsp;&euro;",
-		price_note     = "Once. Taxes included.",
+		price_note     = "",
 		environment    = "sandbox",
 		client_token   = "",   // Paddle's client-side token: "" keeps the shop shut ("Coming soon")
-		prices         = SHOP_PRICES[:],
+		edition        = "supporter",
+		price_id       = "",   // what `classeurtool paddle -apply` prints ("": not made yet)
 		worker         = "",   // the licence Worker's address (licence-worker/README.md of gui_toolkit)
 		thanks         = "https://classeur.froment.software/thanks/",
 		help           = "mailto:contact@froment.software",
