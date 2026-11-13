@@ -193,7 +193,7 @@ card_body :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, width, heigh
 	// cut in its middle
 	lines := height - pic - em * (0.5 + 1.3 + 0.4) >= em * CARD_LINE_EM * 2 ? 2 : 1
 	st := ui.top_style()
-	name := card_name(shown_text(fs.base(shown_name(app, e^))), width - 2 * st.text_pad - 1, lines)
+	name := card_name(ui.text_shown(fs.base(shown_name(app, e^))), width - 2 * st.text_pad - 1, lines)
 	ui.next({width = ui.fill(), height = ui.px(lines == 2 ? em * CARD_LINE_EM * 2 : em * 1.5), text_align = .Center})
 	ui.paragraph(fmt.tprintf("%s###n", name))
 	size := ""

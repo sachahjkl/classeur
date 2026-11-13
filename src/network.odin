@@ -4,6 +4,7 @@ package classeur
 // shows or opens, and by the command Find network devices. The sidebar keeps the list it has until the new one comes;
 // an answer older than the last search asked is dropped.
 
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -22,7 +23,7 @@ network_find :: proc(app: ^App) {
 	app.answers_due += 1
 	r := new(Devices_Found)
 	r^ = {app = app, serial = app.devices_asked, offline = app.headless}
-	pool_submit(&app.pool, proc(data: rawptr) {
+	tasks.add(&app.pool, proc(data: rawptr) {
 		r := (^Devices_Found)(data)
 		if !r.offline { r.devices = fs.network_devices() }
 		if !ui.post(&r.app.main.state, devices_found, r) { devices_found_free(r) }

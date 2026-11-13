@@ -21,6 +21,7 @@ import "core:slice"
 import "core:strings"
 import "gt:draw"
 import "gt:platform"
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -91,7 +92,7 @@ same_volume_cached :: proc(app: ^App, file, dir: string) -> bool {
 	Ask :: struct { app: ^App, from, to: string, same: bool }
 	q := new(Ask)
 	q^ = {app = app, from = strings.clone(from), to = strings.clone(dir)}
-	pool_submit(&app.pool, proc(data: rawptr) {
+	tasks.add(&app.pool, proc(data: rawptr) {
 		q := (^Ask)(data)
 		q.same = fs.same_volume(q.from, q.to)
 		if !ui.post(&q.app.main.state, proc(data: rawptr, word: u64) {

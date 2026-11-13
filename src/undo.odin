@@ -118,7 +118,7 @@ act_undo :: proc(app: ^App) {
 		job := job_add(app, .Restore, in_trash, undoing = true)
 		job.redo_step = step
 	}
-	say(app, "Undone: the %s%s.", UNDO_SAID[step.kind], n > 1 ? " of several items" : "")
+	announce(app, .Good, "Undone: the %s%s.", UNDO_SAID[step.kind], n > 1 ? " of several items" : "")
 }
 
 act_redo :: proc(app: ^App) {
@@ -151,7 +151,7 @@ act_redo :: proc(app: ^App) {
 		job := job_add(app, .Trash, befores)
 		job.redoing = true
 	}
-	say(app, "Done again: the %s%s.", UNDO_SAID[step.kind], n > 1 ? " of several items" : "")
+	announce(app, .Good, "Done again: the %s%s.", UNDO_SAID[step.kind], n > 1 ? " of several items" : "")
 }
 
 // An undo or a redo of a rename, a new folder or a new file, on its way to the edits' worker and back.
@@ -223,13 +223,13 @@ undo_done :: proc(data: rawptr, word: u64) {
 	if a.redo {
 		undo_push(app, kind, a.step.pairs, redoing = true)
 		undo_reveal(app, a.step.pairs[0][1])
-		say(app, "Done again: the %s%s.", UNDO_SAID[kind], n > 1 ? " of several items" : "")
+		announce(app, .Good, "Done again: the %s%s.", UNDO_SAID[kind], n > 1 ? " of several items" : "")
 		return
 	}
 	undo_reveal(app, kind == .Rename ? a.step.pairs[0][0] : a.step.pairs[0][1])
 	append(&app.redo, a.step)
 	a.step = {}   // (the redo stack's now)
-	say(app, "Undone: the %s%s.", UNDO_SAID[kind], n > 1 ? " of several items" : "")
+	announce(app, .Good, "Undone: the %s%s.", UNDO_SAID[kind], n > 1 ? " of several items" : "")
 }
 
 @(private = "file")

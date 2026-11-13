@@ -2,11 +2,12 @@ package classeur
 
 // Tabs and panels. A tab is a place in the file system with its history (back, forward) and the folder it shows; a
 // panel holds tabs, one shown; the window shows its panels side by side. Reading a folder is a task of the workers
-// (pool.odin): the tab asks, the answer comes back through ui.post, and only the last answer asked counts.
+// (gt:tasks): the tab asks, the answer comes back through ui.post, and only the last answer asked counts.
 
 import "core:strings"
 import "core:sync"
 import "core:time"
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -283,7 +284,7 @@ tab_load :: proc(app: ^App, t: ^Tab) {
 		for p, i in t.tree_open { job.tree[i] = strings.clone(p) }
 	}
 	t.walk = t.flat ? job : nil
-	pool_submit(&app.pool, load_run, job)
+	tasks.add(&app.pool, load_run, job)
 }
 
 // The entries a flat read has read so far.

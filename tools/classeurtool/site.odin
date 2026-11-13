@@ -1,20 +1,14 @@
 package classeurtool
 
-// The site, made when it is deployed (.github/workflows/pages.yml) so that it cannot be behind a release. The steps are the
-// toolkit's (gt:site); this file says what this site is: its address, names and colours.
-//   classeurtool site build <site> <out>      the changelog's pages and the classic ones from <site>, then what a page
-//                                           says when it is shared; <out> is what is published
-//   classeurtool site check [--site folder] [--shot file.png] [--browser program]
-//                                           the pages in a real browser, served on this machine
+// The site, made when it is deployed (.github/workflows/pages.yml) so that it cannot be behind a release. The command is
+// the toolkit's (site.command: build, check, card); this file says what this site is: its address, names and colours,
+// and its own check of the downloads.
 // {{version}} in the home page is the last version: its download link names the file of that release.
 
 import "core:fmt"
 import cdp "gt:cdp"
 import tk_site "gt:site"
 
-SITE_DIR     :: "site"
-REPOSITORY   :: "https://github.com/sachahjkl/classeur"
-CHANGELOG    :: "CHANGELOG.md"
 VERSION_MARK :: "{{version}}"
 
 // Where the site is published, what it is: the one place that says it.
@@ -23,7 +17,7 @@ SITE_META :: tk_site.Meta{
 	name        = "classeur",
 	repository  = REPOSITORY,
 	tagline     = "A fast file manager you drive from the keyboard",
-	changes     = CHANGELOG,
+	changes     = "CHANGELOG.md",
 	card        = "img/main.png",
 	logo        = "img/logo.png",
 	logo_file   = "site/img/logo.png",
@@ -42,25 +36,20 @@ SITE_LD :: [?][2]string{
 	{"license", "https://opensource.org/license/mit"},
 }
 
-@(private = "file")
+// (the fields live as long as the tool: site.command keeps them)
 site_meta :: proc() -> tk_site.Meta {
 	m := SITE_META
 	ld := SITE_LD
-	m.ld_fields = make([][2]string, len(ld), context.temp_allocator)
+	m.ld_fields = make([][2]string, len(ld))
 	copy(m.ld_fields, ld[:])
 	return m
 }
 
 // The systems classeur is published for: the home page's button is the reader's (Linux when it is not known).
-@(private = "file", rodata)
+@(rodata)
 SITE_DOWNLOADS := [?]tk_site.Download{
 	{os = "linux", label = "Linux", href = "https://github.com/sachahjkl/classeur/releases/download/v{{version}}/classeur-{{version}}-linux-x64.tar.gz", detail = "v{{version}} · x64 · .tar.gz"},
 	{os = "windows", label = "Windows", href = "https://github.com/sachahjkl/classeur/releases/download/v{{version}}/classeur-{{version}}-windows-x64.zip", detail = "v{{version}} · Windows 10 / 11 · x64 · .zip"},
-}
-
-@(private = "file")
-site_changelog :: proc(site, out: string) -> bool {
-	return tk_site.build_changelog(site, out, {changes = CHANGELOG, version_mark = VERSION_MARK, downloads = SITE_DOWNLOADS[:]})
 }
 
 // A browser of each system (what it says it runs on), and the download the home page offers it: the file of the
@@ -76,7 +65,6 @@ SITE_SYSTEMS := [?]Site_System{
 	{"Android", "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36", "Linux armv8l", "Android", "-linux-x64.tar.gz", "-windows-x64.zip"},
 }
 
-@(private = "file")
 site_downloads :: proc(s: ^tk_site.Check) {
 	for sys in SITE_SYSTEMS {
 		tk_site.check_call(s, "Emulation.setUserAgentOverride", fmt.tprintf(`{{"userAgent":%s,"platform":%s,"userAgentMetadata":{{"platform":%s,"platformVersion":"","architecture":"x86","model":"","mobile":false}}}}`,
@@ -91,20 +79,4 @@ site_downloads :: proc(s: ^tk_site.Check) {
 			fmt.tprintf("index.html, %s: the other is %s (%s)", sys.name, sys.other, tk_site.check_text(s, other + ".href")))
 	}
 	tk_site.check_call(s, "Emulation.setUserAgentOverride", `{"userAgent":""}`)   // (the browser's own again)
-}
-
-run_site :: proc(args: []string) -> int {
-	what := len(args) > 0 ? args[0] : ""
-	switch what {
-	case "build":
-		if len(args) != 3 { break }
-		if !site_changelog(args[1], args[2]) { return 1 }
-		return tk_site.build_meta(site_meta(), args[2], args[2]) ? 0 : 1
-	case "check":
-		o := tk_site.Check_Options{site = SITE_DIR, generate = site_changelog, extra = site_downloads}
-		if why := tk_site.check_arguments(args[1:], &o); why != "" { fmt.eprintfln("classeurtool site check: %s", why); return EXIT_USAGE }
-		return tk_site.check(o) ? 0 : 1
-	}
-	fmt.eprintln("classeurtool site build <site> <out> | check [--site folder] [--shot file.png] [--browser program]")
-	return EXIT_USAGE
 }

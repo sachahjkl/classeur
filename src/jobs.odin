@@ -229,7 +229,7 @@ job_status_text :: proc(job: ^Job, now: f64) -> string {
 	st := sync.atomic_load(&job.state)
 	if st == .Counting { return fmt.tprintf("%s: counting…", JOB_VERB[job.kind]) }
 	files, files_done := sync.atomic_load(&job.files_total), sync.atomic_load(&job.files_done)
-	return fmt.tprintf("%s %d of %d · %s%s", JOB_VERB[job.kind], min(files_done + 1, files), files, shown_text(job_current(job)), job_rate_fields(job, now))
+	return fmt.tprintf("%s %d of %d · %s%s", JOB_VERB[job.kind], min(files_done + 1, files), files, ui.text_shown(job_current(job)), job_rate_fields(job, now))
 }
 
 job_current :: proc(job: ^Job, allocator := context.temp_allocator) -> string {
@@ -579,15 +579,7 @@ job_ended :: proc(data: rawptr, word: u64) {
 	case .Cancelled: said = fmt.tprintf("%s: cancelled.", JOB_VERB[job.kind])
 	case .Waiting, .Counting, .Running, .Asking:
 	}
-	if said != "" {
-		say(app, "%s", said)
-		// (one long enough to be shown in the jobs' view, ended while the window is behind others: the person is elsewhere,
-		// the system's notification tells them; one the system cannot show is the toast just shown)
-		long := job.started_ms > 0 && ui.now_ms() - job.started_ms >= JOBS_VIEW_AFTER_MS
-		if long && app.announcer.window != nil && !app.announcer.window.active && !app.announcer.missing {
-			ui.announce(&app.announcer, st == .Done ? .Good : st == .Failed ? .Bad : .Info, said)
-		}
-	}
+	if said != "" { announce(app, st == .Done ? .Good : st == .Failed ? .Bad : .Info, "%s", said) }
 	job.ended_ms = ui.now_ms()
 	app_frames(app)
 }

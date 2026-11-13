@@ -1,11 +1,13 @@
 package classeur
 
 // The questions the program asks: a name already taken where a job copies or moves (replace, skip, keep both, for the
-// next ones too), and the confirmation before deleting for good (some items, or the trash emptied).
+// next ones too), the confirmation before deleting for good (some items, or the trash emptied), and the report of a
+// last session that did not end cleanly.
 
 import "core:fmt"
 import "core:strings"
 import "core:sync"
+import lucide "gt:lucide"
 import "gt:ui"
 import "fs"
 
@@ -47,6 +49,45 @@ confirm_empty_trash :: proc(app: ^App, paths: []string, names: []string = nil) {
 dialogs_build :: proc(app: ^App, em: f32) {
 	confirm_build(app, em)
 	conflict_build(app, em)
+	crash_build(app, em)
+}
+
+// The last session crashed or was killed (gt:crash): its report is offered at this start, to open or to copy where it
+// is. Nothing is sent anywhere.
+crash_offer :: proc(app: ^App, report: string) {
+	delete(app.crash_report)
+	app.crash_report = strings.clone(report)
+	app.crash_asking = true
+}
+
+CRASH_WIDTH_EM :: 34
+
+@(private = "file")
+crash_build :: proc(app: ^App, em: f32) {
+	if !app.crash_asking { return }
+	if ui.modal("crash_report", em * CRASH_WIDTH_EM, &app.crash_asking) {
+		if ui.dialog_header("crash_title", "classeur stopped unexpectedly", {icon = lucide.BUG, icon_font = app.icons, close = true}) {}
+		if ui.dialog_body("crash_body") {
+			ui.next({width = ui.fill()})
+			ui.paragraph("Its last session ended without closing. What happened is written in a report on this computer; nothing was sent anywhere.###crash_note")
+			ui.spacer(ui.px(em * 0.6))
+			if ui.tags("weak") {
+				ui.next({width = ui.fill(), font = app.mono})
+				ui.paragraph(fmt.tprintf("%s###crash_path", ui.text_shown(app.crash_report)))
+			}
+		}
+		if ui.dialog_buttons("crash_buttons") {
+			if ui.button_icon("crash_copy", lucide.COPY, "Copy its path", icon_font = app.icons).clicked {
+				ui.window_clipboard_set(app.crash_report)
+				announce(app, .Good, "The report's path is copied.")
+			}
+			ui.spacer(ui.px(em * 0.6))
+			if ui.button_icon("crash_open", lucide.FILE_TEXT, "Open the report (Enter)", icon_font = app.icons, intent = .Primary).clicked || ui.key_press(.Return) {
+				ui.open(app.crash_report)
+				app.crash_asking = false
+			}
+		}
+	}
 }
 
 // The toolkit's question (ui.confirm): what is deleted named, Enter cancels.
@@ -82,7 +123,8 @@ Conflict_View :: struct {
 	job:  u64,
 }
 
-// Laid out as ui.confirm: the question, a weak note, then its choices (Enter: Keep both, which loses nothing).
+// The toolkit's three parts of a dialog: the question in the header, the two files and a weak note in the body, then
+// its choices (Enter: Keep both, which loses nothing).
 @(private = "file")
 conflict_build :: proc(app: ^App, em: f32) {
 	job := job_asking(app)
@@ -95,51 +137,39 @@ conflict_build :: proc(app: ^App, em: f32) {
 		v.job, v.open, v.all = job.id, true, false
 	}
 	answer := Conflict.Ask
-	w := em * CONFLICT_WIDTH_EM
-	if ui.modal("conflict", w, &v.open) {
-		pad := em * 1.2
-		ui.spacer(ui.px(pad))
-		ui.next({width = ui.px(w), height = ui.children_sum()})
-		if ui.row() {
-			ui.spacer(ui.px(pad))
-			ui.next({width = ui.px(w - 2 * pad), height = ui.children_sum(), axis = .Y})
-			if ui.column() {
-				ui.next({width = ui.fill(), font_size = em * 1.15})
-				ui.paragraph(fmt.tprintf("%s is already in %s###title", shown_text(fs.base(job.ask_name)), shown_text(fs.base(fs.parent(job.ask_name)))))
-				// (the two files side by side, as the job read them: which to keep is seen before it is chosen)
-				sync.mutex_lock(&job.mutex)
-				there, coming := job.ask_there, job.ask_coming
-				sync.mutex_unlock(&job.mutex)
-				ui.spacer(ui.px(em * 0.4))
-				conflict_file_line(app, "There", there, coming, em, "###there")
-				conflict_file_line(app, job.kind == .Move ? "Moved" : job.kind == .Restore ? "Put back" : "Copied", coming, there, em, "###coming")
-				ui.spacer(ui.px(em * 0.4))
-				if ui.tags("weak") {
-					ui.next({width = ui.fill()})
-					ui.paragraph("Replace it, keep both (the new one numbered), or skip it.###text")
-				}
-				ui.spacer(ui.px(em * 0.6))
-				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0))})
-				if ui.row(.Center) { ui.checkbox("###all", "Do the same for the next ones", &v.all) }
-				ui.spacer(ui.px(em * 1.1))
-				ui.next({width = ui.fill(), height = ui.children_sum()})
-				if ui.row(id = "###buttons") {
-					bw :: proc(em: f32) { ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))}) }
-					bw(em)
-					if ui.button("Cancel the job###cancel").clicked { job_cancel(job); v.open = false }
-					ui.spacer(ui.fill())
-					bw(em)
-					if ui.button("Skip###skip").clicked { answer = .Skip }
-					ui.spacer(ui.px(em * 0.6))
-					bw(em)
-					if ui.button("Keep both (Enter)###both").clicked || ui.key_press(.Return) { answer = .Keep_Both }
-					ui.spacer(ui.px(em * 0.6))
-					bw(em)
-					if ui.tags("danger_button") { if ui.button("Replace###replace").clicked { answer = .Replace } }
-				}
+	if ui.modal("conflict", em * CONFLICT_WIDTH_EM, &v.open) {
+		title := fmt.tprintf("%s is already in %s", ui.text_shown(fs.base(job.ask_name)), ui.text_shown(fs.base(fs.parent(job.ask_name))))
+		if ui.dialog_header("title", title, {icon = lucide.FILES, icon_font = app.icons, close = true}) {}
+		if ui.dialog_body("body") {
+			// (the two files side by side, as the job read them: which to keep is seen before it is chosen)
+			sync.mutex_lock(&job.mutex)
+			there, coming := job.ask_there, job.ask_coming
+			sync.mutex_unlock(&job.mutex)
+			conflict_file_line(app, "There", there, coming, em, "###there")
+			conflict_file_line(app, job.kind == .Move ? "Moved" : job.kind == .Restore ? "Put back" : "Copied", coming, there, em, "###coming")
+			ui.spacer(ui.px(em * 0.4))
+			if ui.tags("weak") {
+				ui.next({width = ui.fill()})
+				ui.paragraph("Replace it, keep both (the new one numbered), or skip it.###text")
 			}
+			ui.spacer(ui.px(em * 0.6))
+			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.0))})
+			if ui.row(.Center) { ui.checkbox("###all", "Do the same for the next ones", &v.all) }
 		}
-		ui.spacer(ui.px(pad))
+		if ui.dialog_buttons("buttons") {
+			bw :: proc(em: f32) { ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))}) }
+			bw(em)
+			if ui.button("Cancel the job###cancel", intent = .Cancel).clicked { job_cancel(job); v.open = false }
+			ui.spacer(ui.px(em * 0.6))
+			bw(em)
+			if ui.button("Skip###skip").clicked { answer = .Skip }
+			ui.spacer(ui.px(em * 0.6))
+			bw(em)
+			if ui.button("Keep both (Enter)###both", intent = .Primary).clicked || ui.key_press(.Return) { answer = .Keep_Both }
+			ui.spacer(ui.px(em * 0.6))
+			bw(em)
+			if ui.button("Replace###replace", intent = .Danger).clicked { answer = .Replace }
+		}
 	}
 	// (Escape closes it: the file is skipped)
 	if !v.open && answer == .Ask && !job.cancel { answer = .Skip }

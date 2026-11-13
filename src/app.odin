@@ -3,22 +3,30 @@ package classeur
 // The running program: one window, its panels of tabs, the workers that read the file system. The interface is built
 // each frame from the App (view.odin); the workers change nothing of it themselves: their results come through ui.post.
 
+import "base:runtime"
 import "core:fmt"
+import "core:log"
+import vmem "core:mem/virtual"
 import "core:strings"
 import "core:sync"
+import "core:thread"
 import "core:time"
 import "core:time/datetime"
 import "core:time/timezone"
 import config "gt:config"
+import crash "gt:crash"
 import "gt:devtools"
 import "gt:font"
 import "gt:host"
 import "gt:instance"
+import tk_log "gt:log"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:render"
 import process "gt:process"
 import setup "gt:setup"
+import store "gt:store"
+import tasks "gt:tasks"
 import update "gt:update"
 import "gt:ui"
 import "fs"
@@ -33,10 +41,10 @@ App :: struct {
 	mono:        font.Font_Id,
 	devtools:    ^devtools.Server,  // TOOLKIT_DEVTOOLS=<port>: driven and captured over the Chrome DevTools Protocol
 	theme_shown: ui.Theme_Shown,
-	pool:        Pool,
-	measure_pool: Pool,
-	thumb_pool:  Pool,              // the thumbnails of the grid (thumbs.odin)
-	edit_pool:   Pool,              // the changes to files the interface asks for (a rename, a new folder, an undo): one
+	pool:        tasks.Pool,        // the reads of folders, the places, the launches: it grows while a share hangs
+	measure_pool: tasks.Pool,
+	thumb_pool:  tasks.Pool,        // the thumbnails of the grid (thumbs.odin): the newest asked first, the cards on screen
+	edit_pool:   tasks.Pool,        // the changes to files the interface asks for (a rename, a new folder, an undo): one
 	                                // worker, so that they are done in the order they were asked (edit_submit)
 	answers_due: int,               // the tasks of edit_submit and places_load whose answer has not come back
 	steps_due:   int,               // the changes on the edits' worker whose step of the undo is not there yet
@@ -125,8 +133,7 @@ App :: struct {
 	cut:         map[string]bool,   // owned keys: the paths cut, drawn dimmed until the paste or another copy or cut (a
 	                                // set: each row shown asks it at each frame)
 	paste:       Paste_Asked,       // the paste waiting for the clipboard's files (actions.odin)
-	status:      string,            // a message for the status bar (owned), until status_until (ui clock, ms)
-	status_until: f64,
+	status:      string,            // owned: the last message said (say, announce), as the tests read it
 	room:        f32,               // the window's width at this build, logical pixels
 	window_px:   [2]f32,            // the window's size at this build, frame pixels (a tab dragged out of it)
 	text_keys:   [dynamic]ui.Key,   // the text fields built in this frame (view.odin: the keys of the list are not theirs)
@@ -161,7 +168,7 @@ App :: struct {
 	update_serial:  int,               // the updater's state last said
 	installed_copy: bool,              // this copy is the installed one: it updates itself by itself
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
-	announcer:     ui.Announcer,       // a long job ended while the window is behind others: said by the system too
+	announcer:     ui.Announcer,       // where a finished act is said (announce): general.messages
 	system_thumbs: bool,            // the system's thumbnails are asked (desktop.thumbnail: its cache, its thumbnailers);
 	                                // off headless, so a test never reaches the person's cache (one turns it on with its own)
 	session_path: string,           // owned: the tests' session file ("": the person's, none when headless)
@@ -173,10 +180,13 @@ App :: struct {
 	tab_coming:   bool,             // a tab of another window is dragged over this one (tab_drop) ...
 	tab_coming_at: [2]f32,          // ... the pointer there
 	tab_coming_path: string,        // owned: ... its folder, "" until the system gives it (Linux: at the drop)
-	session_writer: File_Writer,    // the files written on a worker, one write at a time each (file_writer.odin)
-	prefs_writer:   config.User_Writer,
-	layouts_writer: File_Writer,
-	setup_writer:   File_Writer,
+	session_writer: store.Writer,   // the files written as the window runs, each by a thread of its own: the window
+	prefs_writer:   config.User_Writer,   // never waits for a disk, the latest text wins
+	layouts_writer: store.Writer,
+	setup_writer:   store.Writer,
+	prefs_words:    vmem.Arena,     // the standard preferences' descriptions (the registry keeps them: prefs.odin)
+	crash_report:   string,         // owned: the report of the last session, which did not end cleanly ("": none)
+	crash_asking:   bool,           // the question of that report is shown (crash_build)
 	mounting:     [dynamic]string,  // owned: the shares being found or mounted on a worker (locations.odin)
 	shares:       []fs.Share,       // the shares of the network mounted now (the sidebar's Network section)
 	devices:      []fs.Network_Device,   // the devices of the network that share files, as last found (network.odin)
@@ -221,11 +231,29 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 		outcome, owner = instance.acquire({name = name, wait_ms = 2000}, transmute([]u8)message)
 		if outcome == .Forwarded { return 0 }
 	}
+	// (a window's process only: a second start forwarded above writes nothing)
+	logger := tk_log.install({program = APP_NAME, echo = true})
+	program_logger = logger
+	context.logger = logger
+	defer {
+		context.logger = {}
+		program_logger = {}
+		tk_log.close(logger)
+	}
+	crash.install({program = APP_NAME, version = APP_VERSION, log_tail = {tk_log.tail, logger.data}})
+	// (the session's mark: the main window's alone, a torn-off one's process ends with its tab)
+	report := ""
+	if !standalone {
+		crash.begin_session()
+		report, _ = crash.last_report(context.temp_allocator)
+	}
 	app := app_open({folders = folders, standalone = standalone})
 	if app == nil {
 		if outcome == .First { instance.owner_stop(&owner) }
+		if !standalone { crash.end_session() }
 		return 1
 	}
+	if report != "" { crash_offer(app, report) }
 	server: ^instance.Server
 	if outcome == .First { server = instance.serve_start(owner, app_message, app) }
 	platform.show_window(app.main.win)
@@ -240,7 +268,10 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 	launch := strings.clone(app.launch_after, context.temp_allocator)
 	setup.finish(&app.setup, setup_config())
 	app_close(app)
-	if !standalone { fs.archive_take_out_clear() }   // (what was opened out of archives: the main window's to remove)
+	if !standalone {
+		fs.archive_take_out_clear()   // (what was opened out of archives: the main window's to remove)
+		crash.end_session()
+	}
 	// (the Setup installed a copy and asked to open it: it starts once this one let go of the instance)
 	if launch != "" { _ = setup.launch(launch) }
 	return 0
@@ -310,13 +341,13 @@ app_open :: proc(o: Open_Options) -> ^App {
 	platform.set_app_id(APP_NAME)
 	size := o.size != {} ? o.size : WINDOW_SIZE
 	if !host.host_open(&app.main, &app.shared, {title = "Classeur", size = size, integrated_title = !o.headless, headless = o.headless}, view_build, app) {
-		fmt.eprintln("classeur: no window")
+		log.error("classeur: no window")
 		free(app)
 		return nil
 	}
 	h := &app.main
 	win := h.win
-	if !o.headless { app.announcer = {mode = .System, window = win} }
+	if !o.headless { app.announcer.window = win }   // (its mode: general.messages, settings_apply)
 	app.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
 	app.mono, _ = font.load_embedded(&app.shared.fonts, font.FALLBACK_MONO_DATA)
 	h.state.icon_font = app.icons   // (the menus' icons are the commands' Lucide ones; the widgets keep the toolkit's marks)
@@ -330,16 +361,17 @@ app_open :: proc(o: Open_Options) -> ^App {
 	app.devtools = devtools.start_from_env(win, APP_NAME)
 	h.before_input = proc(h: ^host.Host) { app := (^App)(h.user); devtools.service(app.devtools, &h.state, &app.shared.r) }
 
-	pool_start(&app.pool, POOL_THREADS, POOL_GROW)
-	pool_start(&app.measure_pool, MEASURE_THREADS)
-	pool_start(&app.thumb_pool, THUMB_THREADS, THUMB_THREADS, newest_first = true)
-	pool_start(&app.edit_pool, 1)
+	pools_start(app)
 	app.palette.recording = -1   // (no command's keys recorded: the recorder is shut)
 	app.side_open = {.Recents = false, .Bookmarks = true, .Storage = true, .Network = true, .Places = true}
 	jobs_start(app)
 	watcher_start(app)
 	places_load(app)
 	layouts_load(app)
+	// (the files written as the window runs: their paths known now, a test's included)
+	if path := session_file(app); path != "" { store.writer_open(&app.session_writer, path) }
+	if path := layouts_file(app); path != "" { store.writer_open(&app.layouts_writer, path) }
+	if !app.headless { store.writer_open(&app.setup_writer, setup_choice_file()) }
 	// (the session's tabs come back; folders given open beside them, as the second start's do)
 	if session_load(app) {
 		folders_show(app, o.folders)
@@ -387,6 +419,39 @@ app_frame :: proc(app: ^App) {
 // does not stop).
 QUIT_WAIT_MS :: 500
 
+// The workers that read folders (the measures and the thumbnails have their own: MEASURE_THREADS, THUMB_THREADS), and
+// the ones the reads may add while theirs are held by a share that hangs.
+POOL_THREADS :: 3
+POOL_GROW    :: 8
+
+// The program's log, for the workers' context ({}: none, as in the tests).
+program_logger: runtime.Logger
+
+// The workers' context: the heap and each thread's own temporary memory, never the opener's (a test's tracking
+// allocator is not shared between threads).
+@(private = "file")
+pools_start :: proc(app: ^App) {
+	context = runtime.default_context()
+	if program_logger.procedure != nil { context.logger = program_logger }
+	tasks.start(&app.pool, {threads = POOL_THREADS, grow = POOL_GROW})
+	tasks.start(&app.measure_pool, {threads = MEASURE_THREADS})
+	tasks.start(&app.thumb_pool, {threads = THUMB_THREADS, grow = THUMB_THREADS, newest_first = true})
+	tasks.start(&app.edit_pool, {threads = 1})
+}
+
+// Stops a pool, the work that waits dropped (its memory goes with the process), and waits for its threads until
+// `until`. A read of a share that hangs never ends and tasks.stop joins it: the stop runs on a thread of its own, and
+// one still running then is left to the process's end. False: the pool's threads may still read the App.
+@(private = "file")
+pool_stop_until :: proc(p: ^tasks.Pool, until: time.Tick) -> bool {
+	stopper := thread.create_and_start_with_data(p, proc(data: rawptr) { tasks.stop((^tasks.Pool)(data), proc(data: rawptr) {}) })
+	for !thread.is_done(stopper) && time.tick_diff(time.tick_now(), until) > 0 { time.sleep(2 * time.Millisecond) }
+	if !thread.is_done(stopper) { return false }
+	thread.join(stopper)
+	thread.destroy(stopper)
+	return true
+}
+
 app_close :: proc(app: ^App) {
 	watcher_stop(app)
 	jobs_stop(app)
@@ -404,14 +469,14 @@ app_close :: proc(app: ^App) {
 	// A read of a share that hangs never ends, and a thread cannot be joined with a time limit: the workers get until
 	// QUIT_WAIT_MS, then one still in its task is left to the process's end. It still reads the App: then it is not freed.
 	until := time.tick_add(time.tick_now(), QUIT_WAIT_MS * time.Millisecond)
-	reads_ended := pool_stop(&app.pool, proc(data: rawptr) {}, until)   // (a read left waiting: its memory goes with the process)
-	edits_ended := pool_stop(&app.edit_pool, proc(data: rawptr) {}, until)
-	session_save(app)   // (after the workers: a bookmark's write on one of them never comes after this one)
-	// (a write still pending, its task dropped with the workers: written now)
-	file_writer_flush(&app.layouts_writer)
-	file_writer_flush(&app.setup_writer)
-	measures_ended := pool_stop(&app.measure_pool, proc(data: rawptr) {}, until)
-	thumbs_ended := pool_stop(&app.thumb_pool, proc(data: rawptr) {}, until)
+	reads_ended := pool_stop_until(&app.pool, until)
+	edits_ended := pool_stop_until(&app.edit_pool, until)
+	session_save(app)   // (after the workers: a bookmark asked of one of them is in it)
+	// (what is pending written now: the process may end before their threads would)
+	store.writer_flush(&app.layouts_writer)
+	store.writer_flush(&app.setup_writer)
+	measures_ended := pool_stop_until(&app.measure_pool, until)
+	thumbs_ended := pool_stop_until(&app.thumb_pool, until)
 	thumbs_free(app)
 	icons_free(app)
 	type_names_free(app)
@@ -459,6 +524,7 @@ app_free :: proc(app: ^App) {
 	delete(app.home)
 	delete(app.session_path)
 	delete(app.status)
+	delete(app.crash_report)
 	delete(app.text_keys)
 	measures_free(app)
 	for p in app.recents { delete(p) }
@@ -472,10 +538,10 @@ app_free :: proc(app: ^App) {
 	delete(app.tab_coming_path)
 	delete(app.session_written)
 	delete(app.session_seen)
-	file_writer_free(&app.session_writer)
+	store.writer_close(&app.session_writer)
 	_ = config.user_writer_stop(&app.prefs_writer, &app.prefs)
-	file_writer_free(&app.layouts_writer)
-	file_writer_free(&app.setup_writer)
+	store.writer_close(&app.layouts_writer)
+	store.writer_close(&app.setup_writer)
 	for u in app.mounting { delete(u) }
 	delete(app.mounting)
 	ui.field_destroy(&app.side_filter)
@@ -511,15 +577,24 @@ app_frames :: proc(app: ^App) {
 	app.main.settle = max(app.main.settle, FRAMES_AFTER_INPUT)
 }
 
-// Shows a message in the status bar for a few seconds.
+// A message in the window for a few seconds (a toast): what went wrong, a hint, a state just changed.
 say :: proc(app: ^App, format: string, args: ..any) {
-	delete(app.status)
-	app.status = fmt.aprintf(format, ..args)
-	app.status_until = ui.now_ms() + STATUS_SHOWN_MS
+	status_keep(app, fmt.tprintf(format, ..args))
 	if !app.headless { ui.toast(.Info, "%s", app.status) }
 }
 
-STATUS_SHOWN_MS :: 4000
+// A finished act (copied, saved, deleted, moved), said where general.messages says: the system's notifications, the
+// window, or nowhere. A failure (.Bad) is always said.
+announce :: proc(app: ^App, kind: ui.Toast_Kind, format: string, args: ..any) {
+	status_keep(app, fmt.tprintf(format, ..args))
+	if !app.headless { ui.announce(&app.announcer, kind, app.status) }
+}
+
+@(private = "file")
+status_keep :: proc(app: ^App, text: string) {
+	delete(app.status)
+	app.status = strings.clone(text)
+}
 
 // How square the corners are (1: the toolkit's) and how dense the rows (1: the toolkit's).
 ROUNDING :: 0.25
@@ -535,14 +610,6 @@ selection_color :: proc(app: ^App) -> ui.Color { return ui.color("selection") }
 
 // The themes the window can show: the toolkit's (gui_toolkit docs/themes.md), the same as its other programs'.
 themes :: proc() -> []ui.Theme_Def { return ui.THEMES[:] }
-
-// Text to show as it is: a "##" in it would end the shown part of a box's id string (ui's key rules), so a zero-width
-// space goes between the two signs.
-shown_text :: proc(text: string, allocator := context.temp_allocator) -> string {
-	if !strings.contains(text, "##") { return text }
-	out, _ := strings.replace_all(text, "##", "#​#", allocator)
-	return out
-}
 
 // The window's input before the interface: Ctrl+wheel over a panel zooms its view (File Pilot's), and the list under it
 // does not scroll. The clipboard's answers go to what asked for them.

@@ -436,12 +436,12 @@ side_folder :: proc(app: ^App, id, path, name, under: string, here: string, curs
 		ui.spacer(ui.px(em * 0.5))
 		if under == "" {
 			ui.next({width = ui.fill(), height = ui.pct(1)})
-			ui.label(fmt.tprintf("%s###n", shown_text(name)))
+			ui.label(fmt.tprintf("%s###n", ui.text_shown(name)))
 		} else {
 			ui.next({width = ui.text_size(em * 0.2), height = ui.pct(1)})
-			ui.label(fmt.tprintf("%s###n", shown_text(name)))
+			ui.label(fmt.tprintf("%s###n", ui.text_shown(name)))
 			ui.next({width = ui.fill(), height = ui.pct(1)})
-			if ui.tags("weak") { ui.label(fmt.tprintf("%s###under", shown_text(under))) }
+			if ui.tags("weak") { ui.label(fmt.tprintf("%s###under", ui.text_shown(under))) }
 		}
 		drop_zone(app, ui.parent_box().rect, path)
 		if app.drop_hover == path { drop_mark(ui.parent_box()) }
@@ -462,7 +462,7 @@ side_row :: proc(app: ^App, id, path: string, name: string, here: bool, cursor: 
 		path_icon(app, path, true, em * 1.7)
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###n", shown_text(name)))
+		ui.label(fmt.tprintf("%s###n", ui.text_shown(name)))
 		drop_zone(app, ui.parent_box().rect, path)
 		if app.drop_hover == path { drop_mark(ui.parent_box()) }
 	}
@@ -501,7 +501,7 @@ side_volume :: proc(app: ^App, i: int, v: fs.Volume, sp: fs.Space, here: bool, c
 		if ui.column() {
 			ui.spacer(ui.fill())
 			ui.next({width = ui.fill(), height = ui.px(em * 1.45)})
-			ui.label(fmt.tprintf("%s###n", shown_text(v.label)))
+			ui.label(fmt.tprintf("%s###n", ui.text_shown(v.label)))
 			ui.spacer(ui.px(em * 0.1))
 			if sp.total > 0 {
 				used := 1 - f32(f64(sp.free) / f64(sp.total))
@@ -576,10 +576,10 @@ side_device :: proc(app: ^App, i: int, d: fs.Network_Device, cursor: bool, em: f
 		glyph(app, DEVICE_ICONS[fs.device_kind(d)], em * 1.7)
 		ui.spacer(ui.px(em * 0.5))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###n", shown_text(d.name)))
+		ui.label(fmt.tprintf("%s###n", ui.text_shown(d.name)))
 	}
 	// (the tip's text made only while it shows)
-	if ui.hovered_for(sig, 0.5) { hover_tip(sig, fs.device_where(d), d.services[0].uri) }
+	if ui.hovered_for(sig) { hover_tip(sig, fs.device_where(d), d.services[0].uri) }
 	return
 }
 
@@ -598,7 +598,7 @@ side_device_menu_build :: proc(app: ^App) {
 	if app.side_device_key == 0 { return }
 	if ui.ctx_menu(app.side_device_key) {
 		for u, i in app.side_device_uris {
-			if ui.menu_item(fmt.tprintf("Open %s###dev_open%d", shown_text(u), i), icon = lucide.FOLDER_OPEN).clicked {
+			if ui.menu_item(fmt.tprintf("Open %s###dev_open%d", ui.text_shown(u), i), icon = lucide.FOLDER_OPEN).clicked {
 				if t := current_tab(app); t != nil { tab_go(app, t, u) }
 			}
 		}

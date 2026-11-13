@@ -113,29 +113,20 @@ control_look :: proc(em: f32) -> ui.Style_Mod { return {radius = em * CONTROL_RA
 // A small flat button with a Lucide icon; its tooltip says what it does. `on`: lit in the accent (a toggle that is on).
 icon_action :: proc(app: ^App, id, g, tip: string, em: f32, enabled := true, on := false) -> bool {
 	side := em * 2.0
-	ui.next({width = ui.px(side), height = ui.px(side), font = app.icons, text_pad = 0, fg = on ? ui.color("accent") : nil})
+	ui.next({width = ui.px(side), height = ui.px(side), text_pad = 0, fg = on ? ui.color("accent") : nil})
 	ui.next_merge(control_look(em))
-	sig: ui.Signal
-	if ui.disabled(!enabled) {
-		if ui.tags("ghost_button") { sig = ui.button(fmt.tprintf("%s###%s", g, id)) }
-	}
-	if ui.hovered_for(sig, 0.4) {
-		if ui.tooltip() {
-			ui.next({width = ui.text_size(em * 0.6), height = ui.px(ui.dense(em * 1.8))})
-			ui.label(fmt.tprintf("%s###tip", tip))
-		}
-	}
+	sig := ui.icon_button(id, g, tip = tip, icon_font = app.icons, disabled = !enabled)
 	return enabled && sig.clicked
 }
 
 // A tooltip after the pointer rests on `sig`'s box: its lines, one under the other.
 hover_tip :: proc(sig: ui.Signal, lines: ..string) {
-	if !ui.hovered_for(sig, 0.5) || len(lines) == 0 { return }
+	if !ui.hovered_for(sig) || len(lines) == 0 { return }
 	if ui.tooltip() {
 		for l, i in lines {
 			if l == "" { continue }
 			if i > 0 { ui.push_tags("weak") }
-			ui.tooltip_text(fmt.tprintf("%s###tip%d", shown_text(l), i))
+			ui.tooltip_text(fmt.tprintf("%s###tip%d", ui.text_shown(l), i))
 			if i > 0 { ui.pop_tags() }
 		}
 	}
@@ -321,14 +312,12 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 						ui.spacer(ui.px(em * 0.4))
 						ui.next({width = ui.fill(), height = ui.pct(1)})
 						if !on { ui.push_tags("weak") }
-						ui.label(fmt.tprintf("%s###title", shown_text(tab_title(app, t))))
+						ui.label(fmt.tprintf("%s###title", ui.text_shown(tab_title(app, t))))
 						if !on { ui.pop_tags() }
 						if on || ui.hot_within(tab.key) {
 							ui.next({width = ui.px(em * 1.6), height = ui.px(em * 1.6), font = app.icons, font_size = em * 0.85, text_pad = 0})
 							ui.next_merge(control_look(em))
-							if ui.tags("ghost_button") {
-								if ui.button(fmt.tprintf("%s###close", lucide.X)).clicked { close = i }
-							}
+							if ui.button(fmt.tprintf("%s###close", lucide.X), face = .Ghost).clicked { close = i }
 						} else {
 							ui.spacer(ui.px(em * 1.6))
 						}

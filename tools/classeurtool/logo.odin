@@ -5,15 +5,14 @@ package classeurtool
 // part a soft vertical gradient with a darker edge. Small sizes drop the second sheet (detail_for).
 // assets/logo.png (1024 px) and the sizes the program and the site embed.
 
-import "core:fmt"
-import "core:os"
 import paint "gt:paint"
+import toolbox "gt:toolbox"
 
 LOGO_DIR    :: "assets"
 LOGO_MASTER :: 1024
-LOGO_SIZES  :: [?]int{16, 32, 64, 128, 256}
+@(rodata) LOGO_SIZES := [?]int{16, 32, 64, 128, 256}
 // The sizes of the .ico of classeur.exe (Explorer's lists and tiles, the taskbar, the window's corner, at every scale).
-ICO_SIZES   :: [?]int{16, 20, 24, 32, 40, 48, 64, 96, 128, 256}
+@(rodata) ICO_SIZES := [?]int{16, 20, 24, 32, 40, 48, 64, 96, 128, 256}
 ICO_FILE    :: "assets/classeur.ico"
 // The drawing's own units: a square of LOGO_UNITS, scaled to the canvas.
 LOGO_UNITS  :: 512.0
@@ -135,38 +134,11 @@ logo_render :: proc(size: int) -> paint.Canvas {
 	return c
 }
 
-run_logo :: proc(args: []string) -> int {
-	_ = os.make_directory_all(LOGO_DIR)
-	master := logo_render(LOGO_MASTER)
-	defer paint.canvas_destroy(&master)
-	path := fmt.tprintf("%s/logo.png", LOGO_DIR)
-	if !paint.write_png(master, path) { fmt.eprintfln("classeurtool: %s cannot be written", path); return 1 }
-	fmt.printfln("wrote %s", path)
-	for size in LOGO_SIZES {
-		c := logo_render(size)
-		defer paint.canvas_destroy(&c)
-		p := fmt.tprintf("%s/logo_%d.png", LOGO_DIR, size)
-		if !paint.write_png(c, p) { fmt.eprintfln("classeurtool: %s cannot be written", p); return 1 }
-		fmt.printfln("wrote %s", p)
+// The files the `logo` command writes: assets/logo.png, the sizes the program and the site embed, the icon of
+// classeur.exe (res/classeur.rc: every size Windows asks for, each a PNG) and the project's picture.
+logo :: proc() -> toolbox.Logo {
+	return {
+		render = proc(size: int, user: rawptr) -> paint.Canvas { return logo_render(size) },
+		dir = LOGO_DIR, master = LOGO_MASTER, sizes = LOGO_SIZES[:], ico = ICO_FILE, ico_sizes = ICO_SIZES[:], project_image = true,
 	}
-	// the icon of classeur.exe (res/classeur.rc): every size Windows asks for, each a PNG
-	entries := make([dynamic]paint.Ico_Entry, context.temp_allocator)
-	for size in ICO_SIZES {
-		c := logo_render(size)
-		defer paint.canvas_destroy(&c)
-		append(&entries, paint.Ico_Entry{size, paint.png_encode(c, context.temp_allocator)})
-	}
-	ico := paint.ico_encode(entries[:], context.temp_allocator)
-	if os.write_entire_file(ICO_FILE, ico) != nil { fmt.eprintfln("classeurtool: %s cannot be written", ICO_FILE); return 1 }
-	fmt.printfln("wrote %s", ICO_FILE)
-	// the project's picture (.project/image.png, 512 px): what the repository and opencode's sessions of it show
-	project := logo_render(PROJECT_IMAGE_SIZE)
-	defer paint.canvas_destroy(&project)
-	_ = os.make_directory_all(".project")
-	if !paint.write_png(project, PROJECT_IMAGE) { fmt.eprintfln("classeurtool: %s cannot be written", PROJECT_IMAGE); return 1 }
-	fmt.printfln("wrote %s", PROJECT_IMAGE)
-	return 0
 }
-
-PROJECT_IMAGE      :: ".project/image.png"
-PROJECT_IMAGE_SIZE :: 512

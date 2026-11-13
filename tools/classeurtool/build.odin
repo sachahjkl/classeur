@@ -5,91 +5,20 @@ package classeurtool
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import changelog "gt:changelog"
 import toolbox "gt:toolbox"
 
-// What a build on Linux needs: the Rust standard library that both the toolkit's text backend and wgpu-native carry,
-// linked once (the same code: the toolkit's own CI does the same).
-LINUX_LINK    :: "-extra-linker-flags:-Wl,--allow-multiple-definition"
 // The packages that have tests, and this tool.
 TEST_PACKAGES :: [?]string{"src", "src/fs", "tools/classeurtool"}
-when ODIN_OS == .Windows {
-	PROGRAM :: "build/classeur.exe"
-} else {
-	PROGRAM :: "build/classeur"
-}
-
-toolkit :: proc() -> string {
-	if v := os.get_env("GT", context.temp_allocator); v != "" { return v }
-	return "ext/gui_toolkit"
-}
-
-collection :: proc() -> string { return fmt.tprintf("-collection:gt=%s/src", toolkit()) }
-
-// An odin command on a package of the program: the toolkit's collection, -vet, and on Linux the text backend.
-odin_cmd :: proc(verb, pkg: string, extra: []string) -> []string {
-	cmd := make([dynamic]string, context.temp_allocator)
-	append(&cmd, "odin", verb, pkg, collection(), "-vet")
-	when ODIN_OS == .Linux {
-		if verb != "check" { append(&cmd, LINUX_LINK) }   // (check links nothing)
-	}
-	append(&cmd, ..extra)
-	return cmd[:]
-}
-
-// The toolkit's text library, built by its own tool (it skips what is up to date).
-build_text :: proc() -> bool {
-	when ODIN_OS == .Linux {
-		_ = os.make_directory_all(fmt.tprintf("%s/build", toolkit()))   // (a fresh checkout has none: the linker writes tk there)
-		return toolbox.run({"odin", "run", "tools/tk", "-out:build/tk", "--", "build_text"}, {dir = toolkit(), echo = true})
-	} else {
-		return true
-	}
-}
-
-// classeur.com, the console launcher (the toolkit's tools/console_launcher) that classeur embeds (src/system_windows.odin):
-// its mark, and its rules: a folder (or none) opens a window and gives the prompt back; a command waits and gives its
-// output and exit code through.
-LAUNCHER_OUT :: "build/classeur.com"
-LAUNCHER_DEFINES :: [?]string{
-	"-define:LAUNCHER_MARK=(classeur console launcher)",
-	"-define:LAUNCHER_DEFAULT=detach",
-	"-define:LAUNCHER_OTHERS=install,uninstall,status,version,--version,help,-h,--help",
-}
-
-build_launcher :: proc() -> bool {
-	when ODIN_OS == .Windows {
-		_ = os.make_directory_all("build")
-		cmd := make([dynamic]string, context.temp_allocator)
-		append(&cmd, "odin", "build", fmt.tprintf("%s/tools/console_launcher", toolkit()), "-vet", "-subsystem:console", "-o:size", fmt.tprintf("-out:%s", LAUNCHER_OUT))
-		defines := LAUNCHER_DEFINES
-		append(&cmd, ..defines[:])
-		return toolbox.run(cmd[:], {echo = true})
-	} else {
-		return true
-	}
-}
-
-// Windows: classeur.com, beside the release build, gives classeur's output and exit code through.
-check_launcher :: proc() -> bool {
-	when ODIN_OS == .Windows {
-		out, code := toolbox.capture({LAUNCHER_OUT, "version"})
-		want := fmt.tprintf("classeur %s", app_version())
-		if code != 0 || strings.trim_space(out) != want {
-			fmt.eprintfln("classeurtool: classeur.com version gave %q (exit code %d), not %q", strings.trim_space(out), code, want)
-			return false
-		}
-		fmt.println("classeur.com: classeur's output and exit code")
-	}
-	return true
-}
 
 // The icon of classeur.exe (resource 1: Explorer's, and the window's: platform.open_window loads it); `logo` writes
 // the .ico it names.
 RESOURCE :: "res/classeur.rc"
 
 run_build :: proc(args: []string) -> int {
+	p := project()
 	release := len(args) > 0 && args[0] == "release"
-	if !build_text() || !build_launcher() { return 1 }
+	if !toolbox.build_native_text(p) || !toolbox.build_launcher(p) { return 1 }
 	_ = os.make_directory("build")
 	mode := release ? []string{"-o:speed"} : []string{"-debug"}
 	extra := make([dynamic]string, context.temp_allocator)
@@ -99,73 +28,67 @@ run_build :: proc(args: []string) -> int {
 		if release { append(&extra, "-subsystem:windows") }
 		append(&extra, fmt.tprintf("-resource:%s", RESOURCE))
 	}
-	if !toolbox.run(odin_cmd("build", "src", extra[:]), {echo = true}) { return 1 }
+	if !toolbox.run(toolbox.odin_command(p, "build", "", extra[:]), {echo = true}) { return 1 }
 	fmt.printfln("built %s", PROGRAM)
 	return 0
 }
 
 run_test :: proc(args: []string) -> int {
-	if !build_text() || !build_launcher() { return 1 }
+	p := project()
+	if !toolbox.build_native_text(p) || !toolbox.build_launcher(p) { return 1 }
 	_ = os.make_directory("build")
 	// (names given, `classeur.test_watch,classeur.test_zoom_icons_stay`: those tests of the program alone, in that order)
 	if len(args) > 0 {
 		out := fmt.tprintf("-out:build/test_some%s", ODIN_OS == .Windows ? ".exe" : "")
 		names := fmt.tprintf("-define:ODIN_TEST_NAMES=%s", args[0])
-		return toolbox.run(odin_cmd("test", "src", {out, names, "-define:ODIN_TEST_THREADS=1", "-define:ODIN_TEST_LOG_STATE_CHANGES=true"}), {echo = true}) ? 0 : 1
+		return toolbox.run(toolbox.odin_command(p, "test", "src", {out, names, "-define:ODIN_TEST_THREADS=1", "-define:ODIN_TEST_LOG_STATE_CHANGES=true"}), {echo = true}) ? 0 : 1
 	}
 	for pkg in TEST_PACKAGES {
 		name, _ := strings.replace_all(pkg, "/", "_", context.temp_allocator)
 		out := fmt.tprintf("-out:build/test_%s%s", name, ODIN_OS == .Windows ? ".exe" : "")
 		// (each test said as it starts: a test that hangs is the last one said; the CI's log shows it)
 		extra := pkg == "src" ? []string{out, "-define:ODIN_TEST_THREADS=1", "-define:ODIN_TEST_LOG_STATE_CHANGES=true"} : []string{out}
-		cmd := pkg == "tools/classeurtool" ? []string{"odin", "test", pkg, collection(), "-vet", out} : odin_cmd("test", pkg, extra)
+		// (the tool links no native library: no Linux link flag)
+		cmd := pkg == "tools/classeurtool" ? []string{"odin", "test", pkg, fmt.tprintf("-collection:gt=%s/src", toolbox.toolkit_dir(p)), "-vet", out} : toolbox.odin_command(p, "test", pkg, extra)
 		if !toolbox.run(cmd, {echo = true}) { return 1 }
 	}
 	return 0
 }
 
 run_check :: proc(args: []string) -> int {
-	if !changelog_check() { return 1 }
-	if !check_scopes() { return 1 }
+	p := project()
+	if !changelog_check(p) { return 1 }
+	if !toolbox.check_scopes("src") { return 1 }
 	if !check_systems() { return 1 }
-	if !build_launcher() { return 1 }   // (classeur embeds it: odin check reads it)
-	if !toolbox.run(odin_cmd("check", "src", nil), {echo = true}) { return 1 }
-	// (the file system's code of the other system is checked too: the program is written for both; the whole program
-	// cannot be, the renderer of the other system needs its libraries)
-	other := ODIN_OS == .Windows ? "-target:linux_amd64" : "-target:windows_amd64"
-	if !toolbox.run({"odin", "check", "src/fs", collection(), "-vet", "-no-entry-point", other}, {echo = true}) { return 1 }
-	if !toolbox.run({"odin", "check", "tools/classeurtool", collection(), "-vet"}, {echo = true}) { return 1 }
+	if !toolbox.build_launcher(p) { return 1 }   // (classeur embeds it: odin check reads it)
+	if !toolbox.run(toolbox.odin_command(p, "check"), {echo = true}) { return 1 }
+	// (the whole program for Windows too, from any system: Windows code that does not compile fails the Linux job)
+	when ODIN_OS != .Windows {
+		// (classeur embeds its console launcher, which only a Windows build makes: an empty one stands for it in a check,
+		// which links nothing)
+		if !os.exists(p.launcher.out) {
+			_ = os.make_directory_all("build")
+			if os.write_entire_file(p.launcher.out, []u8{}) != nil { fmt.eprintfln("classeurtool: %s cannot be written", p.launcher.out); return 1 }
+		}
+		if !toolbox.check_windows(p) { return 1 }
+	} else {
+		// (the file system's code of the other system: the program is written for both)
+		if !toolbox.run({"odin", "check", "src/fs", fmt.tprintf("-collection:gt=%s/src", toolbox.toolkit_dir(p)), "-vet", "-no-entry-point", "-target:linux_amd64"}, {echo = true}) { return 1 }
+	}
+	if !toolbox.run({"odin", "check", "tools/classeurtool", fmt.tprintf("-collection:gt=%s/src", toolbox.toolkit_dir(p)), "-vet"}, {echo = true}) { return 1 }
 	if run_test(nil) != 0 { return 1 }
 	if run_build({"release"}) != 0 { return 1 }
-	return check_launcher() && check_exe_icon() ? 0 : 1
+	return toolbox.check_launcher(p) && check_exe_icon() ? 0 : 1
 }
 
-// The scopes of gui_toolkit (ui.row, ui.parent...) end with the statement they open: `if !ui.row(...) { return }` closes
-// the row at once and its children go to the parent's parent. The compiler accepts it; this check does not.
-SCOPES :: [?]string{"parent", "row", "column", "field_frame", "scroll_y", "style", "tags", "title_bar", "modal", "ctx_menu", "menu_submenu", "tooltip"}
-
-check_scopes :: proc() -> bool {
-	files, ok_files := source_files("src")
-	if !ok_files { return false }
-	ok := true
-	scopes := SCOPES
-	for f in files {
-		if !strings.has_suffix(f.name, ".odin") { continue }
-		data, rerr := os.read_entire_file(f.fullpath, context.temp_allocator)
-		if rerr != nil { continue }
-		text := string(data)
-		n := 0
-		for line in strings.split_lines_iterator(&text) {
-			n += 1
-			for sc in scopes {
-				if strings.contains(line, fmt.tprintf("if !ui.%s(", sc)) {
-					fmt.eprintfln("%s:%d: `if !ui.%s(...)` ends the scope at once: build inside `if ui.%s(...)` and its block", f.fullpath, n, sc, sc)
-					ok = false
-				}
-			}
-		}
-	}
-	return ok
+// The fragments of changelog.d/, as `changelog check` says them.
+@(private = "file")
+changelog_check :: proc(p: toolbox.Project) -> bool {
+	q := p
+	errors, n := changelog.check(changelog.project_options(&q))
+	for e in errors { fmt.eprintln("changelog:", e) }
+	if len(errors) == 0 { fmt.printfln("changelog: %d fragments, all well formed", n) }
+	return len(errors) == 0
 }
 
 // The system and the interface apart: the interface (src/*.odin) asks src/fs and the toolkit (platform, desktop) what

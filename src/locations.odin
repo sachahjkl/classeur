@@ -7,6 +7,7 @@ package classeur
 // is, or the reason it is not is said.
 
 import "core:strings"
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -55,7 +56,7 @@ share_open_start :: proc(app: ^App, text: string, tab: u64) {
 	app.answers_due += 1
 	m := new(Share_Open)
 	m^ = {app = app, text = strings.clone(text), tab = tab}
-	pool_submit(&app.pool, proc(data: rawptr) {
+	tasks.add(&app.pool, proc(data: rawptr) {
 		m := (^Share_Open)(data)
 		r, e := fs.location_resolve(m.text, context.temp_allocator)
 		if e == .Not_Mounted {

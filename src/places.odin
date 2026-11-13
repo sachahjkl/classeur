@@ -6,6 +6,7 @@ package classeur
 
 import "core:strings"
 import "gt:platform"
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -45,7 +46,7 @@ places_load :: proc(app: ^App) {
 	app.answers_due += 1
 	r := new(Places_Read)
 	r^ = {app = app, serial = app.places_asked, home = strings.clone(app.home)}
-	pool_submit(&app.pool, places_run, r)
+	tasks.add(&app.pool, places_run, r)
 }
 
 @(private = "file")
@@ -63,7 +64,7 @@ places_run :: proc(data: rawptr) {
 		append(&r.places, Place{name = strings.clone(k.name), path = path})
 	}
 	// the root of the system (File Pilot's This PC) and the trash, as the system has them
-	for sp in fs.system_places(r.home, context.temp_allocator) {
+	for sp in fs.system_places(context.temp_allocator) {
 		append(&r.places, Place{name = strings.clone(sp.name), path = strings.clone(sp.path)})
 	}
 	r.volumes = fs.volumes()

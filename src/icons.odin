@@ -13,6 +13,7 @@ import "gt:desktop"
 import "gt:draw"
 import lucide "gt:lucide"
 import "gt:render"
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -55,7 +56,7 @@ icon_key :: proc(app: ^App, path: string, folder: bool, px: int) -> string {
 		app.icon_keys[strings.clone(name)] = ""
 		job := new(Icon_Key_Job)
 		job^ = {app = app, name = strings.clone(name), path = strings.clone(path)}
-		pool_submit(&app.thumb_pool, icon_key_run, job, urgent = true)
+		tasks.add(&app.thumb_pool, icon_key_run, job, {urgent = true})
 		return ""
 	}
 	if key == "" { return "" }
@@ -134,7 +135,7 @@ sys_icon :: proc(app: ^App, path: string, folder: bool, px: int) -> (ic: ^Sys_Ic
 	app.icons_cache[strings.clone(key)] = {state = .Asked, used = app.frame}
 	job := new(Icon_Job)
 	job^ = {app = app, key = strings.clone(key), path = strings.clone(path), folder = folder, px = made}
-	pool_submit(&app.thumb_pool, icon_run, job)
+	tasks.add(&app.thumb_pool, icon_run, job)
 	stand, other_failed := icon_stand_in(app, key, made)
 	return stand, false, other_failed
 }

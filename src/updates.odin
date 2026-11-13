@@ -11,6 +11,7 @@ import config "gt:config"
 import "core:strings"
 import "gt:platform"
 import setup "gt:setup"
+import tasks "gt:tasks"
 import update "gt:update"
 import classeur_update "update"
 
@@ -52,7 +53,7 @@ updates_follow :: proc(app: ^App) {
 	// (the installed copy: its manifest and Settings > Apps say the new version; written on a worker)
 	if st.phase == .Installed {
 		version := new_clone(strings.clone(st.version))
-		pool_submit(&app.pool, proc(data: rawptr) {
+		tasks.add(&app.pool, proc(data: rawptr) {
 			version := (^string)(data)
 			defer { delete(version^); free(version) }
 			if ok, why := setup.updated(setup_config(), version^); !ok { fmt.eprintfln("classeur: the update is in place, but %s", why) }

@@ -16,6 +16,7 @@ import "core:time"
 import "gt:platform"
 import config "gt:config"
 import "gt:png"
+import store "gt:store"
 import "gt:testkit"
 import "gt:testkit/unwatched"
 import "gt:ui"
@@ -49,9 +50,9 @@ make_fixture :: proc(t: ^testing.T, files: []string) -> string {
 }
 
 // (shared by the tests of the package: each file of tests uses it)
-start :: proc(t: ^testing.T, folders: []string, size := [2]int{}, home := "", loc := #caller_location) -> (s: ^session.Session, app: ^App) {
+start :: proc(t: ^testing.T, folders: []string, size := [2]int{}, home := "", session_at := "", loc := #caller_location) -> (s: ^session.Session, app: ^App) {
 	context.allocator = runtime.heap_allocator()
-	app = app_open({folders = folders, headless = true, size = size, home = home})
+	app = app_open({folders = folders, headless = true, size = size, home = home, session = session_at})
 	if !testing.expect(t, app != nil, "classeur opens", loc = loc) { session.stop_test(t, "no application", loc) }
 	testing.cleanup(t, proc(p: rawptr) { app_close((^App)(p)) }, app)
 	s = session.attach(t, {win = app.main.win, state = &app.main.state, renderer = &app.shared.r, user = app, allocator = context.allocator,
@@ -1060,9 +1061,8 @@ test_layouts :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		files := FIXTURE
 		dir := make_fixture(t, files[:])
-		s, app := start(t, {dir})
+		s, app := start(t, {dir}, session_at = fs.join(dir, ".session", context.temp_allocator))
 		context.allocator = runtime.heap_allocator()
-		app.session_path = strings.clone(fs.join(dir, ".session", context.temp_allocator))
 		// two panels saved as "work"
 		panel_open(app, fs.join(dir, "Documents", context.temp_allocator))
 		wait_read(s)
@@ -1075,7 +1075,7 @@ test_layouts :: proc(t: ^testing.T) {
 		testing.expect_value(t, len(app.panels), 2)
 		testing.expect_value(t, panel_tab(app.panels[1]).path, fs.join(dir, "Documents", context.temp_allocator))
 		// read again from its file, once its writer has written it (on a worker)
-		file_writer_flush(&app.layouts_writer)
+		store.writer_flush(&app.layouts_writer)
 		layouts_free(&app.layouts)
 		layouts_load(app)
 		testing.expect(t, layout_open(app, "work"))
@@ -2522,14 +2522,8 @@ test_session_writes_in_order :: proc(t: ^testing.T) {
 			append(&app.bookmarks, strings.clone(fmt.tprintf("/mark/%d", i)))
 			session_save(app, later = true)
 		}
-		// (the writer done: nothing pending, none running)
-		for _ in 0 ..< 2000 {
-			sync.mutex_lock(&app.session_writer.mutex)
-			idle := !app.session_writer.running
-			sync.mutex_unlock(&app.session_writer.mutex)
-			if idle { break }
-			time.sleep(time.Millisecond)
-		}
+		// (the writer done: what was put last is on the disk)
+		store.writer_flush(&app.session_writer)
 		data, err := os.read_entire_file(file, context.temp_allocator)
 		testing.expect(t, err == nil, "written")
 		testing.expect(t, strings.contains(string(data), "bookmark /mark/199\n"), "the last text")

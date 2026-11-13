@@ -36,7 +36,8 @@ OPTIONS_PAGES := [?]prefs_page.Page_Info{
 	{category = "look", title = "Appearance", icon = lucide.PALETTE},
 	{category = "files", title = "Files", icon = lucide.FILE},
 	{category = "open", title = "Opening", icon = lucide.FOLDER_OPEN},
-	{category = "updates", title = "Updates", icon = lucide.DOWNLOAD},
+	{category = "update", title = "Updates", icon = lucide.DOWNLOAD},
+	{category = "general", title = "General", icon = lucide.SETTINGS},
 }
 
 options_build :: proc(app: ^App) {

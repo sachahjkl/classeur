@@ -8,6 +8,7 @@ package classeur
 import "core:fmt"
 import "core:strings"
 import config "gt:config"
+import lucide "gt:lucide"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
 
@@ -183,7 +184,7 @@ palette_recorder :: proc(app: ^App) {
 	em := ui.font_size()
 	open := true
 	keep, cancel := false, false
-	// (laid out as ui.confirm: a title, a weak note, the keys pressed, then the buttons)
+	// (the toolkit's three parts of a dialog: the command in the header, the keys pressed in the body, then the buttons)
 	w := em * ui.CONFIRM_WIDTH_EM
 	if ui.modal("palette_keys", w, &open) {
 		hk, ok := ui.key_take()
@@ -204,42 +205,27 @@ palette_recorder :: proc(app: ^App) {
 				p.count += 1
 			}
 		}
-		pad := em * 1.2
-		ui.spacer(ui.px(pad))
-		ui.next({width = ui.px(w), height = ui.children_sum()})
-		if ui.row() {
-			ui.spacer(ui.px(pad))
-			ui.next({width = ui.px(w - 2 * pad), height = ui.children_sum(), axis = .Y})
-			if ui.column() {
-				ui.next({width = ui.fill(), font_size = em * 1.15})
-				ui.paragraph(fmt.tprintf("Keys for %s###rec_title", c.title))
-				ui.spacer(ui.px(em * 0.4))
-				if ui.tags("weak") {
-					ui.next({width = ui.fill()})
-					ui.paragraph("Press them: two for a sequence. Backspace first gives it its own keys again.###rec_help")
-				}
-				ui.spacer(ui.px(em * 0.8))
-				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.6))})
-				if ui.row(.Center, id = "###rec_keys") {
-					ui.spacer(ui.fill())
-					ui.kbd(p.count == 0 ? "Press the keys…" : binding_text(Binding{p.chords}))
-					ui.spacer(ui.fill())
-				}
-				ui.spacer(ui.px(em * 1.1))
-				ui.next({width = ui.fill(), height = ui.children_sum()})
-				if ui.row(id = "###rec_buttons") {
-					ui.spacer(ui.fill())
-					ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-					if ui.button("Cancel###rec_cancel").clicked { cancel = true }
-					ui.spacer(ui.px(em * 0.6))
-					if ui.disabled(p.count == 0) {
-						ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-						if ui.tags("accent_button") { if ui.button("Keep (Enter)###rec_keep").clicked { keep = true } }
-					}
-				}
+		if ui.dialog_header("rec_title", fmt.tprintf("Keys for %s", ui.text_shown(c.title)), {icon = lucide.KEYBOARD, icon_font = app.icons, close = true}) {}
+		if ui.dialog_body("rec_body") {
+			if ui.tags("weak") {
+				ui.next({width = ui.fill()})
+				ui.paragraph("Press them: two for a sequence. Backspace first gives it its own keys again.###rec_help")
+			}
+			ui.spacer(ui.px(em * 0.8))
+			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.6))})
+			if ui.row(.Center, id = "###rec_keys") {
+				ui.spacer(ui.fill())
+				ui.kbd(p.count == 0 ? "Press the keys…" : binding_text(Binding{p.chords}))
+				ui.spacer(ui.fill())
 			}
 		}
-		ui.spacer(ui.px(pad))
+		if ui.dialog_buttons("rec_buttons") {
+			ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
+			if ui.button("Cancel###rec_cancel", intent = .Cancel).clicked { cancel = true }
+			ui.spacer(ui.px(em * 0.6))
+			ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
+			if ui.button("Keep (Enter)###rec_keep", intent = .Primary, disabled = p.count == 0).clicked { keep = true }
+		}
 	}
 	switch {
 	case keep && p.count > 0:

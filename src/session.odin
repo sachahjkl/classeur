@@ -5,7 +5,7 @@ package classeur
 // recent folders. A text file, a line per thing, written when the window closes and, on a worker, as soon as any of it
 // but the window's place changes (session_autosave: a program killed, a session of the system ended, loses nothing):
 //
-//   window <left> <top> <width> <height> <maximized 0|1>
+//   window <left> <top> <width> <height> [maximized]      (platform.placement_text)
 //   sidebar <shown 0|1> <width>
 //   focus <panel>
 //   panel <active tab>
@@ -21,6 +21,7 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 import "gt:platform"
+import store "gt:store"
 import "gt:ui"
 import "fs"
 
@@ -31,20 +32,17 @@ session_file :: proc(app: ^App, allocator := context.temp_allocator) -> string {
 	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/session"}, allocator)
 }
 
-// `later`: written on a worker (the session changed while the window runs: file_writer.odin); else now (the window
-// closes, the workers stopped: whatever was pending is superseded by this one).
+// `later`: written by its writer's thread (the session changed while the window runs); else now, waited for (the window
+// closes: whatever was pending is superseded by this one).
 session_save :: proc(app: ^App, later := false) {
 	path := session_file(app)
 	if path == "" { return }
 	b := strings.builder_make(context.temp_allocator)
 	pl := platform.get_placement(app.main.win)
-	fmt.sbprintf(&b, "window %d %d %d %d %d\n", pl.rect[0], pl.rect[1], pl.rect[2], pl.rect[3], pl.maximized ? 1 : 0)
+	fmt.sbprintf(&b, "window %s\n", platform.placement_text(pl))
 	session_rest(app, &b)
-	if later {
-		file_writer_put(&app.session_writer, &app.pool, path, strings.to_string(b))
-	} else {
-		file_writer_now(&app.session_writer, path, strings.to_string(b))
-	}
+	store.writer_put(&app.session_writer, transmute([]u8)strings.to_string(b))
+	if !later { store.writer_flush(&app.session_writer) }
 }
 
 // What the session holds but the window's place.
@@ -158,11 +156,7 @@ session_load :: proc(app: ^App) -> (opened: bool) {
 		word, _, rest := strings.partition(line, " ")
 		switch word {
 		case "window":
-			f := strings.fields(rest, context.temp_allocator)
-			if len(f) < 5 { continue }
-			for i in 0 ..< 4 { place.rect[i], _ = strconv.parse_int(f[i]) }
-			place.maximized = f[4] == "1"
-			has_place = place.rect[2] > 200 && place.rect[3] > 150
+			if p, ok := platform.placement_parse(rest); ok && p.rect[2] > 200 && p.rect[3] > 150 { place, has_place = p, true }
 		case "sidebar":
 			f := strings.fields(rest, context.temp_allocator)
 			if len(f) < 2 { continue }

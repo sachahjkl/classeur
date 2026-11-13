@@ -103,7 +103,7 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 					if ui.row(.Center, id = "###line") {
 						ui.spacer(ui.px(em * 0.9))
 						ui.next({width = ui.fill(), height = ui.pct(1)})
-						ui.label(fmt.tprintf("%s###what", shown_text(job_title(job))))
+						ui.label(fmt.tprintf("%s###what", ui.text_shown(job_title(job))))
 						state := ""
 						switch st {
 						case .Waiting:   state = "waiting"
@@ -130,7 +130,7 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 						if st == .Failed || st == .Cancelled {
 							ui.spacer(ui.px(em * 0.4))
 							ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 1.9))})
-							if ui.tags("accent_button") { if ui.button("Retry###retry").clicked { job_retry(app, job) } }
+							if ui.button("Retry###retry", intent = .Primary).clicked { job_retry(app, job) }
 						}
 						ui.spacer(ui.px(em * 0.9))
 					}
@@ -143,7 +143,7 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 							break
 						}
 						ui.next({width = ui.px(w), height = ui.px(ui.dense(em * 1.7)), font_size = em * 0.85, fg = ui.color("bad text")})
-						ui.label(fmt.tprintf("    %s###err%d", shown_text(e), i))
+						ui.label(fmt.tprintf("    %s###err%d", ui.text_shown(e), i))
 					}
 					sync.mutex_unlock(&job.mutex)
 				}

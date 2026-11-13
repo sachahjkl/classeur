@@ -8,6 +8,7 @@ package classeur
 import "core:slice"
 import "core:strings"
 import "core:sync"
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -83,7 +84,7 @@ measure_tab :: proc(app: ^App, t: ^Tab) {
 		sync.atomic_add(&ask.refs, 1)
 		job := new(Measure_Job)
 		job^ = {app = app, path = strings.clone(path), mtime = e.mtime, ask = ask}
-		pool_submit(&app.measure_pool, measure_run, job)
+		tasks.add(&app.measure_pool, measure_run, job)
 	}
 }
 

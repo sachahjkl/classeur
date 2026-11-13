@@ -3,9 +3,11 @@ package classeur
 // The preferences: one registry (gt:config), its user file at <config>/classeur/prefs, read at the start and written at
 // each change made in the options (options.odin). `settings_apply` copies the values where the program reads them.
 
+import vmem "core:mem/virtual"
 import "core:strings"
 import config "gt:config"
 import "gt:platform"
+import prefs_page "gt:prefs_page"
 import "gt:ui"
 
 PREF_DEFS := [?]config.Def{
@@ -35,7 +37,7 @@ PREF_DEFS := [?]config.Def{
 	{name = "side.order", description = "The sidebar's sections in their order.", kind = .String, default = {s = "recents,bookmarks,storage,network,places"}, hidden = true},
 	{name = "palette.recent", description = "The commands run last from the palette.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "open.single_click", tags = {"click", "double click"}, description = "Opens an item with one click instead of two.", kind = .Bool, default = {b = false}},
-	{name = "update.auto", tags = {"upgrade", "version"}, category = "updates", description = "The installed classeur checks for a newer one once a day and installs it; it runs at the next start. A copy installed by a package manager (Nix) is updated by it.", kind = .Bool, default = {b = true}},
+	{name = "update.auto", tags = {"upgrade", "version"}, description = "The installed classeur checks for a newer one once a day and installs it; it runs at the next start. A copy installed by a package manager (Nix) is updated by it.", kind = .Bool, default = {b = true}},
 }
 
 // The values the program reads, copied out of the registry.
@@ -72,6 +74,16 @@ prefs_path :: proc(app: ^App) -> string {
 // thread: at the start, before the window is shown and the first frame.)
 prefs_open :: proc(app: ^App) {
 	app.prefs = config.prefs_make()
+	// (the toolkit's standard general.messages: where a finished act is said; its descriptions live in prefs_words)
+	_ = vmem.arena_init_growing(&app.prefs_words)
+	standard := prefs_page.STANDARD_DEFAULTS
+	standard.app_name = APP_NAME
+	prefs_page.standard_register(&app.prefs, {.Session}, standard, vmem.arena_allocator(&app.prefs_words))
+	// (the launcher and the start with the session are the Setup's here: their switches wait until classeur applies them)
+	setup_owned := [?]string{prefs_page.MENU_PREF, prefs_page.AUTOSTART_PREF}
+	for name in setup_owned {
+		if r := config.ref_of(&app.prefs, name); r != config.NO_REF { config.entry(&app.prefs, r).def.hidden = true }
+	}
 	// (the theme's choices are the themes' names)
 	defs := PREF_DEFS
 	names := make([]string, len(themes()))
@@ -90,6 +102,7 @@ prefs_open :: proc(app: ^App) {
 
 prefs_close :: proc(app: ^App) {
 	config.prefs_destroy(&app.prefs)
+	vmem.arena_destroy(&app.prefs_words)
 	delete(app.theme_names)
 }
 
@@ -123,6 +136,7 @@ settings_apply :: proc(app: ^App) {
 	}
 	s.measure_folders = config.bool_of(p, "files.measure_folders")
 	s.single_click = config.bool_of(p, "open.single_click")
+	app.announcer.mode = prefs_page.messages_mode(p)
 	columns_read(app, config.string_of(p, "view.columns"), config.string_of(p, "view.column_widths"))
 	side_order_read(app, config.string_of(p, "side.order"))
 	keymap_read(app, config.string_of(p, "keys.custom"), config.string_of(p, "keys.aliases"))

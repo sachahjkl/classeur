@@ -17,6 +17,7 @@ import "core:sync"
 import desktop "gt:desktop"
 import "gt:platform"
 import "gt:render"
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -83,7 +84,7 @@ thumb_get :: proc(app: ^App, path: string, size, mtime: i64) -> (^Thumb, bool) {
 	job := new(Thumb_Job)
 	job^ = {app = app, key = strings.clone(key), path = strings.clone(path), wanted = app.frame, system = app.system_thumbs}
 	app.thumbs[strings.clone(key)] = {state = .Asked, used = app.frame, job = job}
-	pool_submit(&app.thumb_pool, thumb_run, job)
+	tasks.add(&app.thumb_pool, thumb_run, job)
 	return nil, false
 }
 

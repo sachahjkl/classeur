@@ -11,6 +11,7 @@ import "core:strings"
 import "core:sys/linux"
 import "core:time"
 import "core:time/timezone"
+import "gt:platform"
 
 // Moves `path` to the trash; `in_trash` is its path in the trash (files/<name>: what untrash puts back).
 trash_native :: proc(path: string, allocator := context.allocator) -> (in_trash: string, e: Error) {
@@ -108,9 +109,7 @@ trash_record :: proc(in_trash: string, allocator := context.temp_allocator) -> s
 cpath_t :: proc(path: string) -> cstring { return strings.clone_to_cstring(path, context.temp_allocator) }
 
 home_trash :: proc(allocator := context.allocator) -> string {
-	data := os.get_env("XDG_DATA_HOME", context.temp_allocator)
-	if data == "" { data = join(home(context.temp_allocator), ".local/share", context.temp_allocator) }
-	return join(data, "Trash", allocator)
+	return join(platform.user_dir(.Data, "", context.temp_allocator), "Trash", allocator)
 }
 
 // The folder at the top of the volume that holds `path`: the last folder up the path still on device `dev`.

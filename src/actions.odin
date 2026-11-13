@@ -7,6 +7,7 @@ import "core:strings"
 import "core:sync"
 import "gt:desktop"
 import "gt:platform"
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -99,7 +100,7 @@ open_system :: proc(app: ^App, path: string, in_archive: bool) {
 		Take_Out :: struct { app: ^App, path: string, out: string }
 		job := new(Take_Out)
 		job^ = {app = app, path = strings.clone(path)}
-		pool_submit(&app.pool, proc(data: rawptr) {
+		tasks.add(&app.pool, proc(data: rawptr) {
 			job := (^Take_Out)(data)
 			job.out = strings.clone(fs.archive_take_out(job.path))
 			if !ui.post(&job.app.main.state, proc(data: rawptr, word: u64) {
@@ -139,7 +140,7 @@ launch :: proc(app: ^App, kind: Launch_Kind, path: string, id := "", name := "")
 	}
 	l := new(Launch)
 	l^ = {app = app, kind = kind, path = strings.clone(path), id = strings.clone(id), name = strings.clone(name), headless = app.headless}
-	pool_submit(&app.pool, launch_run, l)
+	tasks.add(&app.pool, launch_run, l)
 }
 
 @(private = "file")
@@ -341,7 +342,7 @@ act_select_invert :: proc(app: ^App) { if t := current_tab(app); t != nil { fold
 // The task posts its answer with ui.post; the procedure the answer runs calls answer_came.
 edit_submit :: proc(app: ^App, run: proc(data: rawptr), data: rawptr) {
 	app.answers_due += 1
-	pool_submit(&app.edit_pool, run, data)
+	tasks.add(&app.edit_pool, run, data)
 }
 
 answer_came :: proc(app: ^App) {
@@ -669,7 +670,7 @@ act_copy_path :: proc(app: ^App) {
 	}
 	if len(targets) == 0 { strings.write_string(&b, t.path) }
 	platform.set_clipboard(app.main.win, strings.to_string(b))
-	say(app, len(targets) > 1 ? "%d paths copied." : "The path is copied.", len(targets))
+	announce(app, .Good, len(targets) > 1 ? "%d paths copied." : "The path is copied.", len(targets))
 }
 
 ////////////////////////////////
@@ -726,7 +727,7 @@ clipboard_put :: proc(app: ^App, cut: bool) {
 	// (what is cut is drawn dimmed until it is pasted: what was cut before is not any more)
 	cut_forget(app)
 	if cut { for p in paths { if p not_in app.cut { app.cut[strings.clone(p)] = true } } }
-	say(app, "%d item%s %s.", len(paths), len(paths) == 1 ? "" : "s", cut ? "cut: paste them to move them" : "copied")
+	announce(app, .Good, "%d item%s %s.", len(paths), len(paths) == 1 ? "" : "s", cut ? "cut: paste them to move them" : "copied")
 }
 
 // The paths cut forgotten: none is drawn dimmed.
@@ -881,12 +882,12 @@ bookmark_toggle :: proc(app: ^App, path: string) {
 		if p == path {
 			delete(p)
 			ordered_remove(&app.bookmarks, i)
-			say(app, "Bookmark removed.")
+			announce(app, .Good, "Bookmark removed.")
 			return
 		}
 	}
 	append(&app.bookmarks, strings.clone(path))
-	say(app, "%s is bookmarked.", fs.base(path))
+	announce(app, .Good, "%s is bookmarked.", fs.base(path))
 }
 
 act_bookmark :: proc(app: ^App) { if t := current_tab(app); t != nil { bookmark_toggle(app, t.path) } }
@@ -913,7 +914,7 @@ act_recents_clear :: proc(app: ^App) {
 // `path` on the clipboard, as text (a place of the sidebar).
 path_to_clipboard :: proc(app: ^App, path: string) {
 	platform.set_clipboard(app.main.win, path)
-	say(app, "The path is copied.")
+	announce(app, .Good, "The path is copied.")
 }
 act_lock :: proc(app: ^App) { if t := current_tab(app); t != nil { t.locked = !t.locked } }
 
@@ -957,7 +958,7 @@ act_copy_name :: proc(app: ^App) {
 	}
 	if len(targets) == 0 { return }
 	platform.set_clipboard(app.main.win, strings.to_string(b))
-	say(app, len(targets) > 1 ? "%d names copied." : "The name is copied.", len(targets))
+	announce(app, .Good, len(targets) > 1 ? "%d names copied." : "The name is copied.", len(targets))
 }
 
 // In the search of every folder below: the folder of the item at the cursor, the item at the cursor there.

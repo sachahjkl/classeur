@@ -25,7 +25,7 @@ Command :: struct {
 COMMANDS := [?]Command{
 	{id = "open", title = "Open", icon = lucide.FOLDER_OPEN, keys = {{.Return, {}}, {}}, run = act_open},
 	{id = "open_new_tab", title = "Open in new tab", icon = lucide.LAYERS_2, keys = {{.Return, {.Ctrl}}, {}}, run = act_open_new_tab},
-	{id = "open_other_panel", title = "Open in other panel", icon = lucide.SEND_HORIZONTAL, keys = {{.Return, {.Shift}}, {}}, run = act_open_other_panel},
+	{id = "open_other_panel", title = "Open in other panel", icon = lucide.SEND_HORIZONAL, keys = {{.Return, {.Shift}}, {}}, run = act_open_other_panel},
 	{id = "up", title = "Go up", icon = lucide.ARROW_UP, tags = {"parent folder"}, keys = {{.Backspace, {}}, {.Up, {.Alt}}}, run = act_up},
 	{id = "back", title = "Go back", icon = lucide.ARROW_LEFT, keys = {{.Left, {.Alt}}, {}}, in_text = true, run = act_back},
 	{id = "forward", title = "Go forward", icon = lucide.ARROW_RIGHT, keys = {{.Right, {.Alt}}, {}}, in_text = true, run = act_forward},
@@ -63,7 +63,7 @@ COMMANDS := [?]Command{
 	{id = "copy_to_other", title = "Copy to other panel", icon = lucide.FOLDER_OUTPUT, keys = {{.F5, {.Shift}}, {}}, run = act_copy_to_other},
 	{id = "move_to_other", title = "Move to other panel", icon = lucide.FOLDER_INPUT, keys = {{.F6, {.Shift}}, {}}, run = act_move_to_other},
 	{id = "trash", title = "Move to trash", icon = lucide.TRASH_2, keys = {{.Delete, {}}, {}}, run = act_trash},
-	{id = "delete", title = "Delete permanently", icon = lucide.TRIANGLE_ALERT, tags = {"for good"}, keys = {{.Delete, {.Shift}}, {}}, run = act_delete},
+	{id = "delete", title = "Delete permanently", icon = lucide.ALERT_TRIANGLE, tags = {"for good"}, keys = {{.Delete, {.Shift}}, {}}, run = act_delete},
 	{id = "put_back", title = "Put back", icon = lucide.ARCHIVE_RESTORE, tags = {"restore", "items of the trash", "where they came from"}, keys = {{.R, {.Ctrl, .Alt}}, {}}, run = act_put_back},
 	{id = "empty_trash", title = "Empty trash", icon = lucide.ARCHIVE, keys = {{.Delete, {.Ctrl, .Shift}}, {}}, run = act_empty_trash},
 	{id = "undo", title = "Undo", icon = lucide.UNDO_2, tags = {"last change to files"}, keys = {{.Z, {.Ctrl}}, {}}, run = act_undo},

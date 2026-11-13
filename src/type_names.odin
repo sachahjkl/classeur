@@ -6,6 +6,7 @@ package classeur
 
 import "core:strings"
 import "gt:desktop"
+import tasks "gt:tasks"
 import "gt:ui"
 
 TYPE_NAMES_KEPT :: 4000
@@ -30,7 +31,7 @@ type_name :: proc(app: ^App, ext: string) -> string {
 	app.type_names[strings.clone(ext)] = {}
 	job := new(Type_Name_Job)
 	job^ = {app = app, ext = strings.clone(ext)}
-	pool_submit(&app.thumb_pool, type_name_run, job, urgent = true)   // (a tiny read: not after the pictures' decodes)
+	tasks.add(&app.thumb_pool, type_name_run, job, {urgent = true})   // (a tiny read: not after the pictures' decodes)
 	return ""
 }
 

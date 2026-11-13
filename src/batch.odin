@@ -245,7 +245,7 @@ batch_done :: proc(data: rawptr, word: u64) {
 		return
 	}
 	undo_push(app, .Rename, a.pairs)
-	say(app, "%d item%s renamed.", len(a.pairs), len(a.pairs) == 1 ? "" : "s")
+	announce(app, .Good, "%d item%s renamed.", len(a.pairs), len(a.pairs) == 1 ? "" : "s")
 }
 
 batch_build :: proc(app: ^App, em: f32) {
@@ -262,13 +262,7 @@ batch_build :: proc(app: ^App, em: f32) {
 
 	if ui.modal("batch_rename", pw, &b.open, 0.1) {
 		if ui.style({width = ui.px(pw)}) {
-			ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 2.8))})
-			if ui.row(.Center, {.Draw_Side_Bottom}, "###batch_head") {
-				ui.spacer(ui.px(em * 0.9))
-				if ui.tags("weak") { glyph(app, lucide.PENCIL, em * 1.6) }
-				ui.next({width = ui.fill(), height = ui.pct(1)})
-				ui.label(fmt.tprintf("Rename %d items###batch_title", n))
-			}
+			if ui.dialog_header("batch_head", fmt.tprintf("Rename %d items", n), {icon = lucide.PENCIL, icon_font = app.icons, close = true}) {}
 			// (Enter in a field renames)
 			if batch_field_row(app, "Pattern", "###bpat", &b.pattern, "{name}", em, pw, focus = b.focus_due) { apply = true }
 			b.focus_due = false
@@ -321,33 +315,30 @@ batch_build :: proc(app: ^App, em: f32) {
 						ui.spacer(ui.px(em * 0.4))
 						if ui.tags("weak") {
 							ui.next({width = ui.pct(0.42), height = ui.pct(1)})
-							ui.label(fmt.tprintf("%s###old", shown_text(b.names[i])))
+							ui.label(fmt.tprintf("%s###old", ui.text_shown(b.names[i])))
 						}
 						if ui.tags("weak") { glyph(app, lucide.ARROW_RIGHT, em * 1.4) }
 						ui.spacer(ui.px(em * 0.4))
 						ui.next({width = ui.fill(), height = ui.pct(1), fg = problem != "" ? ui.color("bad text") : nil})
-						ui.label(problem != "" ? fmt.tprintf("%s (%s)###new", shown_text(news[i]), problem) : fmt.tprintf("%s###new", shown_text(news[i])))
+						ui.label(problem != "" ? fmt.tprintf("%s (%s)###new", ui.text_shown(news[i]), problem) : fmt.tprintf("%s###new", ui.text_shown(news[i])))
 						ui.spacer(ui.px(em * 0.9))
 					}
 				}
 			}
 			ui.hline(ui.px(pw))
-			ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 3.0))})
-			if ui.row(.Center, id = "###batch_buttons") {
-				ui.spacer(ui.px(em * 0.9))
+			ui.spacer(ui.px(em * 0.6))
+			// (the toolkit's row of a dialog's buttons; what keeps the names from being had said before them)
+			if ui.dialog_buttons("batch_buttons") {
 				if ui.tags("weak") {
-					ui.next({width = ui.fill(), height = ui.pct(1), font_size = em * 0.85})
+					ui.next({width = ui.text_size(em * 0.6), height = ui.px(ui.dense(em * 2.2)), font_size = em * 0.85})
 					ui.label(bad > 0 ? fmt.tprintf("%d name%s cannot be had.###bstate", bad, bad == 1 ? "" : "s") : "Esc: close###bstate")
 				}
-				// (as ui.confirm's buttons; the one Enter presses says so)
-				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-				if ui.button("Cancel###bcancel").clicked { b.open = false }
 				ui.spacer(ui.px(em * 0.6))
-				if ui.disabled(bad > 0) {
-					ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-					if ui.tags("accent_button") { if ui.button("Rename (Enter)###bapply").clicked { apply = true } }
-				}
-				ui.spacer(ui.px(em * 0.9))
+				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
+				if ui.button("Cancel###bcancel", intent = .Cancel).clicked { b.open = false }
+				ui.spacer(ui.px(em * 0.6))
+				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
+				if ui.button("Rename (Enter)###bapply", intent = .Primary, disabled = bad > 0).clicked { apply = true }
 			}
 		}
 	}

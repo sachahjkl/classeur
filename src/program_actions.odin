@@ -10,6 +10,7 @@ import config "gt:config"
 import "gt:platform"
 import "gt:render"
 import setup "gt:setup"
+import tasks "gt:tasks"
 import update "gt:update"
 import "gt:ui"
 
@@ -38,7 +39,7 @@ act_app_new_window :: proc(app: ^App) {
 	if app.headless { append(&app.opened, strings.concatenate({"window:", app.home})) }
 	job := new(New_Window)
 	job^ = {app = app, exe = strings.clone(app.exe), path = strings.clone(app.home), headless = app.headless}
-	pool_submit(&app.pool, new_window_run, job)
+	tasks.add(&app.pool, new_window_run, job)
 }
 
 @(private = "file")
@@ -105,7 +106,7 @@ act_app_settings_folder :: proc(app: ^App) {
 
 act_app_version_copy :: proc(app: ^App) {
 	platform.set_clipboard(app.main.win, "classeur " + APP_VERSION)
-	say(app, "The version is copied.")
+	announce(app, .Good, "The version is copied.")
 }
 
 ////////////////////////////////
@@ -198,6 +199,6 @@ act_app_thumbs_clear :: proc(app: ^App) {
 		if th.state == .Ready { render.destroy_texture(&app.shared.r, th.tex) }
 		delete(key)
 	}
-	say(app, "The thumbnails are cleared.")
+	announce(app, .Good, "The thumbnails are cleared.")
 	app_frames(app)
 }

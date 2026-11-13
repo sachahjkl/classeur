@@ -16,6 +16,7 @@ import lucide "gt:lucide"
 import "gt:platform"
 import "gt:render"
 import syntax "gt:syntax"
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -162,7 +163,7 @@ inspector_ask :: proc(app: ^App, path: string, e: fs.Entry) {
 	case e.kind == .File && looks_textual(e.name, e.flags):   job.kind = .Text
 	case:                                                     job.kind = .Other
 	}
-	pool_submit(&app.pool, inspect_run, job)
+	tasks.add(&app.pool, inspect_run, job)
 }
 
 // What the system's thumbnail of a file shows, by its name: a PDF's first page, a frame of a video; "" for the others
@@ -382,7 +383,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 						if insp.language {
 							ui.rich_paragraph("###insp_body", code_runs(insp.text, insp.spans[:]))
 						} else {
-							ui.paragraph(fmt.tprintf("%s###insp_body", shown_text(insp.text)))
+							ui.paragraph(fmt.tprintf("%s###insp_body", ui.text_shown(insp.text)))
 						}
 					}
 					ui.spacer(ui.px(em * 0.8))
@@ -412,7 +413,7 @@ inspector_build :: proc(app: ^App, t: ^Tab, em: f32) {
 						entry_glyph(app, insp.path, x, em * 1.8)
 						ui.spacer(ui.px(em * 0.4))
 						ui.next({width = ui.fill(), height = ui.pct(1)})
-						ui.label(fmt.tprintf("%s###n", shown_text(x.name)))
+						ui.label(fmt.tprintf("%s###n", ui.text_shown(x.name)))
 					}
 					if sig.double_clicked {
 						open_entry(app, t, insp.path, x)
@@ -489,7 +490,7 @@ inspector_head :: proc(app: ^App, path: string, folder: bool, title, meta: strin
 		if ui.column() {
 			ui.spacer(ui.fill())
 			ui.next({width = ui.fill(), height = ui.px(em * 1.4)})
-			ui.label(fmt.tprintf("%s###name", shown_text(title)))
+			ui.label(fmt.tprintf("%s###name", ui.text_shown(title)))
 			if meta != "" {
 				if ui.tags("weak") {
 					ui.next({width = ui.fill(), height = ui.px(em * 1.3), font_size = em * 0.86})
@@ -526,7 +527,7 @@ inspector_summary :: proc(app: ^App, t: ^Tab, em: f32) {
 				entry_glyph(app, t.path, x, em * 1.8)
 				ui.spacer(ui.px(em * 0.4))
 				ui.next({width = ui.fill(), height = ui.pct(1)})
-				ui.label(fmt.tprintf("%s###n", shown_text(x.name)))
+				ui.label(fmt.tprintf("%s###n", ui.text_shown(x.name)))
 			}
 		}
 		if s.count > len(s.rows) {
@@ -590,7 +591,7 @@ inspector_props :: proc(app: ^App, t: ^Tab, e: fs.Entry, em: f32) {
 			} else {
 				ui.next({width = ui.fill(), height = ui.pct(1), font_size = em * 0.9})
 			}
-			ui.label(fmt.tprintf("%s###v", shown_text(value)))
+			ui.label(fmt.tprintf("%s###v", ui.text_shown(value)))
 			ui.spacer(ui.px(em * 0.5))
 		}
 	}

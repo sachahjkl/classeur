@@ -9,6 +9,7 @@ import "core:strings"
 import "core:time"
 import "gt:desktop"
 import lucide "gt:lucide"
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -46,7 +47,7 @@ handlers_ask :: proc(app: ^App, path: string) {
 	m.handlers, m.handlers_ready = nil, false
 	job := new(Handlers_Read)
 	job^ = {app = app, path = strings.clone(path)}
-	pool_submit(&app.pool, proc(data: rawptr) {
+	tasks.add(&app.pool, proc(data: rawptr) {
 		job := (^Handlers_Read)(data)
 		job.handlers = desktop.handlers_for_file(job.path)
 		if !ui.post(&job.app.main.state, proc(data: rawptr, word: u64) {
@@ -333,7 +334,7 @@ tabs_menu_build :: proc(app: ^App, em: f32) {
 			for t in p.tabs { if t.id == m.tabs_tab { holds = true } }
 			if !holds { continue }
 			for t, i in p.tabs {
-				if ui.menu_item(fmt.tprintf("%s###tl%d", shown_text(tab_title(app, t)), t.id), checked = i == p.active).clicked {
+				if ui.menu_item(fmt.tprintf("%s###tl%d", ui.text_shown(tab_title(app, t)), t.id), checked = i == p.active).clicked {
 					p.active, app.focus = i, pi
 				}
 			}
@@ -374,7 +375,7 @@ history_menu_build :: proc(app: ^App, em: f32) {
 		if t == nil { ui.ctx_menu_close(); return }
 		// the last folder first
 		#reverse for v, i in t.back {
-			if ui.menu_item(fmt.tprintf("%s###h%d", shown_text(home_path(app, v.path)), i)).clicked {
+			if ui.menu_item(fmt.tprintf("%s###h%d", ui.text_shown(home_path(app, v.path)), i)).clicked {
 				for len(t.back) > i + 1 { tab_back_quiet(t) }
 				tab_back(app, t)
 			}
@@ -431,7 +432,7 @@ open_with_menu :: proc(app: ^App, path: string) {
 		hs := ready ? app.menu.handlers : nil
 		if !ready { _ = ui.menu_item("Reading…", enabled = false) } else if len(hs) == 0 { _ = ui.menu_item("No application", enabled = false) }
 		for h, i in hs {
-			label := h.default ? fmt.tprintf("%s (default)###ow%d", shown_text(h.name), i) : fmt.tprintf("%s###ow%d", shown_text(h.name), i)
+			label := h.default ? fmt.tprintf("%s (default)###ow%d", ui.text_shown(h.name), i) : fmt.tprintf("%s###ow%d", ui.text_shown(h.name), i)
 			if ui.menu_item(label).clicked { launch(app, .Open_With, path, h.id, h.name) }
 		}
 	}

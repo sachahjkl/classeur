@@ -25,7 +25,7 @@ Every step is a command of `tools/classeurtool` (`help` lists them):
   keyboard, the palette and the menus read that table. No key is read elsewhere unless it moves in a list or a field.
 - The interface's thread never waits. No disk, network or system call runs there, in a build, a draw, an input or an
   action: not a `stat`, not a small read, not a rename, not a mount table, not a clipboard of files. Reading a folder,
-  measuring, copying, renaming, making a folder, the volumes, the shares: all are tasks of the workers (`src/pool.odin`)
+  measuring, copying, renaming, making a folder, the volumes, the shares: all are tasks of the workers (`gt:tasks` pools in `App`)
   whose results come back with `ui.post`. A share that hangs must never freeze the window.
 - A frame does no work in proportion to the number of entries: no sort, no full filter, no pass over every row or every
   entry, no allocation per entry. Counts, sizes and orders are worked out when the data changes (on a worker for a

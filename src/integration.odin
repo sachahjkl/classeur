@@ -19,9 +19,11 @@ import "gt:platform"
 import "gt:process"
 import "gt:render"
 import setup "gt:setup"
+import store "gt:store"
 import "core:math"
 import "gt:draw"
 import lucide "gt:lucide"
+import tasks "gt:tasks"
 import "gt:ui"
 
 ICON_PNGS := [?]desktop.Icon{
@@ -121,7 +123,6 @@ SETUP_CHOICES := [?]setup.Choice{
 }
 
 // What the person answered the Setup (setup.CHOICE_*), kept in <config>/classeur/setup.
-@(private = "file")
 setup_choice_file :: proc() -> string {
 	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/setup"}, context.temp_allocator)
 }
@@ -132,10 +133,10 @@ setup_choice_read :: proc() -> string {
 	return err == nil ? strings.trim_space(string(data)) : ""
 }
 
-// (on a worker: file_writer.odin)
+// (by its writer's thread: the interface's never waits for the disk)
 @(private = "file")
 setup_choice_write :: proc(app: ^App, choice: string) {
-	file_writer_put(&app.setup_writer, &app.pool, setup_choice_file(), choice)
+	store.writer_put(&app.setup_writer, transmute([]u8)choice)
 }
 
 // At a start with the window: the Setup when there is something to do (Windows), unless the person answered for this
@@ -146,7 +147,7 @@ setup_offer :: proc(app: ^App, asked: bool) {
 	if asked && !app.headless { setup.open(&app.setup, setup_config()) }
 	job := new(Setup_Facts)
 	job^ = {app = app, offer = SETUP_AT_START && !asked, headless = app.headless}
-	pool_submit(&app.pool, setup_facts_run, job)
+	tasks.add(&app.pool, setup_facts_run, job)
 }
 
 @(private = "file")
@@ -354,7 +355,7 @@ setup_line :: proc(app: ^App, id, key, value: string, path: bool, em: f32) {
 			if ui.tags("weak") {
 				if icon_action(app, fmt.tprintf("%s_copy", id), lucide.COPY, "Copy the path", em) {
 					ui.window_clipboard_set(value)
-					say(app, "Copied: %s", value)
+					announce(app, .Good, "Copied: %s", value)
 				}
 			}
 		}
@@ -380,17 +381,15 @@ setup_paragraph :: proc(id, text, tone: string, em: f32) {
 @(private = "file")
 setup_buttons :: proc(app: ^App, c: setup.Config, em: f32) -> (ev: setup.Event) {
 	d := &app.setup
-	button :: proc(id, label, tags: string, em: f32) -> bool {
+	button :: proc(id, label: string, intent: ui.Intent, em: f32) -> bool {
 		ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-		ui.push_tags(tags)
-		defer ui.pop_tags()
-		return ui.button(fmt.tprintf("%s###%s", label, id)).clicked
+		return ui.button(fmt.tprintf("%s###%s", label, id), intent = intent).clicked
 	}
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 3.4))})
 	if ui.row(.Center, {}, "###setup_buttons") {
 		ui.spacer(ui.px(em * 1.2))
 		if setup.can_uninstall(d) {
-			if button("setup_uninstall", d.confirm ? "Click again to uninstall" : "Uninstall", "danger_button", em) && !setup.busy(d) {
+			if button("setup_uninstall", d.confirm ? "Click again to uninstall" : "Uninstall", .Danger, em) && !setup.busy(d) {
 				if d.confirm { setup.start_uninstall(d, c) } else { d.confirm = true }
 			}
 		}
@@ -398,14 +397,14 @@ setup_buttons :: proc(app: ^App, c: setup.Config, em: f32) -> (ev: setup.Event) 
 		how := setup.closing(d, c)
 		CLOSING_WORDS := [setup.Closing]string{.Close = "Close", .Not_Now = "Not now", .Keep_Standalone = "Keep standalone"}
 		CLOSING_IDS := [setup.Closing]string{.Close = "setup_close", .Not_Now = "setup_later", .Keep_Standalone = "setup_standalone"}
-		if button(CLOSING_IDS[how], CLOSING_WORDS[how], "button", em) { ev = setup.close(d, how) }
+		if button(CLOSING_IDS[how], CLOSING_WORDS[how], .Neutral, em) { ev = setup.close(d, how) }
 		if d.installed != "" && d.facts.state != .This_Copy {
 			ui.spacer(ui.px(em * 0.5))
-			if button("setup_launch", "Open the installed copy", "accent_button", em) { ev = setup.open_installed(d) }
+			if button("setup_launch", "Open the installed copy", .Primary, em) { ev = setup.open_installed(d) }
 		}
 		if label := setup.install_label(d, c); label != "" {
 			ui.spacer(ui.px(em * 0.5))
-			if button("setup_install", label, "accent_button", em) && !setup.busy(d) { setup.start_install(d, c) }
+			if button("setup_install", label, .Primary, em) && !setup.busy(d) { setup.start_install(d, c) }
 		}
 		ui.spacer(ui.px(em * 1.2))
 	}

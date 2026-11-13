@@ -15,6 +15,7 @@ import "gt:draw"
 import "gt:render"
 import setup "gt:setup"
 import "gt:platform"
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -78,7 +79,7 @@ tab_ghost :: proc(app: ^App, width, em: f32) {
 	if app.tab_drag.active {
 		t := find_tab(app, app.tab_drag.tab)
 		if t == nil { return }
-		path, title = t.path, shown_text(tab_title(app, t))
+		path, title = t.path, ui.text_shown(tab_title(app, t))
 	}
 	// (a tab's own shape, its sides and its top in the accent, open at the bottom as the tabs are: the settings' rounding)
 	ui.next({width = ui.px(width), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .X, cross = .Center})
@@ -351,7 +352,7 @@ tab_drag_overlay :: proc(app: ^App, em: f32) {
 		path_icon(app, t.path, true, em * 1.6)
 		ui.spacer(ui.px(em * 0.4))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###title", shown_text(tab_title(app, t))))
+		ui.label(fmt.tprintf("%s###title", ui.text_shown(tab_title(app, t))))
 	}
 	hint := ui.Rect{{at.x, at.y + d.size.y + em * 0.3}, {at.x + hint_w, at.y + d.size.y + em * 2}}
 	if ui.tags("weak") {
@@ -413,7 +414,7 @@ tab_window :: proc(app: ^App, t: ^Tab) {
 	if app.headless { append(&app.opened, strings.concatenate({"window:", t.path})) }
 	job := new(Tab_Window)
 	job^ = {app = app, tab = t.id, exe = strings.clone(app.exe), path = strings.clone(t.path), headless = app.headless, fails = app.window_fails}
-	pool_submit(&app.pool, tab_window_run, job)
+	tasks.add(&app.pool, tab_window_run, job)
 	app_frames(app)
 }
 

@@ -1,14 +1,13 @@
 package classeur
 
-// The caches of pictures and the workers: what is on screen is never let go, a thumbnail scrolled past is not decoded,
-// a pool whose workers are all held by a hung read starts another.
+// The caches of pictures: what is on screen is never let go, a thumbnail scrolled past is not decoded. (A pool whose
+// threads are all held by a hung read starts another: gt:tasks' own test.)
 
 import "base:runtime"
 import "core:fmt"
 import "core:strings"
 import "core:sync"
 import "core:testing"
-import "core:time"
 import "gt:testkit/session"
 import "gt:testkit/unwatched"
 import "fs"
@@ -81,34 +80,6 @@ test_thumb_stale :: proc(t: ^testing.T) {
 		th, ok := app.thumbs[key]
 		testing.expect(t, ok && th.state == .Ready && th.job == nil, "the wanted thumbnail is ready")
 	})
-}
-
-@(test)
-test_pool_grows :: proc(t: ^testing.T) {
-	Held :: struct {
-		release: sync.Sema,
-		started: sync.Sema,
-		quick:   bool,   // atomic
-	}
-	held: Held
-	p: Pool
-	pool_start(&p, 2, 2)
-	// every worker held, as by reads of a share that hangs
-	for _ in 0 ..< 2 {
-		pool_submit(&p, proc(data: rawptr) {
-			h := (^Held)(data)
-			sync.sema_post(&h.started)
-			sync.sema_wait(&h.release)
-		}, &held)
-	}
-	sync.sema_wait(&held.started)
-	sync.sema_wait(&held.started)
-	pool_submit(&p, proc(data: rawptr) { sync.atomic_store(&(^Held)(data).quick, true) }, &held)
-	since := time.tick_now()
-	for !sync.atomic_load(&held.quick) && time.tick_since(since) < 4 * POOL_STUCK { time.sleep(10 * time.Millisecond) }
-	testing.expect(t, sync.atomic_load(&held.quick), "a quick task runs while the workers are held")
-	sync.sema_post(&held.release, 2)
-	pool_stop(&p)
 }
 
 // A file's icon key is asked on a worker (the toolkit's may read the system's type database): at first none, then the

@@ -13,6 +13,7 @@ import "core:math"
 import "core:slice"
 import "core:strings"
 import lucide "gt:lucide"
+import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -88,7 +89,7 @@ goto_ask :: proc(app: ^App, dir: string) {
 	g.asked = strings.clone(dir)
 	job := new(Goto_Read)
 	job^ = {app = app, dir = strings.clone(dir)}
-	pool_submit(&app.pool, proc(data: rawptr) {
+	tasks.add(&app.pool, proc(data: rawptr) {
 		job := (^Goto_Read)(data)
 		l: fs.Listing
 		defer fs.listing_destroy(&l)
@@ -270,7 +271,7 @@ goto_build :: proc(app: ^App) {
 						path_icon(app, r.path, true, em * 1.7)
 						ui.spacer(ui.px(em * 0.4))
 						ui.next({width = ui.fill(), height = ui.pct(1)})
-						ui.matched_label("###label", shown_text(r.label), r.ranges)
+						ui.matched_label("###label", ui.text_shown(r.label), r.ranges)
 						if ui.tags("weak") {
 							ui.next({width = ui.text_size(em * 0.5), height = ui.pct(1), font_size = math.round(em * 0.85)})
 							ui.label(fmt.tprintf("%s###kind", r.kind))

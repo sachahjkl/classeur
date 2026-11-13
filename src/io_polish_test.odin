@@ -9,6 +9,7 @@ import "core:os"
 import "core:strings"
 import "core:sync"
 import "core:testing"
+import tasks "gt:tasks"
 import "gt:testkit"
 import "gt:testkit/session"
 import "gt:testkit/unwatched"
@@ -21,7 +22,7 @@ gate: sync.Sema
 
 @(private = "file")
 edits_hold :: proc(app: ^App) {
-	pool_submit(&app.edit_pool, proc(data: rawptr) { sync.sema_wait((^sync.Sema)(data)) }, &gate)
+	tasks.add(&app.edit_pool, proc(data: rawptr) { sync.sema_wait((^sync.Sema)(data)) }, &gate)
 }
 
 @(private = "file")

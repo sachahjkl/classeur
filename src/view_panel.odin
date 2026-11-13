@@ -270,7 +270,7 @@ crumbs :: proc(app: ^App, t: ^Tab, em: f32) {
 			ui.next_merge(control_look(em))
 			sig: ui.Signal
 			if !last { ui.push_tags("weak") }
-			if ui.tags("ghost_button") { sig = ui.button(fmt.tprintf("%s###crumb%d", shown_text(c.name), at)) }
+			sig = ui.button(fmt.tprintf("%s###crumb%d", ui.text_shown(c.name), at), face = .Ghost)
 			if !last { ui.pop_tags() }
 			// (files dropped on a crumb go into its folder, as on a row)
 			drop_zone(app, sig.box.rect, c.path)
@@ -354,7 +354,7 @@ address_field :: proc(app: ^App, t: ^Tab, em: f32) {
 				ui.spacer(ui.px(em * 0.4))
 				ui.next({width = ui.fill(), height = ui.pct(1)})
 				// (the folder's name, the letters typed lit: the path before it is the field's)
-				ui.matched_label("###label", shown_text(r.label), r.ranges)
+				ui.matched_label("###label", ui.text_shown(r.label), r.ranges)
 			}
 			if on { ui.pop_tags() }
 			if sig.clicked {
@@ -527,7 +527,7 @@ check_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 @(private = "file")
 check_box :: proc(app: ^App, id: string, on, some: bool, width: f32) -> bool {
 	d := ui.frame_new(Check_Draw)
-	d^ = {on, some, ui.color("text"), ui.color("accent"), {1, 1, 1, 1}, corner_k()}
+	d^ = {on, some, ui.color("text"), ui.color("accent"), ui.ink_on(ui.color("accent")), corner_k()}
 	ui.next({width = ui.px(width), height = ui.pct(1)})
 	b := ui.custom(fmt.tprintf("###%s", id), check_draw, d, {.Clickable})
 	return ui.signal(b).clicked
@@ -541,13 +541,11 @@ icon_check :: proc(app: ^App, t: ^Tab, e: fs.Entry, row: int, selected: bool, em
 	width := em * ICON_CELL_EM
 	ui.next({width = ui.px(width), height = ui.pct(1)})
 	cell := ui.build_box({}, fmt.tprintf("###check%d", row))
-	m := ui.mouse_pos()
-	r := cell.rect   // (the last layout's)
-	over = m.x >= r.min.x && m.x < r.max.x && m.y >= r.min.y && m.y < r.max.y
+	over = ui.pointer_on(cell)   // (the last layout's)
 	if ui.parent(cell) {
 		if over || selected && t.folder.count > 1 {
 			d := ui.frame_new(Check_Draw)
-			d^ = {selected, false, ui.color("text"), ui.color("accent"), {1, 1, 1, 1}, corner_k()}
+			d^ = {selected, false, ui.color("text"), ui.color("accent"), ui.ink_on(ui.color("accent")), corner_k()}
 			ui.next({width = ui.px(width), height = ui.pct(1)})
 			ui.custom("###box", check_draw, d)
 		} else {
@@ -972,14 +970,14 @@ entry_name :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, selected: bool, em: f32) {
 	if t.folder.tree && needle == "" {
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		if hidden { ui.push_tags("weak") }
-		ui.label(fmt.tprintf("%s###n", shown_text(fs.base(e.name))))
+		ui.label(fmt.tprintf("%s###n", ui.text_shown(fs.base(e.name))))
 		if hidden { ui.pop_tags() }
 		return
 	}
 	if !t.folder.flat && needle == "" {
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		if hidden { ui.push_tags("weak") }
-		ui.label(fmt.tprintf("%s###n", shown_text(shown_name(app, e^))))
+		ui.label(fmt.tprintf("%s###n", ui.text_shown(shown_name(app, e^))))
 		if hidden { ui.pop_tags() }
 		return
 	}
@@ -1010,7 +1008,7 @@ match_text :: proc(text: string, ranges: []ui.Fuzzy_Range, offset: int, selected
 		flags := ui.Box_Flags{.Draw_Text, .No_Text_Trunc}
 		if lit && !selected { flags += {.Draw_Background} }
 		ui.next({width = ui.text_size(0), height = ui.pct(1), text_pad = 0, fg = lit && !selected ? ui.color("match") : nil, bg = ui.color("match_bg"), radius = 0})
-		ui.build_box(flags, fmt.tprintf("%s###p%d", shown_text(s), n))
+		ui.build_box(flags, fmt.tprintf("%s###p%d", ui.text_shown(s), n))
 	}
 	n := 0
 	for r in ranges {
@@ -1122,7 +1120,7 @@ zoom_pill :: proc(app: ^App, t: ^Tab, em: f32) {
 	// (the view's icon, then the percent, over the bar: boxes of their own, drawn after it; the icon says it is the view,
 	// not a progress)
 	if ui.parent(b) {
-		fg: Maybe(ui.Color) = z.percent > 40 ? draw.hex(0xffffffff) : nil
+		fg: Maybe(ui.Color) = z.percent > 40 ? ui.ink_on(selection_color(app)) : nil
 		ui.spacer(ui.fill())
 		glyph(app, ZOOM_ICONS[clamp(t.zoom, 0, len(ZOOMS) - 1)], em * 1.3, fg)
 		ui.next({width = ui.text_size(em * 0.15), height = ui.pct(1), fg = fg})
@@ -1244,7 +1242,7 @@ footer_info :: proc(app: ^App, t: ^Tab) -> string {
 	if f.count > 1 { return "" }
 	e := folder_cursor_entry(f)
 	if e == nil { return "" }
-	name := shown_text(fs.base(shown_name(app, e^)))
+	name := ui.text_shown(fs.base(shown_name(app, e^)))
 	if e.size < 0 { return fmt.tprintf("%s · %s", name, type_text(app, e^)) }   // (a folder not measured)
 	return fmt.tprintf("%s · %s · %s", name, type_text(app, e^), size_text(e.size))
 }
@@ -1262,7 +1260,7 @@ stat :: proc(app: ^App, id, icon, text, tip: string, em: f32, lit := false) {
 		ui.next({width = ui.text_size(em * 0.2), height = ui.pct(1), fg = lit ? ui.color("accent") : nil})
 		ui.label(fmt.tprintf("%s###v", text))
 	}
-	if ui.hovered_for(sig, 0.4) {
+	if ui.hovered_for(sig) {
 		if ui.tooltip() {
 			ui.next({width = ui.text_size(em * 0.6), height = ui.px(ui.dense(em * 1.8))})
 			ui.label(fmt.tprintf("%s###tip", tip))
@@ -1388,7 +1386,7 @@ drop_mark :: proc(b: ^ui.Box) {
 // What a row says when the pointer rests on it: its whole name (cut short in the row), its type, size and date; in the
 // search of every folder below, the folder it is in.
 entry_tip :: proc(app: ^App, t: ^Tab, e: ^fs.Entry, sig: ui.Signal) {
-	if !ui.hovered_for(sig, 0.8) { return }
+	if !ui.hovered_for(sig) { return }
 	name := fs.base(e.name)
 	where_ := ""
 	if t.folder.flat && fs.parent(e.name) != "" { where_ = fmt.tprintf("In %s", home_path(app, fs.join(t.path, fs.parent(e.name), context.temp_allocator))) }
