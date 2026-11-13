@@ -44,7 +44,7 @@ Palette :: struct {
 Palette_Key :: struct {
 	built:    bool,
 	keymap:   u64,                // Keymap.version: one's own keys and aliases
-	language: ^i18n.Language,     // the settings' groups and the keys' texts are in it
+	language: u32,                // i18n.version(): the settings' groups and the keys' texts are in it
 	tabs:     bool,               // "tab" typed: Tab 1 to Last tab are offered
 	enabled:  u64,                // a bit per gated command that can run now
 	version:  u64,
@@ -54,7 +54,7 @@ Palette_Key :: struct {
 Sheet_Key :: struct {
 	built:    bool,
 	keymap:   u64,
-	language: ^i18n.Language,
+	language: u32,   // i18n.version() it was made in
 	version:  u64,
 }
 
@@ -105,7 +105,7 @@ command_group :: proc(id: string) -> int {
 	case has(id, "select"): return 3
 	case has(id, "view") || has(id, "zoom") || has(id, "sort") || has(id, "group") || id == "tree" || id == "hidden" || id == "sidebar" || id == "folders_mixed" || id == "inspector": return 4
 	case id == "filter" || id == "flat" || id == "types" || id == "files_only" || id == "folders_only" || id == "every_type": return 5
-	case id == "palette" || id == "shortcuts" || id == "options" || id == "setup" || id == "jobs" || id == "jobs_cancel": return 6
+	case id == "palette" || id == "shortcuts" || id == "options" || id == "jobs" || id == "jobs_cancel": return 6
 	}
 	return 2
 }
@@ -128,7 +128,7 @@ palette_list :: proc(app: ^App) -> ^Palette_List {
 	p := &app.palette
 	// (Tab 1 to Last tab would take nine lines of every search: they show once "tab" is typed)
 	// (the word in the person's language: the titles they search are)
-	key := Palette_Key{built = true, keymap = app.keymap.version, language = i18n.current()}
+	key := Palette_Key{built = true, keymap = app.keymap.version, language = i18n.version()}
 	key.tabs = strings.has_prefix(strings.to_lower(strings.trim_space(ui.line_edit_string(&p.field)), context.temp_allocator), i18n.tr("palette: the word that shows Tab 1 to Last tab", "tab"))
 	for c, bit in p.gated { if COMMANDS[c].enabled(app) { key.enabled |= 1 << u64(bit) } }
 	key.version = p.list_key.version
@@ -185,7 +185,7 @@ tab_pick_command :: proc(id: string) -> bool {
 shortcuts_build :: proc(app: ^App) {
 	p := &app.palette
 	if !p.sheet.open { return }
-	key := Sheet_Key{built = true, keymap = app.keymap.version, language = i18n.current(), version = p.sheet_key.version}
+	key := Sheet_Key{built = true, keymap = app.keymap.version, language = i18n.version(), version = p.sheet_key.version}
 	if key != p.sheet_key {
 		key.version += 1
 		p.sheet_key = key
@@ -294,8 +294,7 @@ palette_recorder :: proc(app: ^App) {
 		}
 		if ui.dialog_buttons("rec_buttons") {
 			ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-			if ui.button("rec_cancel", i18n.tr("Cancel"), o = {intent = .Cancel}).clicked { cancel = true }
-			ui.spacer(ui.px(em * 0.6))
+			if ui.button("rec_cancel", i18n.tr("Cancel")).clicked { cancel = true }
 			ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
 			if ui.button("rec_keep", i18n.tr("Keep (Enter)"), o = {intent = .Primary, disabled = p.count == 0}).clicked { keep = true }
 		}

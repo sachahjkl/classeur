@@ -39,24 +39,13 @@ PREF_DEFS := [?]config.Def{
 // classeur's texts in other languages (docs/i18n.md of gui_toolkit), embedded: `classeurtool i18n fr` writes them.
 CATALOGUES :: []i18n.Catalog{{"fr", #load("../i18n/fr.txt", string)}}
 
-// classeur's look where it differs from the toolkit's (prefs_page.STANDARD_DEFAULTS): dark, flat, squarer, smaller text.
+// classeur's identity in the standard settings: its theme and its name. The rest is the toolkit's, as in its other
+// programs (prefs_page.STANDARD_DEFAULTS).
 @(private = "file")
 standard_defaults :: proc() -> prefs_page.Standard_Defaults {
 	d := prefs_page.STANDARD_DEFAULTS
-	d.theme, d.mode, d.finish, d.font_size = "Graphite", "dark", "flat", 13.5
-	d.app_name = APP_NAME
-	d.values = OWN_DEFAULTS[:]
+	d.theme, d.app_name = "Graphite", APP_NAME
 	return d
-}
-
-// The standard preferences whose default is classeur's own and that Standard_Defaults does not name: the corners
-// squarer (ROUNDING), scrolling that glides even with the animations off, the frames drawn in part (the host's). A reset
-// comes back to them.
-@(private = "file")
-OWN_DEFAULTS := [?]prefs_page.Standard_Value{
-	{"appearance.rounding", "0.25"},
-	{"scrolling.smooth", "on"},
-	{"rendering.partial_redraw", "true"},
 }
 
 // The values the program reads, copied out of the registry.

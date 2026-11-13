@@ -21,17 +21,18 @@ when ODIN_OS == .Windows {
 	PROGRAM :: "build/classeur"
 }
 
-// What classeur is to its tool and to the toolkit's standard commands. classeur.com is the console launcher classeur
-// embeds (src/system_windows.odin): a folder (or none) opens a window and gives the prompt back; a command waits and
-// gives its output and exit code through.
+// What classeur is to its tool and to the toolkit's standard commands, and what Windows shows of it. classeur.com is the
+// console launcher the toolkit builds and classeur embeds: a folder (or none) opens a window and gives the prompt back;
+// a command waits and gives its output and exit code through.
 project :: proc() -> toolbox.Project {
 	return {
 		name = "classeur", repository = REPOSITORY, changelog = "CHANGELOG.md",
 		version_file = "src/main.odin", version_line = "APP_VERSION :: ", program = PROGRAM,
 		// (every icon is named by its lucide constant: the subset holds them all, and the program 900 KB less)
 		features = {.Lucide_Subset},
-		launcher = {out = "build/classeur.com", mark = "(classeur console launcher)", default_rule = "detach",
-		            others = "install,uninstall,status,version,--version,help,-h,--help"},
+		launcher = {default_rule = "detach", others = "install,uninstall,status,version,--version,help,-h,--help"},
+		title = "Classeur", description = "A fast file manager: tabs in panels, a command palette, GoTo, batch rename, undo.",
+		publisher = "Froment Software", copyright = "Copyright (c) 2026 sachahjkl",
 	}
 }
 
@@ -52,7 +53,7 @@ LICENCE_TOOL :: toolbox.Licence_Tool{
 	product  = classeur_licence.PRODUCT,
 	dev_seed = DEV_SEED,
 	hint     = "Open this file with classeur (Settings > General > Licence > Choose a file), or paste the key there.",
-	paddle   = {name = "classeur licence", description = "A personal, perpetual licence of classeur that supports its work.", amounts = "supporter=2900", currency = "EUR"},
+	paddle   = {name = "Classeur User License", description = "A personal, perpetual licence of classeur that supports its work.", amounts = "supporter=2900", currency = "EUR"},
 }
 
 // The program's catalogues: the texts of its code (src and its packages), one file per language in i18n/.
@@ -74,7 +75,6 @@ commands :: proc() -> []toolbox.Command {
 		changelog.command(p),
 		toolbox.i18n_command(I18N),
 		l[0], l[1],
-		toolbox.Command{name = "shop", usage = ": the shop's six pages written into site/ from shop() (shop.odin): again after it changes", run = run_shop},
 		tk_site.command({meta = site_meta(), pages = {version_mark = VERSION_MARK, downloads = SITE_DOWNLOADS[:]}, extra = site_downloads}),
 		toolbox.Command{name = "timed", usage = ": the tests that measure time (opt-in: a loaded machine fails them for nothing)", run = run_timed},
 		toolbox.Command{name = "shots", usage = "[--out folder]: the pictures of the README, the program's own frames with no window of the system", run = run_shots},

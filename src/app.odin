@@ -18,6 +18,7 @@ import crash "gt:crash"
 import "gt:devtools"
 import "gt:font"
 import "gt:host"
+import "gt:i18n"
 import "gt:instance"
 import tk_log "gt:log"
 import lucide "gt:lucide"
@@ -25,6 +26,7 @@ import "gt:platform"
 import "gt:render"
 import prefs_page "gt:prefs_page"
 import process "gt:process"
+import crash_bar "gt:crash_bar"
 import setup "gt:setup"
 import store "gt:store"
 import tasks "gt:tasks"
@@ -50,6 +52,7 @@ App :: struct {
 	answers_due: int,               // the tasks of edit_submit and places_load whose answer has not come back
 	steps_due:   int,               // the changes on the edits' worker whose step of the undo is not there yet
 	places_asked: u64,              // the last read of the places asked (an older answer is dropped)
+	places_language: u32,           // i18n.version() the places' names were asked in (app_frame reads them again)
 	thumbs:      map[string]Thumb,  // by path, size and date (thumb_key; the keys owned)
 	icons_cache: map[string]Sys_Icon,   // the system's icons by key and size (icons.odin)
 	icon_keys:   map[string]string,     // a file's name -> its icon's key (both owned)
@@ -158,10 +161,8 @@ App :: struct {
 	spring_target: string,          // owned: what the dragged files rest on ("": nothing to open), its timer set when it changed
 	spring_done:   bool,            // ... and it was opened: not again till the target changes
 	drag_out:    bool,              // ... or left it: the system's drag takes them after this frame (drag_run)
-	setup:       setup.Dialog,      // the Setup (integration.odin)
-	logo:        render.Texture,    // its logo, made at its first show
-	logo_made:   bool,
-	launch_after: string,           // owned: the installed copy, started once this one has ended ("": none)
+	install:     prefs_page.Install,   // the install: its offer, its dialog, the settings' page (integration.odin)
+	launch_after: string,           // owned: this program again after an update (Restart), started once this one has ended ("": none)
 	updater:        ^update.Updater,   // checks, downloads and puts in place a new classeur (updates.odin; nil headless)
 	measures_sorted_at: f64,           // when measures_resort last sorted (ui.now_ms)
 	update_serial:  int,               // the updater's state last said
@@ -182,10 +183,8 @@ App :: struct {
 	session_writer: store.Writer,   // the files written as the window runs, each by a thread of its own: the window
 	prefs_writer:   config.User_Writer,   // never waits for a disk, the latest text wins
 	layouts_writer: store.Writer,
-	setup_writer:   store.Writer,
 	prefs_words:    vmem.Arena,     // the standard preferences' descriptions (the registry keeps them: prefs.odin)
-	crash_report:   string,         // owned: the report of the last session, which did not end cleanly ("": none)
-	crash_asking:   bool,           // the question of that report is shown (crash_build)
+	crash_bar:      crash_bar.Bar,  // the report of the last session, which did not end cleanly: a bar at the top
 	mounting:     [dynamic]string,  // owned: the shares being found or mounted on a worker (locations.odin)
 	shares:       []fs.Share,       // the shares of the network mounted now (the sidebar's Network section)
 	devices:      []fs.Network_Device,   // the devices of the network that share files, as last found (network.odin)
@@ -200,7 +199,7 @@ App :: struct {
 	opened:      [dynamic]string,   // headless: what open_system would have opened (owned)
 	launched_on: int,               // atomic: the thread that last started a program (launch: a worker, never this one)
 	window_fails: bool,             // the tests: a tab's window of its own fails to start (tab_window)
-	setup_known: bool,              // the install's facts and the Setup's answer came from their worker (setup_offer)
+	setup_known: bool,              // the start's reading of the install came (setup_follow)
 }
 
 WINDOW_SIZE :: [2]int{1180, 720}
@@ -225,8 +224,7 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 	if !standalone {
 		// (its launcher's activation token first: the first start's window comes up with it on Wayland)
 		message := app_message_make(platform.activation_token_from_env(context.temp_allocator), folders)
-		name := instance.key(ODIN_DEBUG ? "classeur.dev" : "classeur", platform.user_dir(.Config, "", context.temp_allocator))
-		outcome, owner = instance.acquire({name = name, wait_ms = 2000}, transmute([]u8)message)
+		outcome, owner = instance.acquire({name = app_instance_name(), wait_ms = 2000}, transmute([]u8)message)
 		if outcome == .Forwarded { return 0 }
 	}
 	// (a window's process only: a second start forwarded above writes nothing)
@@ -251,11 +249,13 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 		if !standalone { crash.end_session() }
 		return 1
 	}
-	if report != "" { crash_offer(app, report) }
+	if report != "" { crash_bar.init(&app.crash_bar, report) }
 	server: ^instance.Server
 	if outcome == .First { server = instance.serve_start(owner, app_message, app) }
 	platform.show_window(app.main.win)
-	setup_offer(app, setup_asked)
+	// (the install read on a task; offered at the start on Windows. The tests read nothing of the person's)
+	if !app.headless { prefs_page.install_offer(&app.install, &app.main.state, offer = SETUP_AT_START && !setup_asked) }
+	if setup_asked && !app.headless { prefs_page.install_open(&app.install) }
 	if !standalone { updates_start(app) }   // (one updater: the main window's; a torn-off one leaves the file alone)
 	for !platform.is_closed(app.main.win) {
 		host.hosts_wait({&app.main})
@@ -264,13 +264,15 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 	updates_stop(app)
 	instance.serve_stop(server)
 	launch := strings.clone(app.launch_after, context.temp_allocator)
-	setup.finish(&app.setup, setup_config())
+	// (the window is closed and the instance let go: the installed copy the install opened may start now)
+	prefs_page.install_end(&app.install)
+	prefs_page.install_launch(&app.install)
 	app_close(app)
 	if !standalone {
 		fs.archive_take_out_clear()   // (what was opened out of archives: the main window's to remove)
 		crash.end_session()
 	}
-	// (the Setup installed a copy and asked to open it: it starts once this one let go of the instance)
+	// (Restart after an update: it starts once this one let go of the instance)
 	if launch != "" { _ = setup.launch(launch) }
 	return 0
 }
@@ -278,6 +280,19 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 // What a second start hands the first: its launcher's activation token on a line of its own (marked by a byte no path
 // has), then its folders, one a line.
 APP_MESSAGE_TOKEN :: "\x01"
+// What `classeur --status` hands it: only whether it answers; the running classeur does nothing with it.
+APP_MESSAGE_PING :: "\x02ping"
+
+// The single instance's name: the person's (a debug build has its own).
+@(private = "file")
+app_instance_name :: proc() -> string {
+	return instance.key(ODIN_DEBUG ? "classeur.dev" : "classeur", platform.user_dir(.Config, "", context.temp_allocator))
+}
+
+// Whether a classeur runs and answers (--status: setup.Setup_Options.running).
+app_running :: proc() -> bool {
+	return instance.send({name = app_instance_name(), wait_ms = 2000}, transmute([]u8)string(APP_MESSAGE_PING)) == .Forwarded
+}
 
 app_message_make :: proc(token: string, folders: []string) -> string {
 	b := strings.builder_make(context.temp_allocator)
@@ -302,6 +317,7 @@ app_message_read :: proc(text: string) -> (token: string, folders: []string) {
 @(private = "file")
 app_message :: proc(user: rawptr, message: []byte) {
 	app := (^App)(user)
+	if string(message) == APP_MESSAGE_PING { return }
 	text := strings.clone(string(message))
 	if !ui.post(&app.main.state, app_message_open, rawptr(raw_data(text)), u64(len(text))) { delete(text) }
 }
@@ -355,6 +371,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	dnd_start(app)
 	ui.table_layout_init(&app.columns, detail_columns(app))   // (before the preferences: they say its columns)
 	prefs_open(app)   // (and h.partial_redraw: rendering.partial_redraw)
+	prefs_page.install_init(&app.install, &app.prefs, setup_options())
 	h.params = app_params
 	h.input = app_input
 	app.devtools = devtools.start_from_env(win, APP_NAME)
@@ -372,7 +389,6 @@ app_open :: proc(o: Open_Options) -> ^App {
 	// (the files written as the window runs: their paths known now, a test's included)
 	if path := session_file(app); path != "" { store.writer_open(&app.session_writer, path) }
 	if path := layouts_file(app); path != "" { store.writer_open(&app.layouts_writer, path) }
-	if !app.headless { store.writer_open(&app.setup_writer, setup_choice_file()) }
 	// (the session's tabs come back; folders given open beside them, as the second start's do)
 	if session_load(app) {
 		folders_show(app, o.folders)
@@ -414,6 +430,8 @@ app_frame :: proc(app: ^App) {
 	prefs_tidy(app)   // (each round, a frame drawn or not: a change made with no frame is written too)
 	drag_run(app)   // (between frames: it blocks until the drop)
 	tab_out_run(app)
+	// (the places' names are translated on the worker that reads them: a new language reads them again)
+	if app.places_language != i18n.version() { places_load(app) }
 }
 
 // How long closing waits for the workers' tasks (a walk, a measure stop at their next folder; a read of one folder
@@ -475,17 +493,17 @@ app_close :: proc(app: ^App) {
 	session_save(app)   // (after the workers: a bookmark asked of one of them is in it)
 	// (what is pending written now: the process may end before their threads would)
 	store.writer_flush(&app.layouts_writer)
-	store.writer_flush(&app.setup_writer)
 	measures_ended := pool_stop_until(&app.measure_pool, until)
 	thumbs_ended := pool_stop_until(&app.thumb_pool, until)
 	thumbs_free(app)
 	icons_free(app)
 	type_names_free(app)
 	delete(app.type_names)
-	if app.logo_made { render.destroy_texture(&app.shared.r, app.logo) }
 	inspector_free(app)   // (before the renderer goes: the textures are its)
 	devtools.stop(app.devtools)
 	if global_app == app { global_app = nil }
+	prefs_page.install_end(&app.install)   // (again for a window app_run did not end: it does nothing the second time)
+	crash_bar.destroy(&app.crash_bar)
 	host.host_close(&app.main)
 	if !reads_ended || !edits_ended || !measures_ended || !thumbs_ended { return }
 	app_free(app)
@@ -508,7 +526,6 @@ app_free :: proc(app: ^App) {
 	band_free(&app.band)
 	layouts_free(&app.layouts)
 	keymap_free(&app.keymap)
-	setup.destroy(&app.setup)
 	delete(app.launch_after)
 	delete(app.exe)
 	tab_image_free(app)
@@ -526,7 +543,6 @@ app_free :: proc(app: ^App) {
 	delete(app.home)
 	delete(app.session_path)
 	delete(app.status)
-	delete(app.crash_report)
 	delete(app.text_keys)
 	measures_free(app)
 	for p in app.recents { delete(p) }
@@ -543,7 +559,6 @@ app_free :: proc(app: ^App) {
 	store.writer_close(&app.session_writer)
 	_ = config.user_writer_stop(&app.prefs_writer, &app.prefs)
 	store.writer_close(&app.layouts_writer)
-	store.writer_close(&app.setup_writer)
 	for u in app.mounting { delete(u) }
 	delete(app.mounting)
 	ui.line_edit_destroy(&app.side_filter)
@@ -594,12 +609,9 @@ status_keep :: proc(app: ^App, text: string) {
 	app.status = strings.clone(text)
 }
 
-// How square the corners are (1: the toolkit's): appearance.rounding's default here (prefs.odin's OWN_DEFAULTS).
-ROUNDING :: 0.25
-
 // How round classeur's own drawings are (the rows' pill, the boxes) against the default: 1 at appearance.rounding's
-// default, 0 square, 8 at the slider's end (the toolkit's boxes follow ui.set_rounding by themselves).
-corner_k :: proc() -> f32 { return ui.rounding(ui.current_state()) / ROUNDING }
+// default, 0 square, 2 at the slider's end (the toolkit's boxes follow ui.set_rounding by themselves).
+corner_k :: proc() -> f32 { return ui.rounding(ui.current_state()) }
 
 // appearance.density's compact step (the Density command's other; 1, the default, is the comfortable one).
 DENSITY_COMPACT :: 0.82

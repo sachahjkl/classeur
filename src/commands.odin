@@ -101,7 +101,6 @@ COMMANDS := [?]Command{
 	{id = "sort_size", title = i18n.later("Sort by size"), icon = lucide.GAUGE, keys = {{.N3, {.Ctrl, .Alt}}}, in_text = true, run = act_sort_size},
 	{id = "sort_type", title = i18n.later("Sort by type"), icon = lucide.FILE_TEXT, keys = {{.N4, {.Ctrl, .Alt}}}, in_text = true, run = act_sort_type},
 	{id = "folders_mixed", title = i18n.later("Folders first"), icon = lucide.FOLDER_TREE, tags = {"or among the files"}, keys = {{.N0, {.Ctrl, .Alt}}}, in_text = true, run = act_folders_mixed},
-	{id = "setup", title = i18n.later("Setup"), icon = lucide.PACKAGE, tags = {"install classeur", "repair", "upgrade", "uninstall"}, keys = {{.F12, {.Ctrl, .Shift}}}, in_text = true, run = act_setup},
 	{id = "layout_save", title = i18n.later("Save layout"), icon = lucide.SAVE, tags = {"panels and tabs"}, keys = {{.S, {.Ctrl, .Alt}}}, in_text = true, run = act_layout_save},
 	{id = "layout_open", title = i18n.later("Open layout"), icon = lucide.BLOCKS, keys = {{.L, {.Ctrl, .Alt}}}, in_text = true, run = act_layout_open},
 	{id = "tree", title = i18n.later("Tree view"), icon = lucide.LIST_TREE, tags = {"folders opened in place"}, keys = {{.E, {.Ctrl, .Shift}}}, in_text = true, run = act_tree},

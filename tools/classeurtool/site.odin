@@ -28,6 +28,8 @@ SITE_META :: tk_site.Meta{
 	publisher   = "Froment Software",
 	ld_type     = "SoftwareApplication",
 	root_domain = false,   // (github.io answers for /robots.txt and /favicon.ico, not the site)
+	publisher_logo = "img/froment-software-64.png",
+	licence     = "MIT",
 }
 
 SITE_LD :: [?][2]string{
@@ -42,6 +44,7 @@ site_meta :: proc() -> tk_site.Meta {
 	ld := SITE_LD
 	m.ld_fields = make([][2]string, len(ld))
 	copy(m.ld_fields, ld[:])
+	m.shop = shop()   // (its pages are made with the others)
 	return m
 }
 

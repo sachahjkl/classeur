@@ -334,10 +334,8 @@ batch_build :: proc(app: ^App, em: f32) {
 					ui.next({width = ui.text_size(em * 0.6), height = ui.px(ui.dense(em * 2.2)), font_size = em * 0.85})
 					ui.label(fmt.tprintf("%s###bstate", bad > 0 ? fmt.tprintf(i18n.tr(bad, "%d name cannot be had.", "%d names cannot be had."), bad) : i18n.tr("Esc: close")))
 				}
-				ui.spacer(ui.px(em * 0.6))
 				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-				if ui.button("bcancel", i18n.tr("Cancel"), o = {intent = .Cancel}).clicked { b.open = false }
-				ui.spacer(ui.px(em * 0.6))
+				if ui.button("bcancel", i18n.tr("Cancel")).clicked { b.open = false }
 				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
 				if ui.button("bapply", i18n.tr("Rename (Enter)"), o = {intent = .Primary, disabled = bad > 0}).clicked { apply = true }
 			}

@@ -107,5 +107,6 @@ options_page :: proc(app: ^App) -> prefs_page.Page_Options {
 		page_foot = proc(user: rawptr, category: string, em: f32) {
 			if category == "general" { licence_section((^App)(user), em) }
 		},
+		install = &app.install, diagnostics = &app.main,
 	}
 }

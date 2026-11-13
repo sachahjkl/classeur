@@ -135,7 +135,7 @@ logo_render :: proc(size: int) -> paint.Canvas {
 }
 
 // The files the `logo` command writes: assets/logo.png, the sizes the program and the site embed, the icon of
-// classeur.exe (res/classeur.rc: every size Windows asks for, each a PNG) and the project's picture.
+// classeur.exe (resource 1, which the toolkit's build links: every size Windows asks for, each a PNG) and the project's picture.
 logo :: proc() -> toolbox.Logo {
 	return {
 		render = proc(size: int, user: rawptr) -> paint.Canvas { return logo_render(size) },

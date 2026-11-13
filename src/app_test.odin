@@ -17,6 +17,7 @@ import "gt:platform"
 import config "gt:config"
 import "gt:png"
 import prefs_page "gt:prefs_page"
+import setup "gt:setup"
 import store "gt:store"
 import "gt:testkit"
 import "gt:testkit/unwatched"
@@ -1085,26 +1086,28 @@ test_layouts :: proc(t: ^testing.T) {
 	})
 }
 
-// classeur install, status, uninstall, on the test's own folders (never the person's desktop).
+// classeur --install and --uninstall, on the test's own folders (never the person's desktop): the copy installed in the
+// test's folder, its entry, its link on the PATH, then all of it taken away.
 @(test)
 test_install :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		when ODIN_OS != .Linux { return }
 		root := testkit.temp_folder(t, "classeur_install")
-		for name in ([]string{"APPLICATIONS_DIR", "ICONS_DIR", "BIN_DIR", "AUTOSTART_DIR", "MENU_DIR"}) {
+		for name in ([]string{"APPLICATIONS_DIR", "ICONS_DIR", "BIN_DIR", "AUTOSTART_DIR", "MENU_DIR", "INSTALL_DIR", "DESKTOP_DIR"}) {
 			dir := fs.join(root, name, context.temp_allocator)
 			_ = os.make_directory_all(dir)
 			os.set_env(fmt.tprintf("CLASSEUR_DESKTOP_%s", name), dir)
 		}
-		defer for name in ([]string{"APPLICATIONS_DIR", "ICONS_DIR", "BIN_DIR", "AUTOSTART_DIR", "MENU_DIR"}) { os.unset_env(fmt.tprintf("CLASSEUR_DESKTOP_%s", name)) }
+		defer for name in ([]string{"APPLICATIONS_DIR", "ICONS_DIR", "BIN_DIR", "AUTOSTART_DIR", "MENU_DIR", "INSTALL_DIR", "DESKTOP_DIR"}) { os.unset_env(fmt.tprintf("CLASSEUR_DESKTOP_%s", name)) }
+		quiet :: proc(text: string) {}
 		entry := fs.join(root, "APPLICATIONS_DIR/classeur.desktop", context.temp_allocator)
-		testing.expect_value(t, cmd_install({}), 0)
+		testing.expect_value(t, setup.command_run(.Install, setup_options(), quiet), setup.COMMAND_DONE)
 		testing.expect(t, fs.exists(entry), "the menu's entry")
 		testing.expect(t, fs.exists(fs.join(root, "BIN_DIR/classeur", context.temp_allocator)), "on the PATH")
 		text, _ := os.read_entire_file(entry, context.temp_allocator)
 		testing.expect(t, strings.contains(string(text), "FileManager"), "a file manager for the menus")
-		testing.expect_value(t, cmd_status({}), 0)
-		testing.expect_value(t, cmd_uninstall({}), 0)
+		testing.expect(t, fs.exists(fs.join(root, "INSTALL_DIR/classeur", context.temp_allocator)), "the copy installed")
+		testing.expect_value(t, setup.command_run(.Uninstall, setup_options(), quiet), setup.COMMAND_DONE)
 		testing.expect(t, !fs.exists(entry), "taken away")
 	})
 }
@@ -1581,8 +1584,8 @@ test_palette_groups :: proc(t: ^testing.T) {
 	})
 }
 
-// classeur's Setup screen opens over the window (it only reads where an install would go: nothing is installed, no
-// answer is written).
+// The install's dialog opens over the window (it only reads where an install would go: nothing is installed, no answer
+// is written).
 @(test)
 test_setup_dialog :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
@@ -1590,17 +1593,17 @@ test_setup_dialog :: proc(t: ^testing.T) {
 		dir := make_fixture(t, files[:])
 		s, app := start(t, {dir}, size = {1100, 720})
 		context.allocator = runtime.heap_allocator()
-		act_setup(app)
+		prefs_page.install_open(&app.install)
 		session.frames(s, 4)
-		testing.expect(t, app.setup.open, "open")
-		session.wait_until(s, proc(s: ^session.Session) -> bool { return (^App)(s.user).setup.known }, "the install read")
+		testing.expect(t, prefs_page.install_open_now(&app.install), "open")
+		session.wait_until(s, proc(s: ^session.Session) -> bool { return (^App)(s.user).install.dialog.known }, "the install read")
 		session.frames(s, 2)
 		testing.expect(t, session.find(s, "setup_install") != nil, "an install offered")
 		when SHOTS { session.save_png(s, "setup.png") }
 		// Escape closes it without an answer (headless: nothing kept in the person's config)
 		session.key(s, .Escape)
 		session.frames(s, 2)
-		testing.expect(t, !app.setup.open, "closed")
+		testing.expect(t, !prefs_page.install_open_now(&app.install), "closed")
 		// the entry's menu, with its icons
 		entry_menu_open(app, current_tab(app), {300, 200})
 		session.frames(s, 3)
@@ -1658,7 +1661,7 @@ test_settings_look :: proc(t: ^testing.T) {
 		dir := make_fixture(t, files[:])
 		s, app := start(t, {dir}, size = {1200, 800})
 		context.allocator = runtime.heap_allocator()
-		testing.expect_value(t, ui.rounding(&app.main.state), f32(ROUNDING))
+		testing.expect_value(t, ui.rounding(&app.main.state), f32(1))   // (the toolkit's default)
 		_ = config.set_from_string(&app.prefs, "appearance.rounding", "1.5", .User)
 		_ = config.set_from_string(&app.prefs, "appearance.density", "0.82", .User)
 		settings_apply(app)

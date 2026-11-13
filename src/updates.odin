@@ -21,13 +21,11 @@ UPDATE_FOLDER :: "https://github.com/sachahjkl/classeur/releases/latest/download
 
 updates_start :: proc(app: ^App) {
 	if app.headless { return }   // (the tests reach no network)
-	// (app.installed_copy comes with the Setup's facts, read on a worker: setup_offer; updates_auto again then)
-	// (update.base_url and update.channel, read at the start: another server's releases, a channel of them)
-	folder := config.string_of(&app.prefs, "update.base_url")
-	if folder == "" { folder = UPDATE_FOLDER }
-	if !strings.has_suffix(folder, "/") { folder = strings.concatenate({folder, "/"}, context.temp_allocator) }   // (the files' names go after it)
+	// (app.installed_copy comes with the start's reading of the install, on a task: setup_follow; updates_auto again then)
+	// (update.base_url, read at the start: another server's releases)
+	folder, _ := prefs_page.update_source(&app.prefs)
 	app.updater = update.updater_start({
-		product = classeur_update.PRODUCT, folder = folder, channel = config.string_of(&app.prefs, "update.channel"), current = APP_VERSION,
+		product = classeur_update.PRODUCT, folder = folder != "" ? folder : UPDATE_FOLDER, current = APP_VERSION,
 		exe = app.exe, user_agent = fmt.tprintf("classeur/%s", APP_VERSION),
 		// (the updater's thread: the loop wakes, and updates_follow reads the state)
 		news = proc(user: rawptr) { platform.wake((^App)(user).main.win) }, user = app,
@@ -61,7 +59,7 @@ updates_follow :: proc(app: ^App) {
 		tasks.add(&app.pool, proc(data: rawptr) {
 			version := (^string)(data)
 			defer { delete(version^); free(version) }
-			if ok, why := setup.updated(setup_config(), version^); !ok { fmt.eprintfln("classeur: the update is in place, but %s", why) }
+			if ok, why := setup.updated(setup_options(), version^); !ok { fmt.eprintfln("classeur: the update is in place, but %s", why) }
 		}, version)
 	}
 }

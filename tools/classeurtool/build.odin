@@ -11,14 +11,10 @@ import toolbox "gt:toolbox"
 // The packages that have tests, and this tool.
 TEST_PACKAGES :: [?]string{"src", "src/fs", "tools/classeurtool"}
 
-// The icon of classeur.exe (resource 1: Explorer's, and the window's: platform.open_window loads it); `logo` writes
-// the .ico it names.
-RESOURCE :: "res/classeur.rc"
-
 run_build :: proc(args: []string) -> int {
 	p := project()
 	release := len(args) > 0 && args[0] == "release"
-	if !toolbox.build_native(p) || !toolbox.build_launcher(p) { return 1 }
+	if !toolbox.build_native(p) { return 1 }
 	_ = os.make_directory("build")
 	mode := release ? []string{"-o:speed"} : []string{"-debug"}
 	extra := make([dynamic]string, context.temp_allocator)
@@ -26,7 +22,6 @@ run_build :: proc(args: []string) -> int {
 	append(&extra, ..mode)
 	when ODIN_OS == .Windows {
 		if release { append(&extra, "-subsystem:windows") }
-		append(&extra, fmt.tprintf("-resource:%s", RESOURCE))
 	}
 	if !toolbox.run(toolbox.odin_command(p, "build", "", extra[:]), {echo = true}) { return 1 }
 	fmt.printfln("built %s", PROGRAM)
@@ -35,7 +30,7 @@ run_build :: proc(args: []string) -> int {
 
 run_test :: proc(args: []string) -> int {
 	p := project()
-	if !toolbox.build_native(p) || !toolbox.build_launcher(p) { return 1 }
+	if !toolbox.build_native(p) { return 1 }
 	_ = os.make_directory("build")
 	// (names given, `classeur.test_watch,classeur.test_zoom_icons_stay`: those tests of the program alone, in that order)
 	if len(args) > 0 {
@@ -62,16 +57,9 @@ run_check :: proc(args: []string) -> int {
 	if !check_systems() { return 1 }
 	// (a text of the interface without its French fails here, not in front of a person)
 	if e := toolbox.i18n_catalogue(I18N.dirs, fmt.tprintf("%s/fr.txt", I18N.folder), "fr", true); e != "" { fmt.eprintln(e); return 1 }
-	if !toolbox.build_launcher(p) { return 1 }   // (classeur embeds it: odin check reads it)
 	if !toolbox.run(toolbox.odin_command(p, "check"), {echo = true}) { return 1 }
 	// (the whole program for Windows too, from any system: Windows code that does not compile fails the Linux job)
 	when ODIN_OS != .Windows {
-		// (classeur embeds its console launcher, which only a Windows build makes: an empty one stands for it in a check,
-		// which links nothing)
-		if !os.exists(p.launcher.out) {
-			_ = os.make_directory_all("build")
-			if os.write_entire_file(p.launcher.out, []u8{}) != nil { fmt.eprintfln("classeurtool: %s cannot be written", p.launcher.out); return 1 }
-		}
 		if !toolbox.check_windows(p) { return 1 }
 	} else {
 		// (the file system's code of the other system: the program is written for both)
@@ -80,7 +68,7 @@ run_check :: proc(args: []string) -> int {
 	if !toolbox.run({"odin", "check", "tools/classeurtool", fmt.tprintf("-collection:gt=%s/src", toolbox.toolkit_dir(p)), "-vet"}, {echo = true}) { return 1 }
 	if run_test(nil) != 0 { return 1 }
 	if run_build({"release"}) != 0 { return 1 }
-	return toolbox.check_launcher(p) && check_exe_icon() ? 0 : 1
+	return toolbox.check_launcher(p) ? 0 : 1
 }
 
 // The fragments of changelog.d/, as `changelog check` says them.

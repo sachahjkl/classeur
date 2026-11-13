@@ -14,6 +14,7 @@ import "gt:i18n"
 import lucide "gt:lucide"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
+import crash_bar "gt:crash_bar"
 import "gt:ui"
 import "fs"
 
@@ -56,7 +57,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	append(&app.text_keys_before, ..app.text_keys[:])
 	clear(&app.text_keys)
 	typing := slice.contains(app.text_keys_before[:], ui.focus_key())
-	app.no_dialog = !app.palette.open && app.palette.recording < 0 && !app.goto.open && !app.batch.open && !app.layouts.naming && !app.setup.open && !app.confirm.open && !app.conflict.open && !app.options.open && !app.palette.sheet.open
+	app.no_dialog = !app.palette.open && app.palette.recording < 0 && !app.goto.open && !app.batch.open && !app.layouts.naming && !prefs_page.install_open_now(&app.install) && !app.confirm.open && !app.conflict.open && !app.options.open && !app.palette.sheet.open
 	keys_follow(app)
 	if app.no_dialog {
 		gesture_escape(app)
@@ -73,6 +74,7 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 		// (the sidebar's width held in the window's room first: the title bar's parts are worked out from it)
 		app.sidebar_px = clamp(app.sidebar_px, SIDEBAR_MIN_PX, max(min(SIDEBAR_MAX_PX, app.room - PANELS_MIN_PX), SIDEBAR_MIN_PX))
 		build_top(app, em)
+		crash_bar.bar(&app.crash_bar, {name = "Classeur", version = APP_VERSION, repository = "sachahjkl/classeur"})
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.row() { build_body(app, em) }
 	}
@@ -85,7 +87,11 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	goto_build(app)
 	batch_build(app, em)
 	layouts_build(app, em)
-	setup_build(app, em)
+	setup_follow(app)
+	#partial switch prefs_page.install_frame(&app.install, em) {
+	case .Installed, .Uninstalled: desktop_follow(app)   // (the switches of the menu and the session, for the copy now integrated)
+	case .Launched:                platform.request_close(app.main.win)   // (the installed copy starts once this one has ended: app_run)
+	}
 	zoom_slider_build(app, em)
 	columns_menu_build(app, em)
 	jobs_view_build(app, em)

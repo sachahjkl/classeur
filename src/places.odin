@@ -45,6 +45,7 @@ Places_Read :: struct {
 // Asks a worker to read the places again.
 places_load :: proc(app: ^App) {
 	app.places_asked += 1
+	app.places_language = i18n.version()
 	app.answers_due += 1
 	r := new(Places_Read)
 	r^ = {app = app, serial = app.places_asked, home = strings.clone(app.home)}

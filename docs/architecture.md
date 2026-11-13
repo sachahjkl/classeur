@@ -46,7 +46,7 @@ is immediate-mode); the data changes only on the interface's thread.
 - A thumbnailer the system runs for a PDF or a video (`desktop.thumbnail`) runs on a worker, which waits for it (at
   most 30 seconds): the grid's on the thumbnails' pool, the inspector's on the workers.
 - A program started (the system's application for a file, Open with, a terminal) is a task of the workers (`launch`):
-  a failure comes back to be said. The files written as the window runs (the session, the layouts, the Setup's answer) are
+  a failure comes back to be said. The files written as the window runs (the session, the layouts) are
   each a `store.Writer` (gt:store: its own thread, the latest text wins), the preferences a `config.User_Writer`. Only the reads of the start
   (the preferences, the session, the layouts) run on the interface's thread, before the first frame.
 - The tests wait for the answers with `wait_read` (`app.answers_due`).

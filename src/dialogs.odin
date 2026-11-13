@@ -50,45 +50,6 @@ confirm_empty_trash :: proc(app: ^App, paths: []string, names: []string = nil) {
 dialogs_build :: proc(app: ^App, em: f32) {
 	confirm_build(app, em)
 	conflict_build(app, em)
-	crash_build(app, em)
-}
-
-// The last session crashed or was killed (gt:crash): its report is offered at this start, to open or to copy where it
-// is. Nothing is sent anywhere.
-crash_offer :: proc(app: ^App, report: string) {
-	delete(app.crash_report)
-	app.crash_report = strings.clone(report)
-	app.crash_asking = true
-}
-
-CRASH_WIDTH_EM :: 34
-
-@(private = "file")
-crash_build :: proc(app: ^App, em: f32) {
-	if !app.crash_asking { return }
-	if ui.modal("crash_report", &app.crash_asking, {width_em = CRASH_WIDTH_EM}) {
-		if ui.dialog_header("crash_title", i18n.tr("classeur stopped unexpectedly"), {icon = lucide.BUG, icon_font = app.icons, close = true}) {}
-		if ui.dialog_body("crash_body") {
-			ui.next({width = ui.fill()})
-			ui.paragraph(fmt.tprintf("%s###crash_note", i18n.tr("Its last session ended without closing. What happened is written in a report on this computer; nothing was sent anywhere.")))
-			ui.spacer(ui.px(em * 0.6))
-			if ui.tags("weak") {
-				ui.next({width = ui.fill(), font = app.mono})
-				ui.paragraph(fmt.tprintf("%s###crash_path", ui.text_shown(app.crash_report)))
-			}
-		}
-		if ui.dialog_buttons("crash_buttons") {
-			if ui.button("crash_copy", i18n.tr("Copy its path"), lucide.COPY, {icon_font = app.icons}).clicked {
-				ui.window_clipboard_set(app.crash_report)
-				announce(app, .Good, i18n.tr("The report's path is copied."))
-			}
-			ui.spacer(ui.px(em * 0.6))
-			if ui.button("crash_open", i18n.tr("Open the report (Enter)"), lucide.FILE_TEXT, {icon_font = app.icons, intent = .Primary}).clicked || ui.key_press(.Return) {
-				ui.open(app.crash_report)
-				app.crash_asking = false
-			}
-		}
-	}
 }
 
 // The toolkit's question (ui.confirm): what is deleted named, Enter cancels.
@@ -160,14 +121,11 @@ conflict_build :: proc(app: ^App, em: f32) {
 		if ui.dialog_buttons("buttons") {
 			bw :: proc(em: f32) { ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))}) }
 			bw(em)
-			if ui.button("cancel", i18n.tr("Cancel the job"), o = {intent = .Cancel}).clicked { job_cancel(job); v.open = false }
-			ui.spacer(ui.px(em * 0.6))
+			if ui.button("cancel", i18n.tr("Cancel the job")).clicked { job_cancel(job); v.open = false }
 			bw(em)
 			if ui.button("skip", i18n.tr("Skip")).clicked { answer = .Skip }
-			ui.spacer(ui.px(em * 0.6))
 			bw(em)
 			if ui.button("both", i18n.tr("Keep both (Enter)"), o = {intent = .Primary}).clicked || ui.key_press(.Return) { answer = .Keep_Both }
-			ui.spacer(ui.px(em * 0.6))
 			bw(em)
 			if ui.button("replace", i18n.tr("Replace"), o = {intent = .Danger}).clicked { answer = .Replace }
 		}

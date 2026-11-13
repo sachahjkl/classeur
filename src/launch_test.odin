@@ -8,6 +8,7 @@ import "core:sync"
 import "core:testing"
 import "gt:testkit/session"
 import "gt:testkit/unwatched"
+import prefs_page "gt:prefs_page"
 import "fs"
 
 @(private = "file")
@@ -70,19 +71,18 @@ test_tab_window_fails :: proc(t: ^testing.T) {
 	})
 }
 
-// The Setup's offer: its facts read on a worker, known only once they land (headless: nothing of the person's is read,
-// nothing is offered).
+// The install: read on a task at a real start only (app_run); a test's window reads nothing of the person's and offers
+// nothing, and its frames run the install's machinery all the same.
 @(test)
-test_setup_facts_on_a_worker :: proc(t: ^testing.T) {
+test_setup_not_read_by_tests :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		files := FIXTURE
 		dir := make_fixture(t, files[:])
 		s, app := start(t, {dir})
 		context.allocator = runtime.heap_allocator()
+		session.frames(s, 3)
+		testing.expect(t, !app.install.reading && !app.install.known, "nothing read")
 		testing.expect(t, !app.setup_known)
-		setup_offer(app, false)
-		testing.expect(t, !app.setup_known, "not read on the interface's thread")
-		session.wait_until(s, proc(s: ^session.Session) -> bool { return (^App)(s.user).setup_known }, "the Setup's facts")
-		testing.expect(t, !app.setup.open, "nothing offered to the tests")
+		testing.expect(t, !prefs_page.install_open_now(&app.install), "nothing offered to the tests")
 	})
 }

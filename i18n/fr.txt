@@ -390,9 +390,6 @@ fr Trier par type
 en Folders first
 fr Dossiers en premier
 
-en Setup
-fr Installation
-
 en Save layout
 fr Enregistrer la disposition
 
@@ -536,21 +533,6 @@ fr Réinitialiser la disposition
 
 en Clear thumbnails
 fr Effacer les miniatures
-
-en classeur stopped unexpectedly
-fr classeur s'est arrêté de façon inattendue
-
-en Its last session ended without closing. What happened is written in a report on this computer; nothing was sent anywhere.
-fr Sa dernière session s'est terminée sans fermeture. Ce qui s'est passé est écrit dans un rapport sur cet ordinateur ; rien n'a été envoyé.
-
-en Copy its path
-fr Copier son chemin
-
-en The report's path is copied.
-fr Chemin du rapport copié.
-
-en Open the report (Enter)
-fr Ouvrir le rapport (Entrée)
 
 en Delete %s for good?
 fr Supprimer %s définitivement ?
@@ -955,78 +937,6 @@ fr classeur dans le terminal (dans le PATH)
 
 en The desktop's launcher cannot be changed: %s
 fr Le lanceur du bureau ne peut pas être modifié : %s
-
-en Reading the install…
-fr Lecture de l'installation…
-
-en none
-fr aucune
-
-en a copy
-fr une copie
-
-en This copy: v%s   Installed copy: %s   %s
-fr Cette copie : v%s   Copie installée : %s   %s
-
-en Close (Escape)
-fr Fermer (Échap)
-
-en Working…
-fr En cours…
-
-en Location
-fr Emplacement
-
-en Installed program
-fr Programme installé
-
-en Options
-fr Options
-
-en Shortcut on the Desktop
-fr Raccourci sur le Bureau
-
-en On this system
-fr Sur ce système
-
-en missing
-fr manquant
-
-en in place
-fr en place
-
-en Desktop shortcut
-fr Raccourci du Bureau
-
-en This copy
-fr Cette copie
-
-en On NixOS, a Nix package is the better install: Nix updates it. An install here makes this copy run by itself (nix-build makes the libraries it needs).
-fr Sur NixOS, un paquet Nix est la meilleure installation : Nix le met à jour. Une installation ici fait tourner cette copie seule (nix-build fournit les bibliothèques dont elle a besoin).
-
-en Copy the path
-fr Copier le chemin
-
-en Copied: %s
-fr Copié : %s
-
-en Click again to uninstall
-fr Cliquez encore pour désinstaller
-
-en Uninstall
-fr Désinstaller
-
-en Close
-fr Fermer
-
-en Not now
-fr Pas maintenant
-
-en Keep standalone
-fr Garder autonome
-
-en Open the installed copy
-fr Ouvrir la copie installée
 
 en Copying
 fr Copie
