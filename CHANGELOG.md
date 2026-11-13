@@ -3,6 +3,25 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.20.0] - 2026-11-13
+
+### Added
+- **A Diagnostics page in the settings, with a Copy button.** It shows the versions, the system, the graphics adapter (and whether a software rasterizer draws), the window's size and scale, the last frames' times and how much partial redraw drew. If classeur is slow, copy it and send it.
+
+### Changed
+- **Windows: classeur.exe says what it is.** Properties > Details and Task Manager show its name, version and publisher. Its windows group under the Start menu's shortcut in the taskbar. The archive has `classeur.com` beside `classeur.exe` for use from a terminal. The window is sharp on each monitor, and paths longer than 260 characters and UTF-8 text work.
+- **The licence has its own page in the settings, worded as in the other programs.** It says whether classeur is registered. It offers Buy a licence, a field to paste a key, Choose a licence file… and Remove the licence.
+- **A crash of the last session shows in a bar at the top of the window**, in place of a dialog. The bar says what happened and offers Open the report, Copy and Report on GitHub (a new issue with the report in it). Its cross dismisses it.
+- **The install is in the settings: an Installation page.** It says where the installed copy is, its version, and whether this copy is the installed one. It shows the menu entry, Settings > Apps, the start with the session and the PATH, with Install, Repair, Upgrade and Uninstall. The palette finds the page ("install").
+The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in the other programs. `--status` says what is installed and whether classeur runs. `--install` installs the copy in its own folder. `classeur install`, `uninstall`, `status` and the Setup command (Ctrl+Shift+F12) are gone.
+- **A change of language shows at once**: the window, the settings and the sidebar's places (Documents, Downloads, Pictures…) take the new language without a restart.
+- **classeur has the same settings and look as the other programs of Froment Software.** Only its theme, Graphite, is its own. It is no longer always dark and flat: it starts light or dark as the system is, with the machined finish, 14 px text (was 13.5) and the usual rounded corners (they were squarer). A setting that you changed keeps your value; Reset in the settings gives the new defaults. The settings open on General, as in the other programs.
+
+### Fixed
+- **`classeur --pref name=value` sets a preference for the run**, as in the other programs. It no longer opens a folder of that name.
+- **Dialogs and buttons never cut their text.** If a dialog's buttons do not fit on one line, they go on a second line. The bookmarks hint and the batch rename's help wrap, and the batch rename's case choices widen for longer words. Cancel buttons are neutral, no longer red.
+- **French done right.** Keys have the names that a French keyboard prints ("Ctrl+Maj+N"), and numbers use the French decimal mark and spacing. The filter fields say "Filtrer…". The batch rename explains each of its fields ({name}, {ext}, {n}, {date}, {time}, {id}) in the language in use. A delete for good asks « Supprimer définitivement « nom » ? ». The palette's foot is shorter, and the window's title writes the name "classeur".
+
 ## [0.19.2] - 2026-11-13
 
 ### Changed
@@ -444,6 +463,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.20.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.20.0
 [0.19.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.19.2
 [0.19.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.19.1
 [0.19.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.19.0
