@@ -1,27 +1,22 @@
 package classeur
 
 // The preferences: one registry (gt:config), its user file at <config>/classeur/prefs, read at the start and written at
-// each change made in the options (options.odin). `settings_apply` copies the values where the program reads them.
+// each change made in the options (options.odin). `settings_apply` copies classeur's values where the program reads
+// them; the toolkit's standard ones go to the toolkit by themselves (prefs_page.standard_watch).
 
 import vmem "core:mem/virtual"
 import "core:strings"
 import config "gt:config"
+import "gt:font"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
 import "gt:ui"
 
+// classeur's own preferences. The look, the text, the scrolling, the hand's feel, the updates and the desktop are the
+// toolkit's standard ones (prefs_page.standard_register, docs/settings.md of gui_toolkit): one name per concept.
 PREF_DEFS := [?]config.Def{
-	{name = "look.rounding", tags = {"radius", "corners", "round", "square"}, description = "The rounding of every corner of the interface: buttons, fields, menus, dialogs, the rows' selection, the boxes (0: square).", kind = .Float, default = {f = ROUNDING}, min = 0, max = 2, bounded = true},
-	{name = "look.density", tags = {"compact", "spacing", "rows"}, description = "Compact rows and bars fit more on the screen at the same text size.", kind = .String, default = {s = "comfortable"}, choices = {"comfortable", "compact"}},
-	{name = "look.animations", tags = {"motion", "transitions"}, description = "The interface's animations: the system's setting, always, or never.", kind = .String, default = {s = "system"}, choices = {"system", "on", "off"}},
-	{name = "look.smooth_scroll", tags = {"scrolling", "wheel"}, description = "Scrolling glides to where the wheel or the keys send it, even when the animations are off.", kind = .Bool, default = {b = true}},
-	{name = "look.autohide_scrollbars", tags = {"scrollbar", "hide"}, description = "The scroll bars show only while the pointer is over what they scroll.", kind = .Bool, default = {b = false}},
-	{name = "look.follow_system", tags = {"dark", "light", "mode"}, description = "Follows the system's light or dark scheme as it changes; off, classeur stays dark.", kind = .Bool, default = {b = false}},
-	{name = "look.theme", tags = {"colours", "colors", "dark", "light"}, description = "The colours of every part of the window.", kind = .String, default = {s = "Graphite"}},
-	{name = "look.system_title", tags = {"title bar", "decorations", "window"}, description = "The system draws the window's title bar, above the tabs; off, the tabs are in the title bar.", kind = .Bool, default = {b = false}},
-	{name = "look.alternating_rows", tags = {"zebra", "stripes"}, description = "Paints every other row a shade lighter, to tell the rows apart.", kind = .Bool, default = {b = false}},
-	{name = "look.inactive_opacity", tags = {"dim", "panels", "focus"}, description = "Dims the contents of the panels that do not have the keyboard, so that the one that has it stands out.", kind = .Float, default = {f = 0.8}, min = 0.3, max = 1, bounded = true},
-	{name = "look.font_size", tags = {"text", "zoom", "scale"}, description = "The size of the text, in logical pixels.", kind = .Float, default = {f = 13.5}, min = 10, max = 22, bounded = true},
+	{name = "appearance.alternating_rows", tags = {"zebra", "stripes"}, description = "Paints every other row a shade lighter, to tell the rows apart.", kind = .Bool, default = {b = false}},
+	{name = "appearance.inactive_opacity", tags = {"dim", "panels", "focus"}, description = "Dims the contents of the panels that do not have the keyboard, so that the one that has it stands out.", kind = .Float, default = {f = 0.8}, min = 0.3, max = 1, bounded = true},
 	{name = "files.show_extensions", tags = {"suffix", "names"}, description = "Shows the extensions of the files' names.", kind = .Bool, default = {b = true}},
 	{name = "files.show_hidden", tags = {"dotfiles", "hidden"}, description = "Shows the hidden files (their names start with a dot; on Windows, their attribute).", kind = .Bool, default = {b = false}},
 	{name = "files.folders_first", tags = {"directories", "sort", "order"}, description = "Lists the folders before the files, whatever the sort.", kind = .Bool, default = {b = true}},
@@ -37,18 +32,52 @@ PREF_DEFS := [?]config.Def{
 	{name = "side.order", description = "The sidebar's sections in their order.", kind = .String, default = {s = "recents,bookmarks,storage,network,places"}, hidden = true},
 	{name = "palette.recent", description = "The commands run last from the palette.", kind = .String, default = {s = ""}, hidden = true},
 	{name = "open.single_click", tags = {"click", "double click"}, description = "Opens an item with one click instead of two.", kind = .Bool, default = {b = false}},
-	{name = "update.auto", tags = {"upgrade", "version"}, description = "The installed classeur checks for a newer one once a day and installs it; it runs at the next start. A copy installed by a package manager (Nix) is updated by it.", kind = .Bool, default = {b = true}},
+}
+
+// classeur's look where it differs from the toolkit's (prefs_page.STANDARD_DEFAULTS): dark, flat, squarer, smaller text.
+@(private = "file")
+standard_defaults :: proc() -> prefs_page.Standard_Defaults {
+	d := prefs_page.STANDARD_DEFAULTS
+	d.theme, d.mode, d.finish, d.font_size = "Graphite", "dark", "flat", 13.5
+	d.app_name = APP_NAME
+	return d
+}
+
+// The standard preferences whose default is classeur's own and that Standard_Defaults does not hold: the corners
+// squarer (ROUNDING), scrolling that glides even with the animations off, the frames drawn in part (the host's). Given
+// before the person's file is read, so that a reset comes back to them.
+@(private = "file", rodata)
+OWN_DEFAULTS := [?][2]string{
+	{"appearance.rounding", "0.25"},
+	{"scrolling.smooth", "on"},
+	{"rendering.partial_redraw", "true"},
+}
+
+@(private = "file")
+default_own :: proc(p: ^config.Prefs, name, text: string) {
+	r := config.ref_of(p, name)
+	if r == config.NO_REF { return }
+	e := config.entry(p, r)
+	v, err := config.parse_value(e.def, text)
+	assert(err == .None, "a default of classeur's own refused")
+	if e.def.kind == .String { v.s = text }   // (a literal: the definition keeps it)
+	e.def.default = v
+	// (nothing set it yet: its value is the old default, its string owned by the registry)
+	value := v
+	if e.def.kind == .String { value.s = strings.clone(text, p.allocator) }
+	delete(e.value.s, p.allocator)
+	e.value = value
 }
 
 // The values the program reads, copied out of the registry.
 Settings :: struct {
-	rounding:         f32,
-	compact:          bool,
+	compact:          bool,     // appearance.density below 1 (the Density command's two steps)
 	animations:       string,   // "system", "on", "off" (in the registry)
-	smooth_scroll:    bool,
 	system_title:     bool,   // the system draws the title bar (the tabs under it, no window buttons of classeur's)
-	follow_system:    bool,
 	theme:            string,   // in the registry (valid until the next change)
+	mode:             ui.Theme_Mode,
+	finish:           ui.Finish,
+	glow:             f32,
 	alternating_rows: bool,
 	inactive_opacity: f32,
 	font_size:        f32,
@@ -63,7 +92,6 @@ prefs_file :: proc(allocator := context.temp_allocator) -> string {
 }
 
 // Where the changes are written: the person's file; the tests', beside their session file (none: headless).
-@(private = "file")
 prefs_path :: proc(app: ^App) -> string {
 	if app.session_path != "" { return strings.concatenate({app.session_path, ".prefs"}, context.temp_allocator) }
 	if app.headless { return "" }
@@ -74,36 +102,66 @@ prefs_path :: proc(app: ^App) -> string {
 // thread: at the start, before the window is shown and the first frame.)
 prefs_open :: proc(app: ^App) {
 	app.prefs = config.prefs_make()
-	// (the toolkit's standard general.messages: where a finished act is said; its descriptions live in prefs_words)
+	// (the toolkit's standard preferences first: their descriptions live in prefs_words, as long as the registry)
 	_ = vmem.arena_init_growing(&app.prefs_words)
-	standard := prefs_page.STANDARD_DEFAULTS
-	standard.app_name = APP_NAME
-	prefs_page.standard_register(&app.prefs, {.Session}, standard, vmem.arena_allocator(&app.prefs_words))
-	// (the launcher and the start with the session are the Setup's here: their switches wait until classeur applies them)
-	setup_owned := [?]string{prefs_page.MENU_PREF, prefs_page.AUTOSTART_PREF}
-	for name in setup_owned {
+	prefs_page.standard_register(&app.prefs, prefs_page.STANDARD_ALL, standard_defaults(), vmem.arena_allocator(&app.prefs_words))
+	for d in OWN_DEFAULTS { default_own(&app.prefs, d[0], d[1]) }
+	if r := config.ref_of(&app.prefs, prefs_page.SYSTEM_TITLE_PREF); r != config.NO_REF {
+		e := config.entry(&app.prefs, r)
+		// (offered where the system can draw a title bar: Windows, X11, a Wayland compositor with server-side ones;
+		// classeur changes its title bar at once: settings_apply)
+		e.def.hidden = !platform.system_title_available(app.main.win)
+		e.def.restart = false
+	}
+	// (the launcher and the start with the session apply to the copy that is integrated: their switches show once a
+	// worker found this copy is it, desktop_follow)
+	desktop_owned := [?]string{prefs_page.MENU_PREF, prefs_page.AUTOSTART_PREF}
+	for name in desktop_owned {
 		if r := config.ref_of(&app.prefs, name); r != config.NO_REF { config.entry(&app.prefs, r).def.hidden = true }
 	}
-	// (the theme's choices are the themes' names)
-	defs := PREF_DEFS
-	names := make([]string, len(themes()))
-	for t, i in themes() { names[i] = t.name }
-	app.theme_names = names
-	for &d in defs {
-		if d.name == "look.theme" { d.choices = names }
-		// (offered where the system can draw a title bar: Windows, X11, a Wayland compositor with server-side ones)
-		if d.name == "look.system_title" { d.hidden = !platform.system_title_available(app.main.win) }
-	}
-	config.register(&app.prefs, defs[:])
+	config.register(&app.prefs, PREF_DEFS[:])
 	if !app.headless { config.load_file(&app.prefs, prefs_file(), .User) }
+	// (the person's own themes, beside the preferences; none in the tests)
+	themes_path := ""
+	if !app.headless { themes_path = themes_file() }
+	prefs_page.themes_file_init(&app.themes_file, themes_path, ui.THEMES[:])
+	fonts_apply(app)
 	settings_apply(app)
+	// (the toolkit's settings to the toolkit, now and at each change: the feel, the zoom, the density, the corners, the
+	// motion, the scrolling, the text's rendering)
+	prefs_page.standard_watch(&app.standard, &app.prefs, &app.main.state, {renderer = &app.shared.r, fonts = &app.shared.fonts, partial_redraw = &app.main.partial_redraw})
+	// (what standard_apply leaves alone at a default: the default classeur gives it)
+	ui.set_rounding(&app.main.state, f32(config.float_of(&app.prefs, "appearance.rounding")))
+	if config.string_of(&app.prefs, "scrolling.smooth") == "on" { ui.set_smooth_scroll(&app.main.state, .On) }
+	app.main.partial_redraw = config.bool_of(&app.prefs, "rendering.partial_redraw")
 	if path := prefs_path(app); path != "" { config.user_writer_start(&app.prefs_writer, &app.prefs, path) }
 }
 
 prefs_close :: proc(app: ^App) {
+	prefs_page.standard_unwatch(&app.standard)
+	prefs_page.themes_file_destroy(&app.themes_file)
 	config.prefs_destroy(&app.prefs)
 	vmem.arena_destroy(&app.prefs_words)
-	delete(app.theme_names)
+}
+
+// The person's own themes ([Name] sections of colours): made from the toolkit's template at the settings' first click.
+themes_file :: proc(allocator := context.temp_allocator) -> string {
+	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/themes.txt"}, allocator)
+}
+
+// The fonts the person named (appearance.text.*), read at the start: the system's family in place of classeur's.
+@(private = "file")
+fonts_apply :: proc(app: ^App) {
+	if app.headless { return }   // (the tests' fonts are compiled in)
+	p := &app.prefs
+	fonts := &app.shared.fonts
+	if family := config.string_of(p, prefs_page.UI_FONT_PREF); family != "" {
+		if id, ok := font.load_system(fonts, family); ok { app.shared.font = id }
+	}
+	if family := config.string_of(p, prefs_page.MONO_FONT_PREF); family != "" {
+		if id, ok := font.load_system(fonts, family); ok { app.mono = id }
+	}
+	if path := config.string_of(p, prefs_page.EMOJI_FONT_PREF); path != "" { font.set_emoji_source(fonts, path) }
 }
 
 // Each round of the loop: the user's changes since the last text handed to the writer's thread, which writes them (config.User_Writer:
@@ -117,17 +175,15 @@ prefs_tidy :: proc(app: ^App) {
 settings_apply :: proc(app: ^App) {
 	p := &app.prefs
 	s := &app.settings
-	s.rounding = f32(config.float_of(p, "look.rounding"))
-	s.compact = config.string_of(p, "look.density") == "compact"
-	s.animations = config.string_of(p, "look.animations")
-	s.smooth_scroll = config.bool_of(p, "look.smooth_scroll")
-	s.system_title = config.bool_of(p, "look.system_title")
+	s.compact = config.float_of(p, "appearance.density") < 1
+	s.animations = config.string_of(p, "appearance.animations")
+	s.system_title = config.bool_of(p, prefs_page.SYSTEM_TITLE_PREF)
 	if !app.headless { platform.set_integrated_title(app.main.win, !s.system_title) }
-	s.follow_system = config.bool_of(p, "look.follow_system")
-	s.theme = config.string_of(p, "look.theme")
-	s.alternating_rows = config.bool_of(p, "look.alternating_rows")
-	s.inactive_opacity = f32(config.float_of(p, "look.inactive_opacity"))
-	s.font_size = f32(config.float_of(p, "look.font_size"))
+	look := prefs_page.appearance_read(p, context.temp_allocator)
+	s.theme = config.string_of(p, prefs_page.THEME_PREF)   // (the registry's: valid until the next change)
+	s.mode, s.finish, s.glow, s.font_size = look.mode, look.finish, look.glow, look.font_size
+	s.alternating_rows = config.bool_of(p, "appearance.alternating_rows")
+	s.inactive_opacity = f32(config.float_of(p, "appearance.inactive_opacity"))
 	s.show_extensions = config.bool_of(p, "files.show_extensions")
 	switch config.string_of(p, "files.date_format") {
 	case "relative":       s.date_format = .Relative
@@ -140,9 +196,6 @@ settings_apply :: proc(app: ^App) {
 	columns_read(app, config.string_of(p, "view.columns"), config.string_of(p, "view.column_widths"))
 	side_order_read(app, config.string_of(p, "side.order"))
 	keymap_read(app, config.string_of(p, "keys.custom"), config.string_of(p, "keys.aliases"))
-	ui.set_rounding(&app.main.state, s.rounding)
-	ui.set_density(&app.main.state, s.compact ? DENSITY_COMPACT : DENSITY)
-	ui.set_scrollbar_autohide(&app.main.state, config.bool_of(p, "look.autohide_scrollbars"))
 	updates_auto(app)
 	hidden := config.bool_of(p, "files.show_hidden")
 	if hidden != app.show_hidden {

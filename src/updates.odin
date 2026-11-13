@@ -10,6 +10,7 @@ import "core:fmt"
 import config "gt:config"
 import "core:strings"
 import "gt:platform"
+import prefs_page "gt:prefs_page"
 import setup "gt:setup"
 import tasks "gt:tasks"
 import update "gt:update"
@@ -21,8 +22,12 @@ UPDATE_FOLDER :: "https://github.com/sachahjkl/classeur/releases/latest/download
 updates_start :: proc(app: ^App) {
 	if app.headless { return }   // (the tests reach no network)
 	// (app.installed_copy comes with the Setup's facts, read on a worker: setup_offer; updates_auto again then)
+	// (update.base_url and update.channel, read at the start: another server's releases, a channel of them)
+	folder := config.string_of(&app.prefs, "update.base_url")
+	if folder == "" { folder = UPDATE_FOLDER }
+	if !strings.has_suffix(folder, "/") { folder = strings.concatenate({folder, "/"}, context.temp_allocator) }   // (the files' names go after it)
 	app.updater = update.updater_start({
-		product = classeur_update.PRODUCT, folder = UPDATE_FOLDER, current = APP_VERSION,
+		product = classeur_update.PRODUCT, folder = folder, channel = config.string_of(&app.prefs, "update.channel"), current = APP_VERSION,
 		exe = app.exe, user_agent = fmt.tprintf("classeur/%s", APP_VERSION),
 		// (the updater's thread: the loop wakes, and updates_follow reads the state)
 		news = proc(user: rawptr) { platform.wake((^App)(user).main.win) }, user = app,
@@ -39,7 +44,7 @@ updates_stop :: proc(app: ^App) {
 // update.auto, read again when the preferences change.
 updates_auto :: proc(app: ^App) {
 	if app.updater == nil { return }
-	auto := config.bool_of(&app.prefs, "update.auto") && app.installed_copy
+	auto := config.bool_of(&app.prefs, prefs_page.UPDATE_AUTO_PREF) && app.installed_copy
 	update.set_auto(app.updater, check = auto, install = auto)
 }
 

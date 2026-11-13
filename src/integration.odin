@@ -14,6 +14,7 @@ package classeur
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import config "gt:config"
 import desktop "gt:desktop"
 import "gt:platform"
 import "gt:process"
@@ -23,6 +24,7 @@ import store "gt:store"
 import "core:math"
 import "gt:draw"
 import lucide "gt:lucide"
+import prefs_page "gt:prefs_page"
 import tasks "gt:tasks"
 import "gt:ui"
 
@@ -185,6 +187,64 @@ setup_facts_done :: proc(data: rawptr, word: u64) {
 
 act_setup :: proc(app: ^App) { setup.open(&app.setup, setup_config()) }
 
+////////////////////////////////
+// The settings' general.menu and general.autostart (the toolkit's standard ones)
+
+// The Setup (Windows) or `classeur install` (Linux) integrates a copy; the settings then say whether that copy is in
+// the application menu and starts with the session, and desktop.apply makes it so. Only the integrated copy follows
+// them: a build or a copy that is not integrated (Nix's, which Nix integrates) never installs anything because of a
+// preference. So at the start, and after each change of the two, a worker reads the integration's status: when its parts
+// are this copy's, it applies the two (the PATH part stays as the Setup or the install left it), and the settings show
+// their switches. `classeur uninstall` and the Setup's Uninstall stay the way to take the whole integration away.
+desktop_follow :: proc(app: ^App) {
+	if app.headless || app.standalone { return }   // (the tests touch nothing of the person's; a torn-off tab's window owns nothing)
+	job := new(Desktop_Follow)
+	job^ = {app = app, menu = config.bool_of(&app.prefs, prefs_page.MENU_PREF), autostart = config.bool_of(&app.prefs, prefs_page.AUTOSTART_PREF)}
+	// (the edits' worker: one at a time, in the order asked, so that the last change wins)
+	tasks.add(&app.edit_pool, desktop_follow_run, job)
+}
+
+@(private = "file")
+Desktop_Follow :: struct {
+	app:        ^App,
+	menu:       bool,
+	autostart:  bool,
+	integrated: bool,     // the worker's answer
+	failed:     string,   // owned: what desktop.apply said went wrong
+}
+
+@(private = "file")
+desktop_follow_run :: proc(data: rawptr) {
+	job := (^Desktop_Follow)(data)
+	o := integration_options(nil)
+	st := desktop.status(&o, context.temp_allocator)
+	job.integrated = st.state != .Absent && st.error == .None && st.stale_exe == ""
+	if job.integrated {
+		o.add_to_path = st.parts[.Path].present
+		o.start_menu, o.autostart = job.menu, job.autostart
+		if r := desktop.apply(&o); r.error != .None {
+			job.failed = fmt.aprintf("%s %s", desktop.error_text(r.error), r.detail)
+		}
+	}
+	if !ui.post(&job.app.main.state, desktop_follow_done, job) {
+		delete(job.failed)
+		free(job)
+	}
+}
+
+@(private = "file")
+desktop_follow_done :: proc(data: rawptr, word: u64) {
+	job := (^Desktop_Follow)(data)
+	defer { delete(job.failed); free(job) }
+	app := job.app
+	names := [?]string{prefs_page.MENU_PREF, prefs_page.AUTOSTART_PREF}
+	for name in names {
+		if r := config.ref_of(&app.prefs, name); r != config.NO_REF { config.entry(&app.prefs, r).def.hidden = !job.integrated }
+	}
+	if job.failed != "" { say(app, "The desktop's launcher cannot be changed: %s", job.failed) }
+	app_frames(app)
+}
+
 // classeur's own Setup screen over the toolkit's controller (gt:setup: the state, what is offered, the work on its
 // thread): a head (the mark, what is offered, the versions, the state in its colour), then sections as the settings
 // page has them (a small title, lines under a rule, no frame in a frame), and the buttons in a bar at the foot.
@@ -222,6 +282,7 @@ setup_build :: proc(app: ^App, em: f32) {
 	if app.headless { return }
 	switch ev {
 	case .Installed:       setup_choice_write(app, setup.CHOICE_INSTALLED)
+		desktop_follow(app)   // (the switches of the menu and the session, for the copy just integrated)
 	case .Kept_Standalone: setup_choice_write(app, setup.CHOICE_STANDALONE)
 	case .Dismissed:       setup_choice_write(app, setup.choice_dismissed(APP_VERSION))
 	case .Launched:
@@ -229,7 +290,8 @@ setup_build :: proc(app: ^App, em: f32) {
 		delete(app.launch_after)
 		app.launch_after = strings.clone(app.setup.installed)
 		platform.request_close(app.main.win)
-	case .Uninstalled, .None:
+	case .Uninstalled:     desktop_follow(app)
+	case .None:
 	}
 }
 

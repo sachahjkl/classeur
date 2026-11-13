@@ -18,7 +18,7 @@ RESOURCE :: "res/classeur.rc"
 run_build :: proc(args: []string) -> int {
 	p := project()
 	release := len(args) > 0 && args[0] == "release"
-	if !toolbox.build_native_text(p) || !toolbox.build_launcher(p) { return 1 }
+	if !toolbox.build_native(p) || !toolbox.build_launcher(p) { return 1 }
 	_ = os.make_directory("build")
 	mode := release ? []string{"-o:speed"} : []string{"-debug"}
 	extra := make([dynamic]string, context.temp_allocator)
@@ -35,7 +35,7 @@ run_build :: proc(args: []string) -> int {
 
 run_test :: proc(args: []string) -> int {
 	p := project()
-	if !toolbox.build_native_text(p) || !toolbox.build_launcher(p) { return 1 }
+	if !toolbox.build_native(p) || !toolbox.build_launcher(p) { return 1 }
 	_ = os.make_directory("build")
 	// (names given, `classeur.test_watch,classeur.test_zoom_icons_stay`: those tests of the program alone, in that order)
 	if len(args) > 0 {

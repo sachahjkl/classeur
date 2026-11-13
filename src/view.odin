@@ -37,6 +37,8 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	app.window_px = size
 	app.frame += 1
 	updates_follow(app)
+	// (the person's themes file read again when it changed: theme_show, in the next frame's params, shows the new one)
+	if prefs_page.themes_file_poll(&app.themes_file, &h.state) { app_frames(app) }
 	dnd_frame(app)
 	app.tab_rects, app.tab_rects_last = app.tab_rects_last, app.tab_rects
 	clear(&app.tab_rects)
@@ -105,7 +107,7 @@ glyph :: proc(app: ^App, g: string, width: f32, fg: Maybe(ui.Color) = nil) {
 }
 
 // The corners of the small controls in the bars and the rows (the icon buttons, the crumbs, the address and rename
-// fields): CONTROL_RADIUS_EM at look.rounding's default, as the rows' pill, square at 0. Fixed_Radius: the toolkit
+// fields): CONTROL_RADIUS_EM at appearance.rounding's default, as the rows' pill, square at 0. Fixed_Radius: the toolkit
 // would scale it by the rounding a second time, and square a corner this small at the default.
 CONTROL_RADIUS_EM :: 0.15
 control_look :: proc(em: f32) -> ui.Style_Mod { return {radius = em * CONTROL_RADIUS_EM * corner_k(), flags = {.Fixed_Radius}} }
@@ -243,7 +245,7 @@ tab_paint :: proc(b: ^ui.Box, base, edge, line: ui.Color, radius: f32) {
 // glance which panel has the keyboard.
 tab_line_px :: proc() -> f32 { return max(1, ui.scale()) * 2 }
 
-// A tab's top corners: TAB_RADIUS_EM at a rounding of 1 (look.rounding), square at 0.
+// A tab's top corners: TAB_RADIUS_EM at a rounding of 1 (appearance.rounding), square at 0.
 TAB_RADIUS_EM :: 0.6
 tab_radius :: proc(em: f32) -> f32 { return em * TAB_RADIUS_EM * ui.rounding(ui.current_state()) }
 

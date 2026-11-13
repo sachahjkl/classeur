@@ -68,14 +68,15 @@ test_theme_commands :: proc(t: ^testing.T) {
 		dir := make_fixture(t, files[:])
 		s, app := start(t, {dir}, home = dir)
 		context.allocator = runtime.heap_allocator()
-		if len(app.theme_names) < 2 { return }   // (one theme: nothing to step to)
+		list := themes(app)
+		if len(list) < 2 { return }   // (one theme: nothing to step to)
 		before := strings.clone(app.settings.theme, context.temp_allocator)   // (the theme in effect: the preference may say none)
 		at := -1
-		for name, i in app.theme_names { if name == before { at = i } }
+		for th, i in list { if th.name == before { at = i } }
 		session.key(s, .Period, {.Ctrl, .Shift, .Alt})
 		session.frames(s, 1)
-		testing.expect_value(t, config.string_of(&app.prefs, "look.theme"), app.theme_names[(at + 1) % len(app.theme_names)])
-		testing.expect_value(t, app.settings.theme, app.theme_names[(at + 1) % len(app.theme_names)])
+		testing.expect_value(t, config.string_of(&app.prefs, "appearance.theme"), list[(at + 1) % len(list)].name)
+		testing.expect_value(t, app.settings.theme, list[(at + 1) % len(list)].name)
 		session.key(s, .Comma, {.Ctrl, .Shift, .Alt})
 		session.frames(s, 1)
 		testing.expect_value(t, app.settings.theme, before)

@@ -8,6 +8,7 @@ import "core:strings"
 import "core:sync"
 import config "gt:config"
 import "gt:platform"
+import prefs_page "gt:prefs_page"
 import "gt:render"
 import setup "gt:setup"
 import tasks "gt:tasks"
@@ -118,25 +119,30 @@ act_app_theme_previous :: proc(app: ^App) { theme_step(app, -1) }
 // The theme after or before this one, in the settings' order (their cards').
 @(private = "file")
 theme_step :: proc(app: ^App, by: int) {
-	n := len(app.theme_names)
+	list := themes(app)
+	n := len(list)
 	if n == 0 { return }
 	at := 0
-	for name, i in app.theme_names { if name == app.settings.theme { at = i } }
-	name := app.theme_names[((at + by) % n + n) % n]
-	_ = config.set_from_string(&app.prefs, "look.theme", name, .User)
-	settings_apply(app)
+	for t, i in list { if t.name == app.settings.theme { at = i } }
+	name := list[((at + by) % n + n) % n].name
+	pref_set_string(app, prefs_page.THEME_PREF, name)
 	say(app, "Theme: %s.", name)
 }
 
 act_app_density :: proc(app: ^App) {
-	pref_set_string(app, "look.density", app.settings.compact ? "comfortable" : "compact")
+	if app.settings.compact {
+		_ = config.reset(&app.prefs, "appearance.density")
+		settings_apply(app)
+	} else {
+		pref_set_string(app, "appearance.density", fmt.tprintf("%v", DENSITY_COMPACT))
+	}
 	say(app, app.settings.compact ? "Compact rows." : "Comfortable rows.")
 }
 
 // Never, or always: "system" (the default) leaves it to the system, which a key cannot tell, so it goes to never first.
 act_app_animations :: proc(app: ^App) {
 	off := app.settings.animations == "off"
-	pref_set_string(app, "look.animations", off ? "on" : "off")
+	pref_set_string(app, "appearance.animations", off ? "on" : "off")
 	say(app, off ? "Animations on." : "Animations off.")
 }
 
@@ -147,20 +153,16 @@ act_app_text_bigger :: proc(app: ^App) { text_size_step(app, TEXT_STEP) }
 act_app_text_smaller :: proc(app: ^App) { text_size_step(app, -TEXT_STEP) }
 
 act_app_text_reset :: proc(app: ^App) {
-	_ = config.reset(&app.prefs, "look.font_size")
+	_ = config.reset(&app.prefs, prefs_page.FONT_SIZE_PREF)
 	settings_apply(app)
 	say(app, "Text size: %v.", app.settings.font_size)
 }
 
 @(private = "file")
 text_size_step :: proc(app: ^App, by: f32) {
-	lo, hi := f32(10), f32(22)
-	for d in PREF_DEFS {
-		if d.name == "look.font_size" { lo, hi = f32(d.min), f32(d.max) }
-	}
-	size := clamp(app.settings.font_size + by, lo, hi)
+	size := clamp(app.settings.font_size + by, prefs_page.FONT_SIZE_MIN, prefs_page.FONT_SIZE_MAX)
 	if size == app.settings.font_size { return }
-	pref_set_string(app, "look.font_size", fmt.tprintf("%v", size))
+	pref_set_string(app, prefs_page.FONT_SIZE_PREF, fmt.tprintf("%v", size))
 	say(app, "Text size: %v.", app.settings.font_size)
 }
 

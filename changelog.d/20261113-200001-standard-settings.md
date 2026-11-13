@@ -1,0 +1,3 @@
+type: Changed
+
+**The settings are the ones every program of the toolkit has**: besides the look, the text and its fonts, the scrolling, the keyboard's repeats, the delays of tooltips and menus, the rendering and the updates, each with its group, the technical ones under a folded Advanced part. Light or dark replaces "Follow the system" (dark by default, as before), the finish is a choice, and the settings export to JSON, TOML or INI and import back. The names in the settings file changed: a look set before (theme, text size, rounding, density, animations, scrolling, title bar, alternating rows, dimmed panels) is back at its default once.

@@ -26,6 +26,8 @@ Every step is a command of `tools/classeurtool`, a list of the toolkit's `toolbo
 | `changelog new <type> <text> -subject:<subject>` / `check` / `preview` | the fragments of `changelog.d/` |
 | `package`, `notes <version>`, `ship <patch\|minor\|major\|x.y.z> [--dry-run]` | a release (gui_toolkit's `release.commands`) |
 | `site build <site> <out>` / `check` / `card` | the site (gui_toolkit's `site.command`) |
+| `licence keygen` / `pubkey` / `issue` / `verify` / `secrets`, `paddle [-apply]` | classeur's licences and the shop's Paddle catalogue (gui_toolkit's `toolbox.licence_commands`, `docs/licence.md`); the product is `src/licence/product.odin`, the development pair's private half `DEV_SEED` |
+| `shop` | the shop's six pages (pricing, thanks, terms, refunds, privacy, imprint) written into `site/` from `shop()` (`tools/classeurtool/shop.odin`): "Coming soon" until Paddle's token, the price ids and the licence Worker are set there |
 | `shots [--out folder]` | `docs/screenshots/*.png`, from `test_shots` in `src/app_test.odin` |
 | `timed` | the tests that measure time (`TIMED_TESTS`, `-define:CLASSEUR_TIMED=true`): opt-in, a loaded machine fails them for nothing |
 

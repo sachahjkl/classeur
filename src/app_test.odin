@@ -16,6 +16,7 @@ import "core:time"
 import "gt:platform"
 import config "gt:config"
 import "gt:png"
+import prefs_page "gt:prefs_page"
 import store "gt:store"
 import "gt:testkit"
 import "gt:testkit/unwatched"
@@ -1658,8 +1659,8 @@ test_settings_look :: proc(t: ^testing.T) {
 		s, app := start(t, {dir}, size = {1200, 800})
 		context.allocator = runtime.heap_allocator()
 		testing.expect_value(t, ui.rounding(&app.main.state), f32(ROUNDING))
-		_ = config.set_from_string(&app.prefs, "look.rounding", "1.5", .User)
-		_ = config.set_from_string(&app.prefs, "look.density", "compact", .User)
+		_ = config.set_from_string(&app.prefs, "appearance.rounding", "1.5", .User)
+		_ = config.set_from_string(&app.prefs, "appearance.density", "0.82", .User)
 		settings_apply(app)
 		testing.expect_value(t, ui.rounding(&app.main.state), f32(1.5))
 		testing.expect(t, app.settings.compact, "compact")
@@ -1672,8 +1673,11 @@ test_settings_look :: proc(t: ^testing.T) {
 		session.key(s, .Comma, {.Ctrl})
 		session.frames(s, 3)
 		when SHOTS { session.save_png(s, "settings_round.png") }
-		// the rounding's slider held at its start: square at once, before it is let go
-		sl := session.get(s, "sl")
+		// the rounding's slider held at its start: square at once, before it is let go (the page shows its row alone, as
+		// the palette does: the Appearance page is longer than the dialog)
+		prefs_page.show(&app.options.page, &app.prefs, options_page(app), "appearance.rounding")
+		session.frames(s, 3)
+		sl := session.get(s, "slider", within = session.get(s, "set_appearance.rounding"))
 		from := session.center(sl)
 		to := [2]f32{sl.rect.min.x + 1, from.y}
 		session.press(s, from)
@@ -1682,7 +1686,7 @@ test_settings_look :: proc(t: ^testing.T) {
 		testing.expectf(t, ui.rounding(&app.main.state) < 0.2, "shown while held: %v", ui.rounding(&app.main.state))
 		session.release(s, to)
 		session.frames(s, 2)
-		testing.expect(t, config.float_of(&app.prefs, "look.rounding") < 0.2, "written at the release")
+		testing.expect(t, config.float_of(&app.prefs, "appearance.rounding") < 0.2, "written at the release")
 		// held again, and the settings closed meanwhile: what it showed goes back to what is written
 		written := ui.rounding(&app.main.state)
 		session.press(s, to)
@@ -2157,7 +2161,7 @@ test_stripes :: proc(t: ^testing.T) {
 		dir := make_fixture(t, files[:])
 		s, app := start(t, {dir}, size = {1100, 500})
 		context.allocator = runtime.heap_allocator()
-		_ = config.set_from_string(&app.prefs, "look.alternating_rows", "true", .User)
+		_ = config.set_from_string(&app.prefs, "appearance.alternating_rows", "true", .User)
 		settings_apply(app)
 		current_tab(app).zoom = 0
 		wait_read(s)
@@ -2606,13 +2610,13 @@ test_palette_settings :: proc(t: ^testing.T) {
 		dir := make_fixture(t, files[:])
 		s, app := start(t, {dir}, size = {1200, 800})
 		session.key(s, .K, {.Ctrl})
-		session.type_text(s, "corners")
+		session.type_text(s, "radius")
 		session.frames(s, 2)
 		testing.expect(t, session.find_text(s, "Rounding") != nil, "the rounding, by its tag")
 		session.key(s, .Return)
 		session.frames(s, 3)
 		testing.expect(t, !app.palette.open && app.options.open, "the settings open")
-		testing.expect(t, strings.contains(ui.field_string(&app.options.page.query), "look.rounding"), "on the rounding")
+		testing.expect(t, strings.contains(ui.field_string(&app.options.page.query), "appearance.rounding"), "on the rounding")
 		testing.expect(t, session.find_text(s, fmt.tprintf("classeur %s", APP_VERSION)) != nil, "the version at their foot")
 		when SHOTS { session.save_png(s, "palette_settings.png") }
 	})
@@ -2710,9 +2714,9 @@ test_system_title_setting :: proc(t: ^testing.T) {
 		session.key(s, .K, {.Ctrl})
 		session.type_text(s, "title bar")
 		session.frames(s, 2)
-		testing.expect(t, session.find_text(s, "System title") != nil, "the setting, by its tag")
+		testing.expect(t, session.find_text(s, "The system's title bar") != nil, "the setting, by its title")
 		session.key(s, .Escape)
-		_ = config.set_from_string(&app.prefs, "look.system_title", "true", .User)
+		_ = config.set_from_string(&app.prefs, "window.system_title", "true", .User)
 		settings_apply(app)
 		testing.expect(t, app.settings.system_title, "read")
 	})

@@ -134,7 +134,7 @@ header_sort_apply :: proc(app: ^App, l: ^ui.Table_Layout, f: ^Folder) {
 FILTER_EM :: 18
 
 // How much the contents of panel `index` are dimmed: nothing in the panel that has the keyboard or in a panel alone,
-// else what look.inactive_opacity takes away.
+// else what appearance.inactive_opacity takes away.
 panel_dim :: proc(app: ^App, index: int) -> f32 {
 	if index == app.focus || len(app.panels) == 1 { return 0 }
 	return 1 - app.settings.inactive_opacity

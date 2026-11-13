@@ -31,12 +31,19 @@ act_options :: proc(app: ^App) {
 	if o.open { prefs_page.focus_search(&o.page) }
 }
 
+// The pages in their order: the toolkit's standard groups (docs/settings.md) and classeur's own (files, open); the look
+// first, as the settings open on it.
 @(private = "file", rodata)
 OPTIONS_PAGES := [?]prefs_page.Page_Info{
-	{category = "look", title = "Appearance", icon = lucide.PALETTE},
+	{category = "appearance", title = "Appearance", icon = lucide.PALETTE},
+	{category = "window", title = "Window", icon = lucide.APP_WINDOW},
 	{category = "files", title = "Files", icon = lucide.FILE},
 	{category = "open", title = "Opening", icon = lucide.FOLDER_OPEN},
+	{category = "scrolling", title = "Scrolling", icon = lucide.MOUSE},
+	{category = "input", title = "Input", icon = lucide.KEYBOARD},
+	{category = "timing", title = "Delays and menus", icon = lucide.TIMER},
 	{category = "update", title = "Updates", icon = lucide.DOWNLOAD},
+	{category = "rendering", title = "Rendering", icon = lucide.MONITOR},
 	{category = "general", title = "General", icon = lucide.SETTINGS},
 }
 
@@ -44,7 +51,7 @@ options_build :: proc(app: ^App) {
 	o := &app.options
 	if !o.open {
 		// (closed while a slider was held: what it showed and did not write goes back to the preferences)
-		if o.shown { o.shown = false; settings_apply(app) }
+		if o.shown { o.shown = false; options_unpreview(app) }
 		return
 	}
 	o.shown = true
@@ -58,8 +65,12 @@ options_build :: proc(app: ^App) {
 	}
 }
 
-@(private = "file", rodata)
-OPTIONS_CUSTOM := [?]string{"look.theme"}   // (the themes: cards, drawn by the page's custom)
+// What a held slider showed and did not write, back to the preferences' values.
+@(private = "file")
+options_unpreview :: proc(app: ^App) {
+	ui.set_rounding(&app.main.state, f32(config.float_of(&app.prefs, "appearance.rounding")))
+	settings_apply(app)
+}
 
 // The build of the README's pictures (classeurtool shots). They are made before a release sets its version: a version
 // shown in them would be the last release's.
@@ -73,30 +84,27 @@ options_page :: proc(app: ^App) -> prefs_page.Options {
 		user = app,
 		pages = OPTIONS_PAGES[:],
 		icon_font = app.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
-		foot = "Ctrl+,: these settings",
+		file = SHOTS_BUILD ? "" : prefs_path(app),
 		changed = proc(user: rawptr, name: string) {
 			app := (^App)(user)
 			settings_apply(app)
+			if name == prefs_page.MENU_PREF || name == prefs_page.AUTOSTART_PREF { desktop_follow(app) }
 		},
 		// (a slider held: its value shown at once, written when it is let go; only what moves nothing: a text size
 		// shown live moved the slider under the pointer, it comes when let go)
 		preview = proc(user: rawptr, name: string, value: f64) {
 			app := (^App)(user)
 			switch name {
-			case "look.rounding":         ui.set_rounding(&app.main.state, f32(value))
-			case "look.inactive_opacity": app.settings.inactive_opacity = f32(value)
+			case "appearance.rounding":         ui.set_rounding(&app.main.state, f32(value))
+			case "appearance.inactive_opacity": app.settings.inactive_opacity = f32(value)
 			}
 			app_frames(app)
 		},
-		updater = app.updater, update_pref = "update.auto",
+		updater = app.updater,
 		restart = proc(user: rawptr) { updates_restart((^App)(user)) },
-		custom_names = OPTIONS_CUSTOM[:],
-		custom = proc(user: rawptr, name: string, em: f32) {
-			app := (^App)(user)
-			if at := prefs_page.theme_cards(themes(), app.settings.theme, app.theme_shown.light, em); at >= 0 {
-				_ = config.set_from_string(&app.prefs, "look.theme", themes()[at].name, .User)
-				settings_apply(app)
-			}
+		themes = themes(app), themes_light = app.theme_shown.light, themes_file = &app.themes_file,
+		page_foot = proc(user: rawptr, category: string, em: f32) {
+			if category == "general" { licence_section((^App)(user), em) }
 		},
 	}
 }

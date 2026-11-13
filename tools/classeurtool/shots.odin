@@ -18,7 +18,7 @@ TIMED_TESTS :: "classeur.test_close_during_walk"
 
 run_timed :: proc(args: []string) -> int {
 	p := project()
-	if !toolbox.build_native_text(p) { return 1 }
+	if !toolbox.build_native(p) { return 1 }
 	_ = os.make_directory("build")
 	extra := []string{"-out:build/test_timed", "-define:ODIN_TEST_THREADS=1", "-define:CLASSEUR_TIMED=true", "-define:ODIN_TEST_NAMES=" + TIMED_TESTS}
 	return toolbox.run(toolbox.odin_command(p, "test", "src", extra), {echo = true}) ? 0 : 1
@@ -28,7 +28,7 @@ run_shots :: proc(args: []string) -> int {
 	out := SHOTS_OUT
 	if len(args) == 2 && args[0] == "--out" { out = args[1] }
 	p := project()
-	if !toolbox.build_native_text(p) { return 1 }
+	if !toolbox.build_native(p) { return 1 }
 	_ = os.make_directory("build")
 	extra := []string{"-out:build/test_shots", "-define:ODIN_TEST_THREADS=1", "-define:CLASSEUR_SHOTS=true", "-define:ODIN_TEST_NAMES=classeur.test_shots"}
 	if !toolbox.run(toolbox.odin_command(p, "test", "src", extra), {echo = true}) { return 1 }

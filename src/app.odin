@@ -23,6 +23,7 @@ import tk_log "gt:log"
 import lucide "gt:lucide"
 import "gt:platform"
 import "gt:render"
+import prefs_page "gt:prefs_page"
 import process "gt:process"
 import setup "gt:setup"
 import store "gt:store"
@@ -146,8 +147,10 @@ App :: struct {
 	conflict:    Conflict_View,     // a name taken: what to do (dialogs.odin)
 	prefs:       config.Prefs,      // the preferences (prefs.odin)
 	settings:    Settings,          // their values as the program reads them
-	theme_names: []string,          // the choices of look.theme
+	standard:    prefs_page.Standard_Watch,   // the toolkit's standard settings applied as they change (prefs.odin)
+	themes_file: prefs_page.Themes_File,      // the program's themes and the person's own (themes.txt): the themes shown
 	options:     Options,
+	licence:     Licence_View,      // who supports classeur (licence.odin): the settings' General page
 	inspector:   Inspector,         // the pane of Space (inspector.odin)           // the options' list (options.odin)
 	drop_zones:      [dynamic]Drop_Zone,   // where a drop goes, noted by this frame (dnd.odin)
 	drop_zones_last: [dynamic]Drop_Zone,   // and by the last one (what a drop is tested against)
@@ -347,21 +350,24 @@ app_open :: proc(o: Open_Options) -> ^App {
 	}
 	h := &app.main
 	win := h.win
-	if !o.headless { app.announcer.window = win }   // (its mode: general.messages, settings_apply)
+	// (its mode: general.messages, settings_apply; its toasts this window's, also for a message said between builds)
+	app.announcer.state = &h.state
+	if !o.headless { app.announcer.window = win }
 	app.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
 	app.mono, _ = font.load_embedded(&app.shared.fonts, font.FALLBACK_MONO_DATA)
 	h.state.icon_font = app.icons   // (the menus' icons are the commands' Lucide ones; the widgets keep the toolkit's marks)
 	h.after_input = FRAMES_AFTER_INPUT
 	dnd_start(app)
 	ui.table_layout_init(&app.columns, detail_columns())   // (before the preferences: they say its columns)
-	prefs_open(app)
-	h.partial_redraw = true
+	prefs_open(app)   // (and h.partial_redraw: rendering.partial_redraw)
 	h.params = app_params
 	h.input = app_input
 	app.devtools = devtools.start_from_env(win, APP_NAME)
 	h.before_input = proc(h: ^host.Host) { app := (^App)(h.user); devtools.service(app.devtools, &h.state, &app.shared.r) }
 
 	pools_start(app)
+	licence_open(app)
+	desktop_follow(app)
 	app.palette.recording = -1   // (no command's keys recorded: the recorder is shut)
 	app.side_open = {.Recents = false, .Bookmarks = true, .Storage = true, .Network = true, .Places = true}
 	jobs_start(app)
@@ -520,6 +526,7 @@ app_free :: proc(app: ^App) {
 	delete(app.paste.dir)
 	confirm_free(&app.confirm)
 	options_free(&app.options)
+	licence_close(app)
 	prefs_close(app)
 	delete(app.home)
 	delete(app.session_path)
@@ -558,17 +565,12 @@ app_free :: proc(app: ^App) {
 @(private = "file")
 app_params :: proc(h: ^host.Host, bp: ^ui.Build_Params) {
 	app := (^App)(h.user)
-	choice := ui.Theme_Choice{name = app.settings.theme, mode = app.settings.follow_system ? .System : .Dark, finish = .Flat}
-	if ui.theme_show(&app.shared.theme, themes(), choice, &app.theme_shown, render.blend_space(&app.shared.r)) {
+	s := &app.settings
+	choice := ui.Theme_Choice{name = s.theme, mode = s.mode, finish = s.finish, glow = s.glow}
+	if ui.theme_show(&app.shared.theme, themes(app), choice, &app.theme_shown, render.blend_space(&app.shared.r)) {
 		platform.set_dark_title(h.win, !app.theme_shown.light)
 	}
-	bp.disable_zoom = true
-	// (the interface's motion: the system's, unless the settings say always or never)
-	switch app.settings.animations {
-	case "on":  bp.animations = true
-	case "off": bp.animations = false
-	}
-	bp.smooth_scroll = app.settings.smooth_scroll ? .On : .Follow
+	bp.disable_zoom = true   // (Ctrl+wheel zooms a panel's view: app_input)
 	bp.base = ui.Style{pref = {.X = ui.text_size(), .Y = ui.px(26)}, font = app.shared.font, font_size = app.settings.font_size, text_pad = 5, cursor = .Arrow}
 }
 
@@ -580,7 +582,9 @@ app_frames :: proc(app: ^App) {
 // A message in the window for a few seconds (a toast): what went wrong, a hint, a state just changed.
 say :: proc(app: ^App, format: string, args: ..any) {
 	status_keep(app, fmt.tprintf(format, ..args))
-	if !app.headless { ui.toast(.Info, "%s", app.status) }
+	// (in the main window's toasts whatever state is in use: a message said between builds, a task's, shows there)
+	window := ui.Announcer{mode = .Window, state = &app.main.state}
+	if !app.headless { ui.announce(&window, .Info, app.status) }
 }
 
 // A finished act (copied, saved, deleted, moved), said where general.messages says: the system's notifications, the
@@ -596,20 +600,22 @@ status_keep :: proc(app: ^App, text: string) {
 	app.status = strings.clone(text)
 }
 
-// How square the corners are (1: the toolkit's) and how dense the rows (1: the toolkit's).
+// How square the corners are (1: the toolkit's): appearance.rounding's default here (prefs.odin's OWN_DEFAULTS).
 ROUNDING :: 0.25
 
-// How round classeur's own drawings are (the rows' pill, the boxes) against the default: 1 at look.rounding's default,
-// 0 square, 8 at the slider's end (the toolkit's boxes follow ui.set_rounding by themselves).
+// How round classeur's own drawings are (the rows' pill, the boxes) against the default: 1 at appearance.rounding's
+// default, 0 square, 8 at the slider's end (the toolkit's boxes follow ui.set_rounding by themselves).
 corner_k :: proc() -> f32 { return ui.rounding(ui.current_state()) / ROUNDING }
-DENSITY  :: 1.0
+
+// appearance.density's compact step (the Density command's other; 1, the default, is the comfortable one).
 DENSITY_COMPACT :: 0.82
 
 // The selection's fill: the theme's (its accent, a tint), as in the toolkit's lists.
 selection_color :: proc(app: ^App) -> ui.Color { return ui.color("selection") }
 
-// The themes the window can show: the toolkit's (gui_toolkit docs/themes.md), the same as its other programs'.
-themes :: proc() -> []ui.Theme_Def { return ui.THEMES[:] }
+// The themes the window can show: the toolkit's (gui_toolkit docs/themes.md), the same as its other programs', then the
+// person's own (themes.txt).
+themes :: proc(app: ^App) -> []ui.Theme_Def { return app.themes_file.all[:] }
 
 // The window's input before the interface: Ctrl+wheel over a panel zooms its view (File Pilot's), and the list under it
 // does not scroll. The clipboard's answers go to what asked for them.
