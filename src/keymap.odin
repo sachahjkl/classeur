@@ -118,7 +118,7 @@ keymap_save :: proc(app: ^App) {
 		fmt.sbprintf(&b, "%s=%s", id, strings.trim_space(binding_text(bind)))
 		n += 1
 	}
-	config.set_string(&app.prefs, config.ref_of(&app.prefs, "keys.custom"), strings.to_string(b))
+	config.set_string(&app.prefs, "keys.custom", strings.to_string(b))
 	a := strings.builder_make(context.temp_allocator)
 	n = 0
 	for alias, id in app.keymap.aliases {
@@ -126,7 +126,7 @@ keymap_save :: proc(app: ^App) {
 		fmt.sbprintf(&a, "%s=%s", alias, id)
 		n += 1
 	}
-	config.set_string(&app.prefs, config.ref_of(&app.prefs, "keys.aliases"), strings.to_string(a))
+	config.set_string(&app.prefs, "keys.aliases", strings.to_string(a))
 }
 
 // The command `id` bound to `b` in place of its own keys (another command that had `b` loses it: one key, one command).

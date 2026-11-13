@@ -54,7 +54,7 @@ ROW_FIXED_EM  :: 7
 // view.column_widths), the same in every panel; each tab keeps its own sort.
 Detail :: enum u8 { Name, Modified, Type, Folders, Files, Size }
 
-// (not rodata: i18n.later marks the titles for the catalogue; app_open gives the table its translated copy)
+// (not rodata: i18n.later marks the titles for the catalogue; the table translates them where it shows them)
 DETAIL_COLUMNS := [Detail]ui.Table_Column{
 	.Name     = {title = i18n.later("Name"), width = 0},
 	.Modified = {title = i18n.later("Modified"), width = COL_MODIFIED_EM, descending_first = true},
@@ -63,7 +63,7 @@ DETAIL_COLUMNS := [Detail]ui.Table_Column{
 	.Files    = {title = i18n.later("Files"), width = COL_COUNT_EM, number = true, unsorted = true},
 	.Size     = {title = i18n.later("Size"), width = COL_SIZE_EM, number = true},
 }
-// (the table's columns: the app's copy of the table of Detail, whose titles app_open translates)
+// (the table's columns: the app's copy of the table of Detail)
 detail_columns :: proc(app: ^App) -> []ui.Table_Column {
 	app.column_defs = DETAIL_COLUMNS
 	return slice.enumerated_array(&app.column_defs)
@@ -97,15 +97,14 @@ columns_save :: proc(app: ^App) {
 		if strings.builder_len(b) > 0 { strings.write_byte(&b, ',') }
 		strings.write_string(&b, keys[Detail(k)])
 	}
-	config.set_string(&app.prefs, config.ref_of(&app.prefs, "view.columns"), strings.to_string(b))
-	config.set_string(&app.prefs, config.ref_of(&app.prefs, "view.column_widths"), ui.table_widths_text(l, slice.enumerated_array(&keys)))
+	config.set_string(&app.prefs, "view.columns", strings.to_string(b))
+	config.set_string(&app.prefs, "view.column_widths", ui.table_widths_text(l, slice.enumerated_array(&keys)))
 }
 
 // The header's menu (a right click on it): the toolkit's (the column clicked back to its own width and unsorted, the
 // rows unsorted, each column ticked when shown, the default columns), on the sort of the tab whose header was clicked.
 columns_menu_build :: proc(app: ^App, em: f32) {
-	if app.columns_menu_key == 0 { app.columns_menu_key = ui.key_from_string(0, "classeur_columns_menu") }
-	if ui.ctx_menu(app.columns_menu_key, em * MENU_WIDTH_EM) {
+	if ui.menu(COLUMNS_MENU, em * MENU_WIDTH_EM) {
 		t := find_tab(app, app.columns_menu_tab)
 		if t == nil { return }
 		// (the layout is every panel's; its sort, the tab's: shown as the tab sorts, given back to it when changed)
@@ -274,7 +273,7 @@ crumbs :: proc(app: ^App, t: ^Tab, em: f32) {
 			ui.next_merge(control_look(em))
 			sig: ui.Signal
 			if !last { ui.push_tags("weak") }
-			sig = ui.button(fmt.tprintf("%s###crumb%d", ui.text_shown(c.name), at), face = .Ghost)
+			sig = ui.button(fmt.tprintf("crumb%d", at), ui.text_shown(c.name), o = {face = .Ghost})
 			if !last { ui.pop_tags() }
 			// (files dropped on a crumb go into its folder, as on a row)
 			drop_zone(app, sig.box.rect, c.path)
@@ -292,7 +291,7 @@ crumbs :: proc(app: ^App, t: ^Tab, em: f32) {
 address_field :: proc(app: ^App, t: ^Tab, em: f32) {
 	// the path's suggestions: the folders of the folder typed so far, found by the letters after it (GoTo's, read on a
 	// worker); Up and Down choose one, Tab completes the path to it, Enter goes there, a click too
-	text := strings.clone(ui.field_string(&t.address), context.temp_allocator)
+	text := strings.clone(ui.line_edit_string(&t.address), context.temp_allocator)
 	rows := fs.looks_like_path(text) ? goto_rows(app, text) : nil
 	n := min(len(rows), ADDRESS_ROWS)
 	key: ui.Key
@@ -304,7 +303,7 @@ address_field :: proc(app: ^App, t: ^Tab, em: f32) {
 		over_suggestions = m.x >= r.min.x && m.x < r.max.x && m.y >= r.min.y && m.y < r.max.y
 	}
 	ui.next_merge(control_look(em))
-	if ui.field_frame("###address") {
+	if ui.input_frame("###address") {
 		frame = ui.parent_box().rect
 		if ui.tags("weak") { glyph(app, lucide.FOLDER_SEARCH, em * 1.7) }
 		key = ui.key_from_string(ui.parent_box().key, "###addr")
@@ -313,14 +312,14 @@ address_field :: proc(app: ^App, t: ^Tab, em: f32) {
 			if ui.key_press(.Down) { t.address_sel = t.address_moved ? (t.address_sel + 1) % n : 0; t.address_moved = true }
 			if ui.key_press(.Up) { t.address_sel = t.address_moved ? (t.address_sel + n - 1) % n : n - 1; t.address_moved = true }
 			if ui.key_press(.Tab) {
-				ui.field_set(&t.address, fmt.tprintf("%s%s", home_path(app, rows[clamp(t.address_sel, 0, n - 1)].path), fs.SEPARATOR_STRING))
+				ui.line_edit_set(&t.address, fmt.tprintf("%s%s", home_path(app, rows[clamp(t.address_sel, 0, n - 1)].path), fs.SEPARATOR_STRING))
 				t.address_sel, t.address_moved = 0, false
 			}
 		}
 		t.address_sel = clamp(t.address_sel, 0, max(n - 1, 0))
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		res: ui.Edit_Result
-		if ui.tags("bare") { res = ui.line_edit("###addr", &t.address, "A folder's path (Tab completes it)") }
+		if ui.tags("bare") { res = ui.line_edit("###addr", &t.address, {placeholder = "A folder's path (Tab completes it)"}) }
 		if res.changed { t.address_sel, t.address_moved = 0, false }
 		note_text_field(app, key)
 		if t.focus_due == .Address {
@@ -338,7 +337,7 @@ address_field :: proc(app: ^App, t: ^Tab, em: f32) {
 			// to the folder that holds it)
 			t.address_open = false
 			t.focus_due = .List
-			tab_go(app, t, t.address_moved && n > 0 ? rows[t.address_sel].path : ui.field_string(&t.address))
+			tab_go(app, t, t.address_moved && n > 0 ? rows[t.address_sel].path : ui.line_edit_string(&t.address))
 			t.address_moved = false
 		}
 	}
@@ -434,9 +433,8 @@ header :: proc(app: ^App, t: ^Tab, em: f32) -> ui.Key {
 	if ev.sorted { header_sort_apply(app, l, f) }   // (the third click leaves no sort: the names' order)
 	if ev.resized || ev.moved { columns_save(app) }
 	if ev.menu {
-		if app.columns_menu_key == 0 { app.columns_menu_key = ui.key_from_string(0, "classeur_columns_menu") }
 		app.columns_menu_tab = t.id
-		ui.ctx_menu_open(app.columns_menu_key, ui.mouse_pos())
+		ui.menu_open(COLUMNS_MENU, ui.mouse_pos())
 	}
 	return ev.view
 }
@@ -601,7 +599,7 @@ empty_state :: proc(app: ^App, t: ^Tab, em: f32) -> bool {
 			case c == .Error:   if a == 0 { tab_up(app, t) } else { tab_load(app, t) }
 			case c == .Empty:   if a == 0 { act_new_folder(app) } else { act_paste(app) }
 			case c == .Filter:
-				ui.field_clear(&t.filter)
+				ui.line_edit_clear(&t.filter)
 				folder_set_filter(f, "")
 				if t.flat { t.flat = false; tab_load(app, t) }
 				t.focus_due = .List
@@ -1172,17 +1170,15 @@ ZOOM_ICONS := [?]string{lucide.TABLE_2, lucide.LIST, lucide.COLUMNS_2, lucide.LA
 // details at the bottom, its icon, its name and its percent; a click on a row goes to that step, the track at the left
 // is dragged from step to step (the view following smoothly), the wheel and Up, Down too.
 zoom_slider_open :: proc(app: ^App, t: ^Tab, at: ui.Rect) {
-	if app.zoom_slider_key == 0 { app.zoom_slider_key = ui.key_from_string(0, "classeur_zoom_slider") }
 	app.zoom_slider_tab = t.id
-	ui.ctx_menu_open_rect(app.zoom_slider_key, at)
+	ui.menu_open(ZOOM_SLIDER_MENU, at, search = false)   // (a slider, no items to search)
 }
 
 zoom_slider_build :: proc(app: ^App, em: f32) {
-	if app.zoom_slider_key == 0 { return }
 	w := em * 16
-	if ui.ctx_menu(app.zoom_slider_key, w) {
+	if ui.menu(ZOOM_SLIDER_MENU, w) {
 		t := find_tab(app, app.zoom_slider_tab)
-		if t == nil { ui.ctx_menu_close(); return }
+		if t == nil { ui.menu_close(); return }
 		n := len(ZOOMS)
 		step_h := ui.dense(em * 2.2)
 		ui.next({width = ui.px(w), height = ui.px(step_h * f32(n))})
@@ -1284,30 +1280,30 @@ filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 		key := ui.key_from_string(ui.parent_box().key, "###filter")
 		// text typed in the panel that has the keyboard, no field and no dialog taking it: into its filter (File
 		// Pilot's); Space is the inspector's, not a letter
-		if focused && app.no_dialog && !ui.key_pressed_peek(.Space) && !ui.ctx_menu_any_open() && ui.type_to_field(key) {
+		if focused && app.no_dialog && !ui.key_pressed_peek(.Space) && !ui.menu_any_open() && ui.type_to_field(key) {
 			t.filter_open = true
 		}
 		// Space in the empty filter: the inspector's key, as in the list; taken before the field is built, so it never
 		// shows a space (no name starts with one)
-		if focused && app.no_dialog && ui.focus_key() == key && ui.field_string(&t.filter) == "" && ui.typed_take(' ') {
+		if focused && app.no_dialog && ui.focus_key() == key && ui.line_edit_string(&t.filter) == "" && ui.typed_take(' ') {
 			act_inspector(app)
 		}
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		res: ui.Edit_Result
-		if ui.tags("bare") { res = ui.line_edit("###filter", &t.filter, "Filter...", clearable = !t.flat) }
+		if ui.tags("bare") { res = ui.line_edit("###filter", &t.filter, {placeholder = "Filter...", clearable = !t.flat}) }
 		note_text_field(app, key)
 		if t.focus_due == .Filter {
 			ui.set_focus(key)
 			t.focus_due = .None
 		}
-		folder_set_filter(&t.folder, ui.field_string(&t.filter))
+		folder_set_filter(&t.folder, ui.line_edit_string(&t.filter))
 		if res.focused {
 			// the list's moves from the filter: the keyboard stays in it
 			if ui.key_press(.Down) { list_move(t, tab_row_items(t)) }
 			if ui.key_press(.Up) { list_move(t, -tab_row_items(t)) }
 		}
 		if res.cancelled {
-			if len(t.filter.buf) > 0 { ui.field_clear(&t.filter) }
+			if len(t.filter.buf) > 0 { ui.line_edit_clear(&t.filter) }
 			t.focus_due = .List
 		}
 		if res.committed { act_open(app) }
@@ -1323,7 +1319,7 @@ filter_field :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 			// (the field's own cross empties it; this one leaves the search of every folder below, its letters with it)
 			if t.flat {
 				if icon_action(app, "filter_clear", lucide.X, i18n.tr("Clear the filter, leave the search (Escape)"), em) {
-					ui.field_clear(&t.filter)
+					ui.line_edit_clear(&t.filter)
 					if t.flat { t.flat = false; tab_load(app, t) }
 				}
 			}

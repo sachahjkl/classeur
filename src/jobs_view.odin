@@ -113,7 +113,7 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 			ui.label(fmt.tprintf("%s###jobs_title", n == 0 ? i18n.tr("No job yet") : fmt.tprintf(i18n.tr("Jobs: %d"), n)))
 			// (the jobs go on: the panel alone goes, the footer's button brings it back)
 			ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 1.9))})
-			if ui.button(fmt.tprintf("%s###jobs_bg", i18n.tr("Background"))).clicked { v.open = false }
+			if ui.button("jobs_bg", i18n.tr("Background")).clicked { v.open = false }
 			ui.spacer(ui.px(em * 0.9))
 		}
 		ui.hline(ui.px(w))
@@ -151,12 +151,12 @@ jobs_view_build :: proc(app: ^App, em: f32) {
 							ui.progress("###bar", total > 0 ? clamp(f32(f64(done) / f64(total)), 0, 1) : 0, st == .Counting)
 							ui.spacer(ui.px(em * 0.4))
 							ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 1.9))})
-							if ui.button(fmt.tprintf("%s###cancel", i18n.tr("Cancel"))).clicked { job_cancel(job) }
+							if ui.button("cancel", i18n.tr("Cancel")).clicked { job_cancel(job) }
 						}
 						if st == .Failed || st == .Cancelled {
 							ui.spacer(ui.px(em * 0.4))
 							ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 1.9))})
-							if ui.button(fmt.tprintf("%s###retry", i18n.tr("Retry")), intent = .Primary).clicked { job_retry(app, job) }
+							if ui.button("retry", i18n.tr("Retry"), o = {intent = .Primary}).clicked { job_retry(app, job) }
 						}
 						ui.spacer(ui.px(em * 0.9))
 					}

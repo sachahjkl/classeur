@@ -22,14 +22,13 @@ Layout :: struct {
 Layouts :: struct {
 	list:      [dynamic]Layout,
 	naming:    bool,           // the field that names the layout shown is open
-	field:     ui.Text_Field,
-	menu_key:  ui.Key,
+	field:     ui.Line_Edit,
 }
 
 layouts_free :: proc(l: ^Layouts) {
 	for x in l.list { delete(x.name); delete(x.text) }
 	delete(l.list)
-	ui.field_destroy(&l.field)
+	ui.line_edit_destroy(&l.field)
 	l^ = {}
 }
 
@@ -125,8 +124,8 @@ layout_delete :: proc(app: ^App, name: string) {
 act_layout_save :: proc(app: ^App) {
 	l := &app.layouts
 	l.naming = true
-	ui.field_set(&l.field, fmt.tprintf(i18n.tr("Layout %d"), len(l.list) + 1))
-	ui.field_select_all(&l.field)
+	ui.line_edit_set(&l.field, fmt.tprintf(i18n.tr("Layout %d"), len(l.list) + 1))
+	ui.line_edit_select_all(&l.field)
 }
 
 act_layout_open :: proc(app: ^App) {
@@ -135,16 +134,14 @@ act_layout_open :: proc(app: ^App) {
 		say(app, i18n.tr("No layout is saved: Ctrl+Alt+S saves the panels shown."))
 		return
 	}
-	if l.menu_key == 0 { l.menu_key = ui.key_from_string(0, "classeur_layouts_menu") }
 	em := ui.font_size()
 	at := [2]f32{app.room * ui.scale() * 0.5 - em * MENU_WIDTH_EM * 0.5, em * 6}
-	ui.ctx_menu_open(l.menu_key, at, from_keyboard = true, search = true)
+	ui.menu_open(LAYOUTS_MENU, at, from_keyboard = true, search = true)
 }
 
 layouts_build :: proc(app: ^App, em: f32) {
 	l := &app.layouts
-	if l.menu_key == 0 { l.menu_key = ui.key_from_string(0, "classeur_layouts_menu") }
-	if ui.ctx_menu(l.menu_key, em * MENU_WIDTH_EM) {
+	if ui.menu(LAYOUTS_MENU, em * MENU_WIDTH_EM) {
 		open := ""
 		for x, i in l.list {
 			if ui.menu_item(fmt.tprintf("%s###lay%d", ui.text_shown(x.name), i), icon = lucide.LAYOUT_GRID).clicked { open = x.name }
@@ -165,7 +162,7 @@ layouts_build :: proc(app: ^App, em: f32) {
 		placeholder = i18n.tr("The layout's name"), act = i18n.tr("Save"),
 	})
 	if answer == .Confirmed {
-		name := strings.trim_space(ui.field_string(&l.field))
+		name := strings.trim_space(ui.line_edit_string(&l.field))
 		if name == "" { l.naming = true } else { layout_save(app, strings.clone(name, context.temp_allocator)) }
 	}
 }

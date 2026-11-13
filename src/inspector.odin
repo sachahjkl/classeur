@@ -126,10 +126,10 @@ props_free :: proc(p: ^fs.Properties) {
 
 // Its edge: dragged from INSPECTOR_MIN_PX to most of the panel, folded to a strip, saved when let go.
 inspector_pane_options :: proc(app: ^App) -> ui.Pane_Options {
-	return ui.Pane_Options{side = .After, default_size = INSPECTOR_DEFAULT_PX, min_size = INSPECTOR_MIN_PX, collapsible = true, title = i18n.tr("Inspector"),
+	return ui.Pane_Options{side = .After, default_size = INSPECTOR_DEFAULT_PX, min_size = INSPECTOR_MIN_PX, collapsible = true, title = i18n.later("Inspector"),
 		user = app, on_save = proc(user: rawptr, p: ^ui.Pane) {
 			app := (^App)(user)
-			config.set_int(&app.prefs, config.ref_of(&app.prefs, "inspector.width"), i64(p.size[.X]))
+			config.set_int(&app.prefs, "inspector.width", i64(p.size[.X]))
 		}}
 }
 

@@ -25,7 +25,7 @@ test_a_field_pastes_the_clipboard_s_text :: proc(t: ^testing.T) {
 		session.key(s, .A, {.Ctrl})
 		session.set_clipboard(s, "pasted.txt")
 		session.key(s, .V, {.Ctrl})
-		session.wait_until(s, app, proc(s: ^session.Session, app: ^App) -> bool { return ui.field_string(&app.rename.field) == "pasted.txt" }, "the rename's paste")
+		session.wait_until(s, app, proc(s: ^session.Session, app: ^App) -> bool { return ui.line_edit_string(&app.rename.field) == "pasted.txt" }, "the rename's paste")
 		session.key(s, .Escape)
 		session.frames(s, 2)
 		testing.expect(t, !app.rename.active)
@@ -34,6 +34,6 @@ test_a_field_pastes_the_clipboard_s_text :: proc(t: ^testing.T) {
 		session.key(s, .F, {.Ctrl})
 		session.set_clipboard(s, "rep")
 		session.key(s, .V, {.Ctrl})
-		session.wait_until(s, tab, proc(s: ^session.Session, tab: ^Tab) -> bool { return ui.field_string(&tab.filter) == "rep" }, "the filter's paste")
+		session.wait_until(s, tab, proc(s: ^session.Session, tab: ^Tab) -> bool { return ui.line_edit_string(&tab.filter) == "rep" }, "the filter's paste")
 	})
 }

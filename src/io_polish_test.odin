@@ -74,7 +74,7 @@ test_rename_refused_by_the_worker :: proc(t: ^testing.T) {
 		testing.expect(t, app.rename.active, "the field stays open")
 		testing.expect(t, app.rename.refused, "the name refused")
 		testing.expect_value(t, app.rename.waiting, 0)
-		testing.expect_value(t, ui.field_string(&app.rename.field), "archive.zip")
+		testing.expect_value(t, ui.line_edit_string(&app.rename.field), "archive.zip")
 		testing.expect(t, fs.exists(fs.join(dir, "notes.txt", context.temp_allocator)), "notes.txt is still there")
 		testing.expect_value(t, len(app.undo), 0)
 		session.key(s, .Escape)

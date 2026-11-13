@@ -30,7 +30,7 @@ palette_free :: proc(p: ^Palette) {
 palette_open :: proc(app: ^App) {
 	p := &app.palette
 	ui.palette_open(&p.pal)
-	p.size = {f32(config.int_of(&app.prefs, "palette.width")), f32(config.int_of(&app.prefs, "palette.height"))}
+	p.size = {f32(config.float_of(&app.prefs, "palette.width")), f32(config.float_of(&app.prefs, "palette.height"))}   // (ems)
 	p.recording = -1
 }
 
@@ -64,7 +64,7 @@ palette_note_run :: proc(app: ^App, id: string) {
 		strings.write_string(&b, x)
 		n += 1
 	}
-	config.set_string(&app.prefs, config.ref_of(&app.prefs, "palette.recent"), strings.to_string(b))
+	config.set_string(&app.prefs, "palette.recent", strings.to_string(b))
 }
 
 // The palette's list: the program's commands by group (`order`: each line's command), then the settings (`settings`:
@@ -84,7 +84,7 @@ palette_list :: proc(app: ^App) -> (l: Palette_List) {
 	keys := make([dynamic]string, context.temp_allocator)
 	// (Tab 1 to Last tab would take nine lines of every search: they show once "tab" is typed)
 	// (the word in the person's language: the titles they search are)
-	tabs := strings.has_prefix(strings.to_lower(strings.trim_space(ui.field_string(&app.palette.field)), context.temp_allocator), i18n.tr("palette: the word that shows Tab 1 to Last tab", "tab"))
+	tabs := strings.has_prefix(strings.to_lower(strings.trim_space(ui.line_edit_string(&app.palette.field)), context.temp_allocator), i18n.tr("palette: the word that shows Tab 1 to Last tab", "tab"))
 	for g in 0 ..< len(COMMAND_GROUPS) {
 		for &c, i in COMMANDS {
 			if command_group(c.id) != g || (!tabs && tab_pick_command(c.id)) { continue }
@@ -93,7 +93,7 @@ palette_list :: proc(app: ^App) -> (l: Palette_List) {
 			tags := make([dynamic]string, context.temp_allocator)
 			append(&tags, ..c.tags)
 			for alias, id in app.keymap.aliases { if id == c.id { append(&tags, alias) } }
-			append(&cmds, ui.Command{label = i18n.tr(c.title), group = i18n.tr(COMMAND_GROUPS[g]), icon = c.icon, keys = c.keys, tags = tags[:]})
+			append(&cmds, ui.Command{label = c.title, group = COMMAND_GROUPS[g], icon = c.icon, keys = c.keys, tags = tags[:]})
 			append(&order, i)
 			append(&keys, command_keys(app, &c))
 		}
@@ -109,7 +109,7 @@ palette_list :: proc(app: ^App) -> (l: Palette_List) {
 		for c, line in order { if id != "" && COMMANDS[c].id == id { append(&recent, line) } }
 	}
 	l.opts.recent = recent[:]
-	if a := alias_command(app, ui.field_string(&app.palette.field)); a != nil {
+	if a := alias_command(app, ui.line_edit_string(&app.palette.field)); a != nil {
 		for c, line in order { if &COMMANDS[c] == a { l.opts.first = line } }
 	}
 	return
@@ -130,7 +130,7 @@ shortcuts_build :: proc(app: ^App) {
 				if command_group(c.id) != g { continue }
 				keys := c.keys
 				if b, ok := app.keymap.custom[c.id]; ok { keys = b.chords }
-				append(&list, ui.Command{label = i18n.tr(c.title), group = i18n.tr(COMMAND_GROUPS[g]), icon = c.icon, keys = keys})
+				append(&list, ui.Command{label = c.title, group = COMMAND_GROUPS[g], icon = c.icon, keys = keys})
 			}
 		}
 	}
@@ -163,7 +163,7 @@ palette_build :: proc(app: ^App) {
 		// (the palette comes back as it was once the keys are recorded)
 		p.recording, p.count, p.chords = l.order[chosen], 0, {}
 	case {.Alt}:
-		needle := strings.trim_space(ui.field_string(&p.field))
+		needle := strings.trim_space(ui.line_edit_string(&p.field))
 		if needle != "" {
 			keymap_alias(app, needle, c.id)
 			say(app, i18n.tr("%s: an alias of %s."), needle, i18n.tr(c.title))
@@ -187,8 +187,7 @@ palette_recorder :: proc(app: ^App) {
 	open := true
 	keep, cancel := false, false
 	// (the toolkit's three parts of a dialog: the command in the header, the keys pressed in the body, then the buttons)
-	w := em * ui.CONFIRM_WIDTH_EM
-	if ui.modal("palette_keys", w, &open) {
+	if ui.modal("palette_keys", &open, {}) {
 		hk, ok := ui.key_take()
 		if ok && hk.key != .None {
 			key, mods := hk.key, hk.mods
@@ -223,10 +222,10 @@ palette_recorder :: proc(app: ^App) {
 		}
 		if ui.dialog_buttons("rec_buttons") {
 			ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-			if ui.button(fmt.tprintf("%s###rec_cancel", i18n.tr("Cancel")), intent = .Cancel).clicked { cancel = true }
+			if ui.button("rec_cancel", i18n.tr("Cancel"), o = {intent = .Cancel}).clicked { cancel = true }
 			ui.spacer(ui.px(em * 0.6))
 			ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-			if ui.button(fmt.tprintf("%s###rec_keep", i18n.tr("Keep (Enter)")), intent = .Primary, disabled = p.count == 0).clicked { keep = true }
+			if ui.button("rec_keep", i18n.tr("Keep (Enter)"), o = {intent = .Primary, disabled = p.count == 0}).clicked { keep = true }
 		}
 	}
 	switch {
@@ -256,12 +255,12 @@ palette_line_command :: proc(app: ^App, k: int) -> int {
 
 // The command of the palette's first line for what is typed (the tests).
 palette_first :: proc(app: ^App) -> int {
-	if a := alias_command(app, ui.field_string(&app.palette.field)); a != nil {
+	if a := alias_command(app, ui.line_edit_string(&app.palette.field)); a != nil {
 		for &c, i in COMMANDS { if &c == a { return i } }
 	}
 	// (ranked as the palette ranks them: ui.palette_match, the label, then the aliases, the group, then with slips)
 	l := palette_list(app)
-	query := ui.field_string(&app.palette.field)
+	query := ui.line_edit_string(&app.palette.field)
 	best, at := min(int), -1
 	for c, line in l.commands[:len(l.order)] {
 		score, _, ok := ui.palette_match(query, c.label, c.group, c.tags)
@@ -273,8 +272,8 @@ palette_first :: proc(app: ^App) -> int {
 @(private = "file")
 palette_keep_size :: proc(app: ^App) {
 	p := &app.palette
-	w, h := i64(p.size.x), i64(p.size.y)
-	if w == config.int_of(&app.prefs, "palette.width") && h == config.int_of(&app.prefs, "palette.height") { return }
-	config.set_int(&app.prefs, config.ref_of(&app.prefs, "palette.width"), w)
-	config.set_int(&app.prefs, config.ref_of(&app.prefs, "palette.height"), h)
+	w, h := f64(p.size.x), f64(p.size.y)
+	if w == config.float_of(&app.prefs, "palette.width") && h == config.float_of(&app.prefs, "palette.height") { return }
+	config.set_float(&app.prefs, "palette.width", w)
+	config.set_float(&app.prefs, "palette.height", h)
 }

@@ -15,25 +15,26 @@ import "gt:ui"
 
 // classeur's own preferences. The look, the text, the scrolling, the hand's feel, the updates and the desktop are the
 // toolkit's standard ones (prefs_page.standard_register, docs/settings.md of gui_toolkit): one name per concept. The
-// descriptions shown are marked by i18n.later for the catalogue (a hidden one is never shown).
+// titles and descriptions shown are marked by i18n.later for the catalogue (a hidden one is never shown); a title is
+// the one its name gave, written out: one made from the name is in no catalogue.
 PREF_DEFS := [?]config.Def{
-	{name = "appearance.alternating_rows", tags = {"zebra", "stripes"}, description = i18n.later("Paints every other row a shade lighter, to tell the rows apart."), kind = .Bool, default = {b = false}},
-	{name = "appearance.inactive_opacity", tags = {"dim", "panels", "focus"}, description = i18n.later("Dims the contents of the panels that do not have the keyboard, so that the one that has it stands out."), kind = .Float, default = {f = 0.8}, min = 0.3, max = 1, bounded = true},
-	{name = "files.show_extensions", tags = {"suffix", "names"}, description = i18n.later("Shows the extensions of the files' names."), kind = .Bool, default = {b = true}},
-	{name = "files.show_hidden", tags = {"dotfiles", "hidden"}, description = i18n.later("Shows the hidden files (their names start with a dot; on Windows, their attribute)."), kind = .Bool, default = {b = false}},
-	{name = "files.folders_first", tags = {"directories", "sort", "order"}, description = i18n.later("Lists the folders before the files, whatever the sort."), kind = .Bool, default = {b = true}},
-	{name = "files.date_format", tags = {"dates", "time", "modified", "relative"}, description = i18n.later("How the dates read: 2026-11-09 21:40; Today 21:40, Yesterday, the weekday for the last week, then 9 Nov 2026; or 9 Nov 2026 21:40."), kind = .String, default = {s = "ISO"}, choices = {"ISO", "relative", "day month year"}},
-	{name = "files.measure_folders", tags = {"size", "du", "count"}, description = i18n.later("Measures the folders shown: what they hold all the way down, in the Folders, Files and Size columns."), kind = .Bool, default = {b = true}},
+	{name = "appearance.alternating_rows", title = i18n.later("Alternating rows"), tags = {"zebra", "stripes"}, description = i18n.later("Paints every other row a shade lighter, to tell the rows apart."), kind = .Bool, default = {b = false}},
+	{name = "appearance.inactive_opacity", title = i18n.later("Inactive opacity"), tags = {"dim", "panels", "focus"}, description = i18n.later("Dims the contents of the panels that do not have the keyboard, so that the one that has it stands out."), kind = .Float, default = {f = 0.8}, min = 0.3, max = 1, bounded = true},
+	{name = "files.show_extensions", title = i18n.later("Show extensions"), tags = {"suffix", "names"}, description = i18n.later("Shows the extensions of the files' names."), kind = .Bool, default = {b = true}},
+	{name = "files.show_hidden", title = i18n.later("Show hidden"), tags = {"dotfiles", "hidden"}, description = i18n.later("Shows the hidden files (their names start with a dot; on Windows, their attribute)."), kind = .Bool, default = {b = false}},
+	{name = "files.folders_first", title = i18n.later("Folders first"), tags = {"directories", "sort", "order"}, description = i18n.later("Lists the folders before the files, whatever the sort."), kind = .Bool, default = {b = true}},
+	{name = "files.date_format", title = i18n.later("Date format"), tags = {"dates", "time", "modified", "relative"}, description = i18n.later("How the dates read: 2026-11-09 21:40; Today 21:40, Yesterday, the weekday for the last week, then 9 Nov 2026; or 9 Nov 2026 21:40."), kind = .String, default = {s = "ISO"}, choices = {"ISO", "relative", "day month year"}, choice_labels = {i18n.later("ISO"), i18n.later("Relative"), i18n.later("Day month year")}},
+	{name = "files.measure_folders", title = i18n.later("Measure folders"), tags = {"size", "du", "count"}, description = i18n.later("Measures the folders shown: what they hold all the way down, in the Folders, Files and Size columns."), kind = .Bool, default = {b = true}},
 	{name = "view.columns", description = "The columns of the details shown after the name, in their order.", kind = .String, default = {s = DETAIL_COLUMNS_DEFAULT}, hidden = true},
 	{name = "view.column_widths", description = "The widths of the details' columns the person changed (ems).", kind = .String, default = {s = ""}, hidden = true},
 	{name = "keys.custom", description = "The person's keys of the commands (palette: Ctrl+Enter).", kind = .String, default = {s = ""}, hidden = true},
 	{name = "keys.aliases", description = "The aliases of the commands (palette: Alt+Enter).", kind = .String, default = {s = ""}, hidden = true},
-	{name = "palette.width", description = "The palette's width as last resized (logical pixels; 0: its own).", kind = .Int, default = {i = 0}, hidden = true},
-	{name = "palette.height", description = "The palette's height as last resized (logical pixels; 0: its own).", kind = .Int, default = {i = 0}, hidden = true},
+	{name = "palette.width", description = "The palette's width as last resized (ems; 0: its own).", kind = .Float, default = {f = 0}, hidden = true},
+	{name = "palette.height", description = "The palette's height as last resized (ems; 0: its own).", kind = .Float, default = {f = 0}, hidden = true},
 	{name = "inspector.width", description = "The inspector's width as last dragged (logical pixels).", kind = .Int, default = {i = INSPECTOR_DEFAULT_PX}, hidden = true},
 	{name = "side.order", description = "The sidebar's sections in their order.", kind = .String, default = {s = "recents,bookmarks,storage,network,places"}, hidden = true},
 	{name = "palette.recent", description = "The commands run last from the palette.", kind = .String, default = {s = ""}, hidden = true},
-	{name = "open.single_click", tags = {"click", "double click"}, description = i18n.later("Opens an item with one click instead of two."), kind = .Bool, default = {b = false}},
+	{name = "open.single_click", title = i18n.later("Single click"), tags = {"click", "double click"}, description = i18n.later("Opens an item with one click instead of two."), kind = .Bool, default = {b = false}},
 }
 
 // classeur's texts in other languages (docs/i18n.md of gui_toolkit), embedded: `classeurtool i18n fr` writes them.
@@ -181,7 +182,7 @@ settings_apply :: proc(app: ^App) {
 	}
 	s.measure_folders = config.bool_of(p, "files.measure_folders")
 	s.single_click = config.bool_of(p, "open.single_click")
-	app.announcer.mode = prefs_page.messages_mode(p)
+	app.announcer.mode = prefs_page.announce_mode(p)
 	columns_read(app, config.string_of(p, "view.columns"), config.string_of(p, "view.column_widths"))
 	side_order_read(app, config.string_of(p, "side.order"))
 	keymap_read(app, config.string_of(p, "keys.custom"), config.string_of(p, "keys.aliases"))
@@ -206,6 +207,6 @@ settings_apply :: proc(app: ^App) {
 
 // A preference changed by the program (a key, a toggle): the registry, the file, what follows.
 pref_set_bool :: proc(app: ^App, name: string, v: bool) {
-	config.set_bool(&app.prefs, config.ref_of(&app.prefs, name), v)
+	config.set_bool(&app.prefs, name, v)
 	settings_apply(app)
 }

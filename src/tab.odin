@@ -27,10 +27,10 @@ Tab :: struct {
 	select_names: [dynamic]string,   // owned: the rows selected when the read comes (what a paste made here), the cursor on the first
 	reveal_scroll: Maybe(f32),       // with it, the list's scroll (Back and Forward: where the folder was left)
 	vl:          ui.Virtual_List,
-	filter:      ui.Text_Field,
+	filter:      ui.Line_Edit,
 	filter_open: bool,
 	scroll_x:    f32,      // the details' sideways scroll (the columns' layout is the panels' together)
-	address:      ui.Text_Field,     // the path typed in place of the crumbs (Ctrl+L)
+	address:      ui.Line_Edit,     // the path typed in place of the crumbs (Ctrl+L)
 	address_open: bool,
 	address_sel:  int,               // the suggestion chosen under the path field
 	address_moved: bool,             // the person chose one (Up, Down): Enter goes there, not to the path typed
@@ -153,8 +153,8 @@ tab_destroy :: proc(t: ^Tab) {
 	delete(t.select_names)
 	ui.vlist_destroy(&t.vl)
 	delete(t.grid_ids)
-	ui.field_destroy(&t.filter)
-	ui.field_destroy(&t.address)
+	ui.line_edit_destroy(&t.filter)
+	ui.line_edit_destroy(&t.address)
 	for p in t.tree_open { delete(p) }
 	delete(t.tree_open)
 	free(t)
@@ -203,7 +203,7 @@ tab_go :: proc(app: ^App, t: ^Tab, path: string, history := true) {
 	for p in t.tree_open { delete(p) }
 	clear(&t.tree_open)
 	measure_forget_asked(app)
-	ui.field_clear(&t.filter)
+	ui.line_edit_clear(&t.filter)
 	t.filter_open = false
 	folder_set_filter(&t.folder, "")
 	// (the types' popup is the folder's: another folder shows every type)

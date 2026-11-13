@@ -22,7 +22,7 @@ GOTO_ROWS :: 12
 
 Goto :: struct {
 	open:      bool,
-	field:     ui.Text_Field,
+	field:     ui.Line_Edit,
 	sel:       int,
 	scroll:    int,
 	focus_due: bool,
@@ -35,7 +35,7 @@ Goto :: struct {
 }
 
 goto_free :: proc(g: ^Goto) {
-	ui.field_destroy(&g.field)
+	ui.line_edit_destroy(&g.field)
 	delete(g.dir)
 	delete(g.asked)
 	for n in g.names { delete(n) }
@@ -48,7 +48,7 @@ goto_free :: proc(g: ^Goto) {
 act_goto_popup :: proc(app: ^App) {
 	g := &app.goto
 	g.open = true
-	ui.field_clear(&g.field)
+	ui.line_edit_clear(&g.field)
 	g.sel, g.scroll, g.moved = 0, 0, false
 	g.focus_due = true
 	// (read again at each opening: a folder made since, a listing that failed)
@@ -207,7 +207,7 @@ goto_build :: proc(app: ^App) {
 	if !g.open { return }
 	em := ui.font_size()
 	pw := min(em * 46, app.room * ui.scale() * 0.92)
-	text := ui.field_string(&g.field)
+	text := ui.line_edit_string(&g.field)
 	rows := goto_rows(app, text)
 	n := len(rows)
 	mouse := ui.mouse_pos()
@@ -215,7 +215,7 @@ goto_build :: proc(app: ^App) {
 	g.mouse = mouse
 	go_to := ""
 
-	if ui.modal("goto", pw, &g.open, 0.12) {
+	if ui.modal("goto", &g.open, {width_em = pw / em, top = 0.12}) {
 		// (its keys read in its scope: an open dialog holds them, code built outside it gets none)
 		if n > 0 {
 			if ui.key_press(.Down) { g.sel = (g.sel + 1) % n; g.moved = true }
@@ -228,7 +228,7 @@ goto_build :: proc(app: ^App) {
 			g.scroll = clamp(g.scroll, 0, max(n - GOTO_ROWS, 0))
 			// Tab: the path completed to the row chosen, ready for the next folder
 			if ui.key_press(.Tab) {
-				ui.field_set(&g.field, fmt.tprintf("%s%s", home_path(app, rows[g.sel].path), fs.SEPARATOR_STRING))
+				ui.line_edit_set(&g.field, fmt.tprintf("%s%s", home_path(app, rows[g.sel].path), fs.SEPARATOR_STRING))
 				g.sel, g.scroll = 0, 0
 			}
 		}
@@ -240,7 +240,7 @@ goto_build :: proc(app: ^App) {
 				input_key := ui.key_from_string(ui.parent_box().key, "###goto_input")
 				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.3))})
 				res: ui.Edit_Result
-				if ui.tags("bare") { res = ui.line_edit("###goto_input", &g.field, "Go to: a path, or a few letters of a folder", clearable = true) }
+				if ui.tags("bare") { res = ui.line_edit("###goto_input", &g.field, {placeholder = "Go to: a path, or a few letters of a folder", clearable = true}) }
 				if res.changed { g.sel, g.scroll, g.moved = 0, 0, false }
 				if res.cancelled { g.open = false }
 				if res.committed {

@@ -264,7 +264,7 @@ setup_build :: proc(app: ^App, em: f32) {
 			}
 		}
 		was_open := d.open
-		if ui.modal_sized("setup", SETUP_PREFERRED_EM * em, &d.size, &d.open, SETUP_MIN_EM * em) {
+		if ui.modal("setup", &d.open, {width_em = SETUP_PREFERRED_EM.x, height_em = SETUP_PREFERRED_EM.y, min_width_em = SETUP_MIN_EM.x, min_height_em = SETUP_MIN_EM.y, size = &d.size}) {
 			setup_head(app, c, em)
 			ui.hline(ui.fill())
 			ui.next({width = ui.fill(), height = ui.fill()})
@@ -374,8 +374,8 @@ setup_body :: proc(app: ^App, c: setup.Config, em: f32) {
 	setup_section(i18n.tr("On this system"), em)
 	// (missing: of an install that is there; none: no install)
 	absent := f.state == .Not_Installed || f.state == .Nix_Package ? i18n.tr("none") : i18n.tr("missing")
-	setup_line(app, "setup_menu", setup.WORDS_MENU, f.start_lnk ? i18n.tr("in place") : absent, false, em)
-	setup_line(app, "setup_record", setup.WORDS_RECORD, f.record ? i18n.tr("in place") : absent, false, em)
+	setup_line(app, "setup_menu", i18n.tr(SETUP_MENU_WORDS), f.start_lnk ? i18n.tr("in place") : absent, false, em)
+	setup_line(app, "setup_record", i18n.tr(SETUP_RECORD_WORDS), f.record ? i18n.tr("in place") : absent, false, em)
 	setup_line(app, "setup_desk", i18n.tr("Desktop shortcut"), f.desk_lnk ? i18n.tr("in place") : i18n.tr("none"), false, em)
 	setup_line(app, "setup_running", i18n.tr("This copy"), f.running, true, em)
 	if f.nixos && f.state != .Nix_Package && f.state != .This_Copy {
@@ -447,7 +447,7 @@ setup_buttons :: proc(app: ^App, c: setup.Config, em: f32) -> (ev: setup.Event) 
 	d := &app.setup
 	button :: proc(id, label: string, intent: ui.Intent, em: f32) -> bool {
 		ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-		return ui.button(fmt.tprintf("%s###%s", label, id), intent = intent).clicked
+		return ui.button(id, label, o = {intent = intent}).clicked
 	}
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 3.4))})
 	if ui.row(.Center, {}, "###setup_buttons") {

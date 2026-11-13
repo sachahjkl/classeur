@@ -76,7 +76,7 @@ test_rename_refused_and_tab :: proc(t: ^testing.T) {
 		wait_read(s)   // (the rename is the edits' worker's: its refusal comes back)
 		testing.expect(t, app.rename.active, "the field stays open")
 		testing.expect(t, app.rename.refused, "the field says the name was refused")
-		testing.expect_value(t, ui.field_string(&app.rename.field), "b.txt")
+		testing.expect_value(t, ui.line_edit_string(&app.rename.field), "b.txt")
 		testing.expect(t, app.rename.field.mark == 0 && app.rename.field.cursor == len("b.txt"), "what was typed is selected")
 		testing.expect(t, fs.exists(fs.join(dir, "a.txt", context.temp_allocator)), "a.txt is still there")
 
@@ -141,7 +141,7 @@ test_tabs_overflow :: proc(t: ^testing.T) {
 		// the chevron's menu: every tab; a click shows it
 		session.click(s, "tablist0")
 		session.frames(s, 2)
-		testing.expect(t, ui.ctx_menu_is_open(app.panel_menus.tabs_key), "the tabs' menu")
+		testing.expect(t, ui.menu_is_open(TABS_MENU), "the tabs' menu")
 		for k in 0 ..< len(p.tabs) {
 			_, ok := ui.menu_item_rect(0, k)
 			testing.expectf(t, ok, "tab %d in the menu", k)

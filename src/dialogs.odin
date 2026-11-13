@@ -66,7 +66,7 @@ CRASH_WIDTH_EM :: 34
 @(private = "file")
 crash_build :: proc(app: ^App, em: f32) {
 	if !app.crash_asking { return }
-	if ui.modal("crash_report", em * CRASH_WIDTH_EM, &app.crash_asking) {
+	if ui.modal("crash_report", &app.crash_asking, {width_em = CRASH_WIDTH_EM}) {
 		if ui.dialog_header("crash_title", i18n.tr("classeur stopped unexpectedly"), {icon = lucide.BUG, icon_font = app.icons, close = true}) {}
 		if ui.dialog_body("crash_body") {
 			ui.next({width = ui.fill()})
@@ -78,12 +78,12 @@ crash_build :: proc(app: ^App, em: f32) {
 			}
 		}
 		if ui.dialog_buttons("crash_buttons") {
-			if ui.button_icon("crash_copy", lucide.COPY, i18n.tr("Copy its path"), icon_font = app.icons).clicked {
+			if ui.button("crash_copy", i18n.tr("Copy its path"), lucide.COPY, {icon_font = app.icons}).clicked {
 				ui.window_clipboard_set(app.crash_report)
 				announce(app, .Good, i18n.tr("The report's path is copied."))
 			}
 			ui.spacer(ui.px(em * 0.6))
-			if ui.button_icon("crash_open", lucide.FILE_TEXT, i18n.tr("Open the report (Enter)"), icon_font = app.icons, intent = .Primary).clicked || ui.key_press(.Return) {
+			if ui.button("crash_open", i18n.tr("Open the report (Enter)"), lucide.FILE_TEXT, {icon_font = app.icons, intent = .Primary}).clicked || ui.key_press(.Return) {
 				ui.open(app.crash_report)
 				app.crash_asking = false
 			}
@@ -138,7 +138,7 @@ conflict_build :: proc(app: ^App, em: f32) {
 		v.job, v.open, v.all = job.id, true, false
 	}
 	answer := Conflict.Ask
-	if ui.modal("conflict", em * CONFLICT_WIDTH_EM, &v.open) {
+	if ui.modal("conflict", &v.open, {width_em = CONFLICT_WIDTH_EM}) {
 		title := fmt.tprintf(i18n.tr("%s is already in %s"), ui.text_shown(fs.base(job.ask_name)), ui.text_shown(fs.base(fs.parent(job.ask_name))))
 		if ui.dialog_header("title", title, {icon = lucide.FILES, icon_font = app.icons, close = true}) {}
 		if ui.dialog_body("body") {
@@ -160,16 +160,16 @@ conflict_build :: proc(app: ^App, em: f32) {
 		if ui.dialog_buttons("buttons") {
 			bw :: proc(em: f32) { ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))}) }
 			bw(em)
-			if ui.button(fmt.tprintf("%s###cancel", i18n.tr("Cancel the job")), intent = .Cancel).clicked { job_cancel(job); v.open = false }
+			if ui.button("cancel", i18n.tr("Cancel the job"), o = {intent = .Cancel}).clicked { job_cancel(job); v.open = false }
 			ui.spacer(ui.px(em * 0.6))
 			bw(em)
-			if ui.button(fmt.tprintf("%s###skip", i18n.tr("Skip"))).clicked { answer = .Skip }
+			if ui.button("skip", i18n.tr("Skip")).clicked { answer = .Skip }
 			ui.spacer(ui.px(em * 0.6))
 			bw(em)
-			if ui.button(fmt.tprintf("%s###both", i18n.tr("Keep both (Enter)")), intent = .Primary).clicked || ui.key_press(.Return) { answer = .Keep_Both }
+			if ui.button("both", i18n.tr("Keep both (Enter)"), o = {intent = .Primary}).clicked || ui.key_press(.Return) { answer = .Keep_Both }
 			ui.spacer(ui.px(em * 0.6))
 			bw(em)
-			if ui.button(fmt.tprintf("%s###replace", i18n.tr("Replace")), intent = .Danger).clicked { answer = .Replace }
+			if ui.button("replace", i18n.tr("Replace"), o = {intent = .Danger}).clicked { answer = .Replace }
 		}
 	}
 	// (Escape closes it: the file is skipped)

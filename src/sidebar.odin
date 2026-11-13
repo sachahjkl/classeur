@@ -59,7 +59,7 @@ sidebar_build :: proc(app: ^App, em: f32) {
 	k.box = box.key
 	if ui.parent(box) {
 		side_filter(app, em)
-		query := strings.to_lower(ui.field_string(&app.side_filter), context.temp_allocator)
+		query := strings.to_lower(ui.line_edit_string(&app.side_filter), context.temp_allocator)
 		ui.next({width = ui.fill(), height = ui.fill()})
 		if ui.scroll_y("###side_scroll") {
 			scroll := ui.parent_box()
@@ -241,16 +241,14 @@ bookmark_line :: proc(app: ^App) {
 // cleared.
 @(private = "file")
 side_row_menu_open :: proc(app: ^App, path: string, kind: Side_Row_Kind) {
-	if app.side_row_key == 0 { app.side_row_key = ui.key_from_string(0, "classeur_side_row_menu") }
 	delete(app.side_row_path)
 	app.side_row_path, app.side_row_kind = strings.clone(path), kind
-	ui.ctx_menu_open(app.side_row_key, ui.mouse_pos())
+	ui.menu_open(SIDE_ROW_MENU, ui.mouse_pos())
 }
 
 @(private = "file")
 side_row_menu_build :: proc(app: ^App) {
-	if app.side_row_key == 0 { return }
-	if ui.ctx_menu(app.side_row_key) {
+	if ui.menu(SIDE_ROW_MENU) {
 		path := app.side_row_path
 		if side_item("open") {
 			if t := current_tab(app); t != nil { tab_go(app, t, path) }
@@ -290,9 +288,9 @@ side_filter :: proc(app: ^App, em: f32) {
 		key := ui.key_from_string(ui.parent_box().key, "###sfilter")
 		ui.next({width = ui.fill(), height = ui.pct(1)})
 		res: ui.Edit_Result
-		if ui.tags("bare") { res = ui.line_edit("###sfilter", &app.side_filter, "Filter...", clearable = true) }
+		if ui.tags("bare") { res = ui.line_edit("###sfilter", &app.side_filter, {placeholder = "Filter...", clearable = true}) }
 		note_text_field(app, key)
-		if res.cancelled { ui.field_clear(&app.side_filter) }
+		if res.cancelled { ui.line_edit_clear(&app.side_filter) }
 		ui.spacer(ui.px(em * 0.4))
 	}
 }
@@ -358,7 +356,7 @@ side_move :: proc(app: ^App, s: Side_Section, to: int) {
 		if i > 0 { strings.write_byte(&b, ',') }
 		strings.write_string(&b, strings.to_lower(SECTION_TITLES[x], context.temp_allocator))
 	}
-	config.set_string(&app.prefs, config.ref_of(&app.prefs, "side.order"), strings.to_string(b))
+	config.set_string(&app.prefs, "side.order", strings.to_string(b))
 }
 
 // The place a dragged heading goes: before the first heading whose middle is under the pointer, else at the end. While
@@ -397,16 +395,14 @@ side_drag_end :: proc(app: ^App, em: f32) {
 
 // A section's menu: where it goes.
 side_menu_open :: proc(app: ^App, s: Side_Section) {
-	if app.side_menu_key == 0 { app.side_menu_key = ui.key_from_string(0, "classeur_side_menu") }
 	app.side_menu_of, app.side_touched = s, true
-	ui.ctx_menu_open(app.side_menu_key, ui.mouse_pos())
+	ui.menu_open(SIDE_MENU, ui.mouse_pos())
 }
 
 side_menu_build :: proc(app: ^App, em: f32) {
 	side_row_menu_build(app)
 	side_device_menu_build(app)
-	if app.side_menu_key == 0 { return }
-	if ui.ctx_menu(app.side_menu_key) {
+	if ui.menu(SIDE_MENU) {
 		s := app.side_menu_of
 		at := 0
 		for x, i in app.side_order { if x == s { at = i } }
@@ -414,8 +410,8 @@ side_menu_build :: proc(app: ^App, em: f32) {
 		menu_command(app, "side_up", enabled = at > 0)
 		menu_command(app, "side_down", enabled = at < last)
 		ui.menu_separator()
-		if ui.menu_item(i18n.tr("Move to the top"), enabled = at > 0).clicked { side_move(app, s, 0) }
-		if ui.menu_item(i18n.tr("Move to the bottom"), enabled = at < last).clicked { side_move(app, s, last) }
+		if ui.menu_item(i18n.tr("Move to the top"), disabled = at <= 0).clicked { side_move(app, s, 0) }
+		if ui.menu_item(i18n.tr("Move to the bottom"), disabled = at >= last).clicked { side_move(app, s, last) }
 		ui.menu_separator()
 		if ui.menu_item(app.side_open[s] ? i18n.tr("Close the section") : i18n.tr("Open the section"), icon = app.side_open[s] ? lucide.CHEVRON_RIGHT : lucide.CHEVRON_DOWN).clicked { app.side_open[s] = !app.side_open[s] }
 		if s == .Network { menu_command(app, "network_find") }
@@ -588,17 +584,15 @@ side_device :: proc(app: ^App, i: int, d: fs.Network_Device, cursor: bool, em: f
 // A device's menu: each of its services opened (the URIs kept: the list may be found again while it is open).
 @(private = "file")
 side_device_menu_open :: proc(app: ^App, d: fs.Network_Device) {
-	if app.side_device_key == 0 { app.side_device_key = ui.key_from_string(0, "classeur_side_device_menu") }
 	for u in app.side_device_uris { delete(u) }
 	clear(&app.side_device_uris)
 	for s in d.services { append(&app.side_device_uris, strings.clone(s.uri)) }
-	ui.ctx_menu_open(app.side_device_key, ui.mouse_pos())
+	ui.menu_open(SIDE_DEVICE_MENU, ui.mouse_pos())
 }
 
 @(private = "file")
 side_device_menu_build :: proc(app: ^App) {
-	if app.side_device_key == 0 { return }
-	if ui.ctx_menu(app.side_device_key) {
+	if ui.menu(SIDE_DEVICE_MENU) {
 		for u, i in app.side_device_uris {
 			if ui.menu_item(fmt.tprintf("%s###dev_open%d", fmt.tprintf(i18n.tr("Open %s"), ui.text_shown(u)), i), icon = lucide.FOLDER_OPEN).clicked {
 				if t := current_tab(app); t != nil { tab_go(app, t, u) }

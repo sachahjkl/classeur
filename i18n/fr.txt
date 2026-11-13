@@ -1445,14 +1445,26 @@ fr Musique
 en Videos
 fr Vidéos
 
+en Alternating rows
+fr Lignes alternées
+
 en Paints every other row a shade lighter, to tell the rows apart.
 fr Éclaircit une ligne sur deux, pour distinguer les lignes.
+
+en Inactive opacity
+fr Opacité des panneaux inactifs
 
 en Dims the contents of the panels that do not have the keyboard, so that the one that has it stands out.
 fr Atténue le contenu des panneaux qui n'ont pas le clavier, pour que celui qui l'a ressorte.
 
+en Show extensions
+fr Afficher les extensions
+
 en Shows the extensions of the files' names.
 fr Affiche les extensions des noms de fichiers.
+
+en Show hidden
+fr Afficher les fichiers cachés
 
 en Shows the hidden files (their names start with a dot; on Windows, their attribute).
 fr Affiche les fichiers cachés (leur nom commence par un point ; sous Windows, leur attribut).
@@ -1460,11 +1472,29 @@ fr Affiche les fichiers cachés (leur nom commence par un point ; sous Windows, 
 en Lists the folders before the files, whatever the sort.
 fr Liste les dossiers avant les fichiers, quel que soit le tri.
 
+en Date format
+fr Format des dates
+
 en How the dates read: 2026-11-09 21:40; Today 21:40, Yesterday, the weekday for the last week, then 9 Nov 2026; or 9 Nov 2026 21:40.
 fr L'écriture des dates : 2026-11-09 21:40 ; Aujourd'hui 21:40, Hier, le jour de la semaine pour la dernière semaine, puis 9 nov. 2026 ; ou 9 nov. 2026 21:40.
 
+en ISO
+fr ISO
+
+en Relative
+fr Relative
+
+en Day month year
+fr Jour mois année
+
+en Measure folders
+fr Mesurer les dossiers
+
 en Measures the folders shown: what they hold all the way down, in the Folders, Files and Size columns.
 fr Mesure les dossiers affichés : tout ce qu'ils contiennent, jusqu'en bas, dans les colonnes Dossiers, Fichiers et Taille.
+
+en Single click
+fr Un seul clic
 
 en Opens an item with one click instead of two.
 fr Ouvre un élément en un clic au lieu de deux.
@@ -1553,8 +1583,20 @@ fr Ouvrir %s
 en Permissions
 fr Permissions
 
+en applications menu
+fr menu des applications
+
+en icons
+fr icônes
+
 en Attributes
 fr Attributs
+
+en Start menu
+fr menu Démarrer
+
+en Settings > Apps
+fr Paramètres > Applications
 
 en Tab
 fr Onglet

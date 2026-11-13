@@ -18,7 +18,6 @@ import crash "gt:crash"
 import "gt:devtools"
 import "gt:font"
 import "gt:host"
-import "gt:i18n"
 import "gt:instance"
 import tk_log "gt:log"
 import lucide "gt:lucide"
@@ -83,10 +82,8 @@ App :: struct {
 	side_held:     bool,                // ... and its button is still down (let go: it lands)
 	gesture_cancelled: bool,            // Escape ended a drag or a rectangle, its button still down: nothing starts till its release
 	side_cancelled: bool,               // Escape cancelled it, its button still down
-	side_menu_key: ui.Key,              // a heading's menu: Move up, Move down...
 	side_menu_of:  Side_Section,
 	side_touched:  bool,
-	side_row_key:  ui.Key,              // a row's menu: Open, Copy the path... (sidebar.odin)
 	side_row_path: string,              // owned: the place it was opened on
 	side_row_kind: Side_Row_Kind,
 	bm_drag:       int,                 // the bookmark dragged ...
@@ -96,7 +93,7 @@ App :: struct {
 	bm_line:       ui.Rect,             // where it lands, as shown ({}: none)
 	no_dialog:     bool,                // this build: no dialog takes the keys (typing goes to the filter)                // a heading was clicked or dragged: the section the commands move is known
 	shortcuts_open: bool,               // the sheet of the keys (F1)
-	side_filter: ui.Text_Field,
+	side_filter: ui.Line_Edit,
 	keys_at:     Keys_At,           // what has the keyboard: the panel's list, the sidebar, the inspector (F6)
 	side_keys:   Side_Keys,         // the sidebar's cursor while it has the keyboard (sidebar.odin)
 	volume_space: [dynamic]fs.Space,   // of each volume, read with the places
@@ -125,10 +122,8 @@ App :: struct {
 	jobs_view:   Jobs_View,         // the jobs' window (jobs_view.odin)
 	tab_drag:    Tab_Drag,          // a tab dragged (tab_drag.odin)
 	columns:      ui.Table_Layout,  // the details' columns: their order, the ones shown, their widths (view.columns)
-	column_defs:  [Detail]ui.Table_Column,   // DETAIL_COLUMNS, their titles in the person's language (the table's columns)
-	columns_menu_key: ui.Key,
+	column_defs:  [Detail]ui.Table_Column,   // DETAIL_COLUMNS: the table's columns
 	columns_menu_tab: u64,          // the tab whose header's menu is open (its sort is the menu's)
-	zoom_slider_key: ui.Key,        // the zoom's slider over the footer (view_panel.odin)
 	zoom_slider_tab: u64,
 	tab_rects:   [dynamic]Tab_Rect, // the tabs' boxes of this frame
 	tab_rects_last: [dynamic]Tab_Rect,   // and of the last one (what a released tab is tested against)
@@ -198,7 +193,6 @@ App :: struct {
 	devices_asked: u64,             // the last search asked (an older answer is dropped)
 	devices_searching: bool,        // a search runs
 	devices_seen_open: bool,        // the Network section was open at the last build (opened again: a new search)
-	side_device_key: ui.Key,        // a device's menu: each of its services (sidebar.odin)
 	side_device_uris: [dynamic]string,   // owned: their URIs
 	session_seen:    string,        // owned: the session's text at its last change (session_autosave waits for it to settle)
 	session_changed_ms: f64,        // when it changed
@@ -362,8 +356,6 @@ app_open :: proc(o: Open_Options) -> ^App {
 	dnd_start(app)
 	ui.table_layout_init(&app.columns, detail_columns(app))   // (before the preferences: they say its columns)
 	prefs_open(app)   // (and h.partial_redraw: rendering.partial_redraw)
-	// (the language is known once the preferences are read: the columns' titles in it)
-	for &c in app.column_defs { c.title = i18n.tr(c.title) }
 	h.params = app_params
 	h.input = app_input
 	app.devtools = devtools.start_from_env(win, APP_NAME)
@@ -555,7 +547,7 @@ app_free :: proc(app: ^App) {
 	store.writer_close(&app.setup_writer)
 	for u in app.mounting { delete(u) }
 	delete(app.mounting)
-	ui.field_destroy(&app.side_filter)
+	ui.line_edit_destroy(&app.side_filter)
 	delete(app.side_row_path)
 	delete(app.volume_space)
 	delete(app.panel_rects)

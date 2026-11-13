@@ -16,8 +16,22 @@ import "fs"
 
 MENU_WIDTH_EM :: 17
 
+// The ids of the menus (the window's: each is open at most once)
+ENTRY_MENU   :: "classeur_entry_menu"
+HISTORY_MENU :: "classeur_history_menu"
+PANEL_MENU   :: "classeur_panel_menu"
+TAB_MENU     :: "classeur_tab_menu"
+TABS_MENU    :: "classeur_tabs_menu"     // every tab of a panel (the chevron of a row too short for them)
+TYPES_MENU   :: "classeur_types_menu"
+RANKS_MENU   :: "classeur_ranks_menu"    // a column's filter: its dates or its sizes (rank_menu_open)
+LAYOUTS_MENU :: "classeur_layouts_menu"
+SIDE_MENU    :: "classeur_side_menu"     // a heading's menu: Move up, Move down...
+SIDE_ROW_MENU    :: "classeur_side_row_menu"     // a row's menu: Open, Copy the path... (sidebar.odin)
+SIDE_DEVICE_MENU :: "classeur_side_device_menu"  // a device's menu: each of its services (sidebar.odin)
+COLUMNS_MENU     :: "classeur_columns_menu"
+ZOOM_SLIDER_MENU :: "classeur_zoom_slider"       // the zoom's slider over the footer (view_panel.odin)
+
 Entry_Menu :: struct {
-	key:      ui.Key,
 	tab:      u64,
 	on_entry: bool,   // opened on a row (else on the folder)
 	with_path: string,             // owned: the file "Open with" was asked for
@@ -72,12 +86,11 @@ handlers_ask :: proc(app: ^App, path: string) {
 
 entry_menu_open :: proc(app: ^App, t: ^Tab, pos: ui.Vec2, from_keyboard := false, on_entry := true) {
 	m := &app.menu
-	if m.key == 0 { m.key = ui.key_from_string(0, "classeur_entry_menu") }
 	m.tab, m.on_entry = t.id, on_entry
 	if on_entry {
 		if e := folder_cursor_entry(&t.folder); e != nil && e.kind != .Directory { handlers_ask(app, entry_path(t, e)) }
 	}
-	ui.ctx_menu_open(m.key, pos, from_keyboard = from_keyboard, search = true)
+	ui.menu_open(ENTRY_MENU, pos, from_keyboard = from_keyboard, search = true)
 }
 
 // An item that runs a command, with its first key. `title`: what the item says in place of the command's title (what
@@ -86,20 +99,19 @@ menu_command :: proc(app: ^App, id: string, enabled := true, checked := false, t
 	c := command_find(id)
 	if c == nil { return }
 	text := title != "" ? fmt.tprintf("%s###%s", title, c.id) : i18n.tr(c.title)
-	if ui.menu_item(text, command_keys(app, c), checked = checked, icon = c.icon, enabled = enabled).clicked { c.run(app) }
+	if ui.menu_item(text, command_keys(app, c), checked = checked, icon = c.icon, disabled = !enabled).clicked { c.run(app) }
 }
 
 entry_menu_build :: proc(app: ^App, em: f32) {
 	m := &app.menu
-	if m.key == 0 { return }
 	// (as wide as its longest line: no title cut)
-	if ui.ctx_menu(m.key) { entry_menu_items(app, m) }
+	if ui.menu(ENTRY_MENU) { entry_menu_items(app, m) }
 }
 
 @(private = "file")
 entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 	t := find_tab(app, m.tab)
-	if t == nil { ui.ctx_menu_close(); return }
+	if t == nil { ui.menu_close(); return }
 	trash := shows_trash(t)
 	if m.on_entry {
 		e := folder_cursor_entry(&t.folder)
@@ -169,15 +181,9 @@ entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 // The panel's menus: the history (the chevron of the toolbar) and the panel's own (its "...")
 
 Panel_Menus :: struct {
-	history_key: ui.Key,
 	history_tab: u64,
-	panel_key:   ui.Key,
-	tab_key:     ui.Key,
-	tabs_key:    ui.Key,     // every tab of a panel (the chevron of a row too short for them)
 	tabs_tab:    u64,        // a tab of that panel: the one shown when it opened
-	types_key:   ui.Key,
 	types_tab:   u64,
-	ranks_key:   ui.Key,     // a column's filter: its dates or its sizes (rank_menu_open)
 	ranks_tab:   u64,
 	ranks_by:    Group_By,
 	rank_counts: [8]int,              // the menu's counts, and what they were counted for
@@ -188,19 +194,17 @@ Panel_Menus :: struct {
 // count, ticked when shown. It stays open while types are ticked.
 types_menu_open :: proc(app: ^App, t: ^Tab) {
 	m := &app.panel_menus
-	if m.types_key == 0 { m.types_key = ui.key_from_string(0, "classeur_types_menu") }
 	m.types_tab = t.id
 	t.folder.types_due = true   // (counted once as it opens, then kept while the rows stay the same)
-	ui.ctx_menu_open(m.types_key, ui.mouse_pos())
+	ui.menu_open(TYPES_MENU, ui.mouse_pos())
 }
 
 @(private = "file")
 types_menu_build :: proc(app: ^App, em: f32) {
 	m := &app.panel_menus
-	if m.types_key == 0 { return }
-	if ui.ctx_menu(m.types_key, em * MENU_WIDTH_EM) {
+	if ui.menu(TYPES_MENU, em * MENU_WIDTH_EM) {
 		t := find_tab(app, m.types_tab)
-		if t == nil { ui.ctx_menu_close(); return }
+		if t == nil { ui.menu_close(); return }
 		f := &t.folder
 		// (the columns' filters light this funnel too: they are cleared here as well)
 		if f.dates_off != {} || f.sizes_off != {} {
@@ -232,9 +236,8 @@ rank_menu_open :: proc(app: ^App, t: ^Tab, by: Group_By, at: ui.Vec2) {
 	m := &app.panel_menus
 	// (its "now": the filter's day, the menu's counts and the rows agree; a new day when it opens again)
 	t.folder.filter_now, t.folder.group_tz = time.now()._nsec, app.tz
-	if m.ranks_key == 0 { m.ranks_key = ui.key_from_string(0, "classeur_ranks_menu") }
 	m.ranks_tab, m.ranks_by = t.id, by
-	ui.ctx_menu_open(m.ranks_key, at)
+	ui.menu_open(RANKS_MENU, at)
 }
 
 // (not rodata: i18n.later marks them for the catalogue; tr where they are shown)
@@ -249,10 +252,9 @@ RANK_TITLES := [Group_By][8]string{
 @(private = "file")
 rank_menu_build :: proc(app: ^App, em: f32) {
 	m := &app.panel_menus
-	if m.ranks_key == 0 { return }
-	if ui.ctx_menu(m.ranks_key) {
+	if ui.menu(RANKS_MENU) {
 		t := find_tab(app, m.ranks_tab)
-		if t == nil { ui.ctx_menu_close(); return }
+		if t == nil { ui.menu_close(); return }
 		f := &t.folder
 		by := m.ranks_by
 		off := by == .Date ? f.dates_off : f.sizes_off
@@ -285,19 +287,15 @@ rank_menu_build :: proc(app: ^App, em: f32) {
 
 // A tab's menu (a right click on it): what to do with it and the tabs beside it.
 tab_menu_open :: proc(app: ^App) {
-	m := &app.panel_menus
-	if m.tab_key == 0 { m.tab_key = ui.key_from_string(0, "classeur_tab_menu") }
-	ui.ctx_menu_open(m.tab_key, ui.mouse_pos())
+	ui.menu_open(TAB_MENU, ui.mouse_pos())
 }
 
 @(private = "file")
 tab_menu_build :: proc(app: ^App, em: f32) {
-	m := &app.panel_menus
-	if m.tab_key == 0 { return }
-	if ui.ctx_menu(m.tab_key) {
+	if ui.menu(TAB_MENU) {
 		p := current_panel(app)
 		t := current_tab(app)
-		if t == nil { ui.ctx_menu_close(); return }
+		if t == nil { ui.menu_close(); return }
 		menu_command(app, "tab_new")
 		menu_command(app, "tab_duplicate")
 		menu_command(app, "tab_window", enabled = !(len(app.panels) == 1 && len(app.panels[0].tabs) == 1))
@@ -320,16 +318,14 @@ tabs_menu_open :: proc(app: ^App, p: ^Panel) {
 	t := panel_tab(p)
 	if t == nil { return }
 	m := &app.panel_menus
-	if m.tabs_key == 0 { m.tabs_key = ui.key_from_string(0, "classeur_tabs_menu") }
 	m.tabs_tab = t.id
-	ui.ctx_menu_open(m.tabs_key, ui.mouse_pos())
+	ui.menu_open(TABS_MENU, ui.mouse_pos())
 }
 
 @(private = "file")
 tabs_menu_build :: proc(app: ^App, em: f32) {
 	m := &app.panel_menus
-	if m.tabs_key == 0 { return }
-	if ui.ctx_menu(m.tabs_key, em * MENU_WIDTH_EM) {
+	if ui.menu(TABS_MENU, em * MENU_WIDTH_EM) {
 		// (the panel is the one that holds the tab noted: closed meanwhile, there is none)
 		for p, pi in app.panels {
 			holds := false
@@ -342,21 +338,18 @@ tabs_menu_build :: proc(app: ^App, em: f32) {
 			}
 			return
 		}
-		ui.ctx_menu_close()
+		ui.menu_close()
 	}
 }
 
 history_menu_open :: proc(app: ^App, t: ^Tab, at: ui.Rect) {
 	m := &app.panel_menus
-	if m.history_key == 0 { m.history_key = ui.key_from_string(0, "classeur_history_menu") }
 	m.history_tab = t.id
-	ui.ctx_menu_open(m.history_key, ui.mouse_pos())
+	ui.menu_open(HISTORY_MENU, ui.mouse_pos())
 }
 
 panel_menu_open :: proc(app: ^App, pos: ui.Vec2) {
-	m := &app.panel_menus
-	if m.panel_key == 0 { m.panel_key = ui.key_from_string(0, "classeur_panel_menu") }
-	ui.ctx_menu_open(m.panel_key, pos)
+	ui.menu_open(PANEL_MENU, pos)
 }
 
 panel_menus_build :: proc(app: ^App, em: f32) {
@@ -371,10 +364,9 @@ panel_menus_build :: proc(app: ^App, em: f32) {
 @(private = "file")
 history_menu_build :: proc(app: ^App, em: f32) {
 	m := &app.panel_menus
-	if m.history_key == 0 { return }
-	if ui.ctx_menu(m.history_key, em * MENU_WIDTH_EM) {
+	if ui.menu(HISTORY_MENU, em * MENU_WIDTH_EM) {
 		t := find_tab(app, m.history_tab)
-		if t == nil { ui.ctx_menu_close(); return }
+		if t == nil { ui.menu_close(); return }
 		// the last folder first
 		#reverse for v, i in t.back {
 			if ui.menu_item(fmt.tprintf("%s###h%d", ui.text_shown(home_path(app, v.path)), i)).clicked {
@@ -387,11 +379,9 @@ history_menu_build :: proc(app: ^App, em: f32) {
 
 @(private = "file")
 panel_menu_build :: proc(app: ^App, em: f32) {
-	m := &app.panel_menus
-	if m.panel_key == 0 { return }
-	if ui.ctx_menu(m.panel_key) {
+	if ui.menu(PANEL_MENU) {
 		t := current_tab(app)
-		if t == nil { ui.ctx_menu_close(); return }
+		if t == nil { ui.menu_close(); return }
 		// (where every command is, and the settings, first: the menu that the "…" opens is where one looks for them)
 		menu_command(app, "palette")
 		menu_command(app, "options")
@@ -432,7 +422,7 @@ open_with_menu :: proc(app: ^App, path: string) {
 	if ui.menu_submenu(i18n.tr("Open with"), icon = lucide.APP_WINDOW) {
 		ready := app.menu.with_path == path && app.menu.handlers_ready
 		hs := ready ? app.menu.handlers : nil
-		if !ready { _ = ui.menu_item(i18n.tr("Reading…"), enabled = false) } else if len(hs) == 0 { _ = ui.menu_item(i18n.tr("No application"), enabled = false) }
+		if !ready { _ = ui.menu_item(i18n.tr("Reading…"), disabled = true) } else if len(hs) == 0 { _ = ui.menu_item(i18n.tr("No application"), disabled = true) }
 		for h, i in hs {
 			label := h.default ? fmt.tprintf("%s###ow%d", fmt.tprintf(i18n.tr("%s (default)"), ui.text_shown(h.name)), i) : fmt.tprintf("%s###ow%d", ui.text_shown(h.name), i)
 			if ui.menu_item(label).clicked { launch(app, .Open_With, path, h.id, h.name) }

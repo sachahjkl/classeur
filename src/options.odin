@@ -17,7 +17,7 @@ OPTIONS_MIN_EM :: [2]f32{34, 20}
 Options :: struct {
 	open: bool,
 	page: prefs_page.Page,
-	size: ui.Vec2,   // as the person resized it (logical px; {}: preferred)
+	size: ui.Vec2,   // as the person resized it (ems; {}: preferred)
 	shown: bool,     // it was open at the last build (closed since: a slider's preview undone)
 }
 
@@ -34,7 +34,7 @@ act_options :: proc(app: ^App) {
 
 // The pages in their order: the toolkit's standard groups (docs/settings.md) and classeur's own (files, open); the look
 // first, as the settings open on it.
-// (not rodata: i18n.later marks the titles for the catalogue; options_page gives the page their translations)
+// (not rodata: i18n.later marks the titles for the catalogue; the page translates them where it shows them)
 @(private = "file")
 OPTIONS_PAGES := [?]prefs_page.Page_Info{
 	{category = "appearance", title = i18n.later("Appearance"), icon = lucide.PALETTE},
@@ -57,8 +57,7 @@ options_build :: proc(app: ^App) {
 		return
 	}
 	o.shown = true
-	em := ui.font_size()
-	if ui.modal_sized("options", OPTIONS_PREFERRED_EM * em, &o.size, &o.open, OPTIONS_MIN_EM * em) {
+	if ui.modal("options", &o.open, {width_em = OPTIONS_PREFERRED_EM.x, height_em = OPTIONS_PREFERRED_EM.y, min_width_em = OPTIONS_MIN_EM.x, min_height_em = OPTIONS_MIN_EM.y, size = &o.size}) {
 		// (Escape closes it, unless a field of the page has the keyboard: that Escape is the field's; read in its scope,
 		// where an open dialog's keys are)
 		if !prefs_page.editing(&o.page) && ui.key_press(.Escape) { o.open = false }
@@ -81,16 +80,10 @@ SHOTS_BUILD :: #config(CLASSEUR_SHOTS, false)
 
 // The settings page's options: its build's, and the palette's list of the settings (palette.odin).
 options_page :: proc(app: ^App) -> prefs_page.Options {
-	// (the pages' titles in the person's language: the page shows them as given)
-	pages := make([]prefs_page.Page_Info, len(OPTIONS_PAGES), context.temp_allocator)
-	for p, i in OPTIONS_PAGES {
-		pages[i] = p
-		pages[i].title = i18n.tr(p.title)
-	}
 	return {
 		version = SHOTS_BUILD ? "" : "classeur " + APP_VERSION,
 		user = app,
-		pages = pages,
+		pages = OPTIONS_PAGES[:],
 		icon_font = app.icons, search_icon = lucide.SEARCH, reset_icon = lucide.ROTATE_CCW,
 		file = SHOTS_BUILD ? "" : prefs_path(app),
 		changed = proc(user: rawptr, name: string) {

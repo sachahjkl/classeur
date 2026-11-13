@@ -190,8 +190,8 @@ act_goto :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
 	t.address_open = true
-	ui.field_set(&t.address, t.path)
-	ui.field_select_all(&t.address)
+	ui.line_edit_set(&t.address, t.path)
+	ui.line_edit_select_all(&t.address)
 	t.focus_due = .Address
 }
 
@@ -199,7 +199,7 @@ act_filter :: proc(app: ^App) {
 	t := current_tab(app)
 	if t == nil { return }
 	t.filter_open = true
-	ui.field_select_all(&t.filter)
+	ui.line_edit_select_all(&t.filter)
 	t.focus_due = .Filter
 }
 
@@ -356,7 +356,7 @@ Rename :: struct {
 	active:    bool,
 	tab:       u64,
 	name:      string,          // owned: the entry renamed ("": the entry is not there yet, see `pending`)
-	field:     ui.Text_Field,
+	field:     ui.Line_Edit,
 	focus_due: bool,
 	refused:   bool,            // the name typed was refused (said why): the field in the colour of an error until it changes
 	waiting:   u64,             // the rename the worker does (rename_done): the field stays until its answer; 0: none
@@ -365,7 +365,7 @@ Rename :: struct {
 
 rename_free :: proc(r: ^Rename) {
 	delete(r.name)
-	ui.field_destroy(&r.field)
+	ui.line_edit_destroy(&r.field)
 	r^ = {}
 }
 
@@ -393,7 +393,7 @@ rename_begin :: proc(app: ^App, t: ^Tab, name: string) {
 	delete(r.name)
 	r.active, r.tab, r.name, r.focus_due, r.refused, r.waiting = true, t.id, strings.clone(name), true, false, 0
 	base := fs.base(name)
-	ui.field_set(&r.field, base)
+	ui.line_edit_set(&r.field, base)
 	// the name without its extension selected, as the systems' file managers do
 	ext := fs.extension(base)
 	r.field.mark = 0
@@ -423,11 +423,11 @@ rename_commit :: proc(app: ^App, step := 0) {
 			break
 		}
 	}
-	to := strings.trim_space(ui.field_string(&r.field))
+	to := strings.trim_space(ui.line_edit_string(&r.field))
 	if to != fs.base(r.name) && to != "" {
 		if strings.contains_any(to, fs.SEPARATOR_STRING) || to == "." || to == ".." {
 			say(app, i18n.tr("A name cannot hold %s."), fs.SEPARATOR_STRING)
-			ui.field_select_all(&r.field)
+			ui.line_edit_select_all(&r.field)
 			r.refused, r.focus_due = true, true
 			return
 		}
@@ -547,7 +547,7 @@ rename_done :: proc(data: rawptr, word: u64) {
 			say(app, i18n.tr("%s cannot be renamed: %s."), fs.base(a.name), i18n.tr(fs.ERROR_REASON[a.err]))
 		}
 		if waits {
-			ui.field_select_all(&r.field)
+			ui.line_edit_select_all(&r.field)
 			r.refused, r.focus_due = true, true
 		}
 		return

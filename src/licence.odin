@@ -27,7 +27,7 @@ Licence_View :: struct {
 	status: licence.Status,   // the last one read (heap: its licence's strings)
 	known:  bool,             // a status was read
 	busy:   bool,             // a task on the store is on its way
-	key:    ui.Text_Field,    // the key pasted
+	key:    ui.Line_Edit,    // the key pasted
 	said:   string,           // owned: what the last act came to ("": nothing)
 }
 
@@ -47,8 +47,8 @@ licence_close :: proc(app: ^App) {
 		free(v.store)
 	}
 	licence.status_destroy(&v.status, runtime.heap_allocator())
-	ui.field_wipe(&v.key)
-	ui.field_destroy(&v.key)
+	ui.line_edit_wipe(&v.key)
+	ui.line_edit_destroy(&v.key)
 	delete(v.said)
 	v^ = {}
 }
@@ -99,7 +99,7 @@ licence_ask :: proc(app: ^App, act: Licence_Act, text: string) {
 		case j.act == .Remove: said = i18n.tr("The licence is removed.")
 		case j.act != .Read && v.status.registered:
 			said = fmt.tprintf(i18n.tr("Registered to %s. Thank you."), ui.text_shown(v.status.licence.name))
-			ui.field_wipe(&v.key)
+			ui.line_edit_wipe(&v.key)
 		}
 		delete(v.said)
 		v.said = strings.clone(said)
@@ -160,14 +160,14 @@ licence_section :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.children_sum(), height = ui.px(ui.dense(em * 2.2))})
 		if ui.row(.Center, {}, "###lic_registered") {
 			ui.next({width = ui.text_size(em * 1.2), height = ui.fill()})
-			if ui.button(fmt.tprintf("%s###lic_remove", i18n.tr("Remove the licence")), intent = .Danger, disabled = v.busy).clicked { licence_ask(app, .Remove, "") }
+			if ui.button("lic_remove", i18n.tr("Remove the licence"), o = {intent = .Danger, disabled = v.busy}).clicked { licence_ask(app, .Remove, "") }
 		}
 	case:
 		ui.next({width = ui.fill(), text_pad = 0})
 		ui.paragraph(fmt.tprintf("%s###lic_none", i18n.tr("Unregistered. classeur is free; a licence supports its work.")))
 		ui.next({width = ui.children_sum(), height = ui.px(ui.dense(em * 2.0))})
 		if ui.row(.Center, {}, "###lic_buy_row") {
-			if ui.hint_action("###lic_buy", i18n.tr("Support classeur: buy a licence"), lucide.HEART, app.icons, .Primary).clicked {
+			if ui.button("lic_buy", i18n.tr("Support classeur: buy a licence"), lucide.HEART, {face = .Link, icon_font = app.icons, intent = .Primary}).clicked {
 				ui.open(LICENCE_PRICING_URL, .Url)
 			}
 		}
@@ -175,16 +175,16 @@ licence_section :: proc(app: ^App, em: f32) {
 		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.2))})
 		if ui.row(.Center, {}, "###lic_enter") {
 			ui.next({width = ui.fill(), height = ui.fill()})
-			entered := ui.line_edit("###lic_key", &v.key, i18n.tr("Paste the key of your licence"), secret = true).committed
+			entered := ui.line_edit("###lic_key", &v.key, {placeholder = i18n.tr("Paste the key of your licence"), kind = .Secret}).committed
 			ui.spacer(ui.px(em * 0.5))
 			ui.next({width = ui.text_size(em * 1.2), height = ui.fill()})
-			key := strings.trim_space(ui.field_string(&v.key))
-			if ui.button(fmt.tprintf("%s###lic_register", i18n.tr("Register")), intent = .Primary, disabled = v.busy || key == "").clicked || (entered && key != "") {
+			key := strings.trim_space(ui.line_edit_string(&v.key))
+			if ui.button("lic_register", i18n.tr("Register"), o = {intent = .Primary, disabled = v.busy || key == ""}).clicked || (entered && key != "") {
 				licence_ask(app, .Install, key)
 			}
 			ui.spacer(ui.px(em * 0.5))
 			ui.next({width = ui.text_size(em * 1.2), height = ui.fill()})
-			if ui.button(fmt.tprintf("%s###lic_file", i18n.tr("Choose a file…")), disabled = v.busy).clicked {
+			if ui.button("lic_file", i18n.tr("Choose a file…"), o = {disabled = v.busy}).clicked {
 				d := licence.file_dialog(LICENCE, i18n.tr("Choose a licence file"), i18n.tr("classeur licence"))
 				ui.file_dialog(&app.main.state, .Open, d, proc(r: platform.Dialog_Result, user: rawptr) {
 					if r.status != .Chosen || len(r.paths) == 0 { return }

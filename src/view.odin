@@ -118,7 +118,7 @@ icon_action :: proc(app: ^App, id, g, tip: string, em: f32, enabled := true, on 
 	side := em * 2.0
 	ui.next({width = ui.px(side), height = ui.px(side), text_pad = 0, fg = on ? ui.color("accent") : nil})
 	ui.next_merge(control_look(em))
-	sig := ui.icon_button(id, g, tip = tip, icon_font = app.icons, disabled = !enabled)
+	sig := ui.button(id, icon = g, o = {tip = tip, icon_font = app.icons, disabled = !enabled})
 	return enabled && sig.clicked
 }
 
@@ -320,7 +320,7 @@ tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, 
 						if on || ui.hot_within(tab.key) {
 							ui.next({width = ui.px(em * 1.6), height = ui.px(em * 1.6), font = app.icons, font_size = em * 0.85, text_pad = 0})
 							ui.next_merge(control_look(em))
-							if ui.button(fmt.tprintf("%s###close", lucide.X), face = .Ghost).clicked { close = i }
+							if ui.button("close", icon = lucide.X, o = {icon_font = app.icons}).clicked { close = i }
 						} else {
 							ui.spacer(ui.px(em * 1.6))
 						}

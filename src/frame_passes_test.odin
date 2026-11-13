@@ -58,7 +58,7 @@ test_frame_passes_types :: proc(t: ^testing.T) {
 		f := &tab.folder
 		types_menu_open(app, tab)
 		session.wait_idle(s)
-		testing.expect(t, ui.ctx_menu_is_open(app.panel_menus.types_key), "the types' popup")
+		testing.expect(t, ui.menu_is_open(TYPES_MENU), "the types' popup")
 		testing.expect(t, len(f.types) == 2 && f.types[0].ext == "txt" && f.types[0].count == 2000, "the types counted")
 		made := f.types_made
 		session.frames(s, 5)
@@ -111,7 +111,7 @@ test_frame_passes_grid :: proc(t: ^testing.T) {
 		testing.expect_value(t, tab.grid_ids_made, made)
 		// a filter: the rows change, the ids made once again (the field's text goes to the folder in a build: the
 		// grid's may come before it, then in the next one)
-		ui.field_set(&tab.filter, "0001")
+		ui.line_edit_set(&tab.filter, "0001")
 		session.frames(s, 2)
 		testing.expect(t, f.filter == "0001" && len(f.shown) < PASSES_ENTRIES, "filtered")
 		testing.expect_value(t, tab.grid_ids_made, made + 1)

@@ -38,9 +38,9 @@ Batch :: struct {
 	taken:     map[string]bool,    // owned keys: the names of the folder that are not of the batch (read at the opening)
 	list:      [dynamic]string,    // owned: the names from the clipboard (empty: the pattern)
 	list_asked: u64,               // the clipboard's text asked for these names (platform.clipboard_request; 0: none)
-	pattern:   ui.Text_Field,
-	find:      ui.Text_Field,
-	replace:   ui.Text_Field,
+	pattern:   ui.Line_Edit,
+	find:      ui.Line_Edit,
+	replace:   ui.Line_Edit,
 	casing:    Batch_Case,
 	tz:        ^datetime.TZ_Region,   // the local time zone ({date}, {time}); the app's
 	focus_due: bool,
@@ -54,9 +54,9 @@ batch_free :: proc(b: ^Batch) {
 	delete(b.ids)
 	delete(b.taken)
 	delete(b.list)
-	ui.field_destroy(&b.pattern)
-	ui.field_destroy(&b.find)
-	ui.field_destroy(&b.replace)
+	ui.line_edit_destroy(&b.pattern)
+	ui.line_edit_destroy(&b.find)
+	ui.line_edit_destroy(&b.replace)
 	b^ = {}
 }
 
@@ -105,10 +105,10 @@ batch_open :: proc(app: ^App, t: ^Tab) {
 		for &c in id { c = alphabet[rand.int_max(len(alphabet))] }
 		append(&b.ids, strings.clone(string(id[:])))
 	}
-	ui.field_set(&b.pattern, "{name}")
-	ui.field_select_all(&b.pattern)
-	ui.field_clear(&b.find)
-	ui.field_clear(&b.replace)
+	ui.line_edit_set(&b.pattern, "{name}")
+	ui.line_edit_select_all(&b.pattern)
+	ui.line_edit_clear(&b.find)
+	ui.line_edit_clear(&b.replace)
 }
 
 // The new name of item `i`.
@@ -121,7 +121,7 @@ batch_name :: proc(b: ^Batch, i: int, allocator := context.temp_allocator) -> st
 		out = i < len(b.list) ? b.list[i] : old
 	} else {
 		sb := strings.builder_make(context.temp_allocator)
-		pat := ui.field_string(&b.pattern)
+		pat := ui.line_edit_string(&b.pattern)
 		for k := 0; k < len(pat); {
 			if pat[k] == '{' {
 				if end := strings.index_byte(pat[k:], '}'); end > 0 {
@@ -138,8 +138,8 @@ batch_name :: proc(b: ^Batch, i: int, allocator := context.temp_allocator) -> st
 		if ext != "" && !strings.contains(pat, "{ext}") { fmt.sbprintf(&sb, ".%s", ext) }
 		out = strings.to_string(sb)
 	}
-	if find := ui.field_string(&b.find); find != "" {
-		out, _ = strings.replace_all(out, find, ui.field_string(&b.replace), context.temp_allocator)
+	if find := ui.line_edit_string(&b.find); find != "" {
+		out, _ = strings.replace_all(out, find, ui.line_edit_string(&b.replace), context.temp_allocator)
 	}
 	switch b.casing {
 	case .Keep:
@@ -261,7 +261,7 @@ batch_build :: proc(app: ^App, em: f32) {
 	for p in problems { if p != "" { bad += 1 } }
 	apply := false
 
-	if ui.modal("batch_rename", pw, &b.open, 0.1) {
+	if ui.modal("batch_rename", &b.open, {width_em = pw / em, top = 0.1}) {
 		if ui.style({width = ui.px(pw)}) {
 			if ui.dialog_header("batch_head", fmt.tprintf(i18n.tr(n, "Rename %d item", "Rename %d items"), n), {icon = lucide.PENCIL, icon_font = app.icons, close = true}) {}
 			// (Enter in a field renames)
@@ -280,7 +280,7 @@ batch_build :: proc(app: ^App, em: f32) {
 				b.casing = Batch_Case(casing)
 				ui.spacer(ui.fill())
 				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-				if ui.button(fmt.tprintf("%s###blist", len(b.list) > 0 ? i18n.tr("Pattern again") : i18n.tr("Names from the clipboard"))).clicked {
+				if ui.button("blist", len(b.list) > 0 ? i18n.tr("Pattern again") : i18n.tr("Names from the clipboard")).clicked {
 					if len(b.list) > 0 {
 						for s in b.list { delete(s) }
 						clear(&b.list)
@@ -336,10 +336,10 @@ batch_build :: proc(app: ^App, em: f32) {
 				}
 				ui.spacer(ui.px(em * 0.6))
 				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-				if ui.button(fmt.tprintf("%s###bcancel", i18n.tr("Cancel")), intent = .Cancel).clicked { b.open = false }
+				if ui.button("bcancel", i18n.tr("Cancel"), o = {intent = .Cancel}).clicked { b.open = false }
 				ui.spacer(ui.px(em * 0.6))
 				ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
-				if ui.button(fmt.tprintf("%s###bapply", i18n.tr("Rename (Enter)")), intent = .Primary, disabled = bad > 0).clicked { apply = true }
+				if ui.button("bapply", i18n.tr("Rename (Enter)"), o = {intent = .Primary, disabled = bad > 0}).clicked { apply = true }
 			}
 		}
 	}
@@ -351,7 +351,7 @@ batch_build :: proc(app: ^App, em: f32) {
 }
 
 @(private = "file")
-batch_field_row :: proc(app: ^App, label, id: string, field: ^ui.Text_Field, hint: string, em, pw: f32, focus := false) -> (committed: bool) {
+batch_field_row :: proc(app: ^App, label, id: string, field: ^ui.Line_Edit, hint: string, em, pw: f32, focus := false) -> (committed: bool) {
 	ui.next({width = ui.px(pw), height = ui.px(ui.dense(em * 2.6))})
 	if ui.row(.Center, id = fmt.tprintf("%s_row", id)) {
 		ui.spacer(ui.px(em * 0.9))
@@ -361,7 +361,7 @@ batch_field_row :: proc(app: ^App, label, id: string, field: ^ui.Text_Field, hin
 		}
 		key := ui.key_from_string(ui.parent_box().key, id)
 		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 2.1))})
-		committed = ui.line_edit(id, field, hint).committed
+		committed = ui.line_edit(id, field, {placeholder = hint}).committed
 		if focus { ui.set_focus(key) }
 		ui.spacer(ui.px(em * 0.9))
 	}

@@ -45,7 +45,7 @@ updates_stop :: proc(app: ^App) {
 updates_auto :: proc(app: ^App) {
 	if app.updater == nil { return }
 	auto := config.bool_of(&app.prefs, prefs_page.UPDATE_AUTO_PREF) && app.installed_copy
-	update.set_auto(app.updater, check = auto, install = auto)
+	update.set_auto(app.updater, auto ? .Install : .Off)
 }
 
 // Each frame: what changed is said once (asked, or something to know: not each check that found nothing).
