@@ -3,6 +3,26 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.19.0] - 2026-11-13
+
+### Added
+- **A crash is reported at the next start**: if classeur's last session ended without closing, the next start says so and offers its report, written on this computer. You can open the report or copy its path. Nothing is sent anywhere. classeur also keeps a log of its messages in its state folder.
+- **In the application menu, and with the session**: the copy that the Setup or `classeur install` integrated shows two settings in General. One puts classeur in the application menu (the Start menu on Windows). The other starts classeur with the session.
+- **Choose where classeur tells what it did**: Settings > General > Messages sends the messages of a path or names copied, a layout saved, items renamed, an undo, and a copy, move or delete that ended to the system's notifications (System, the default), to classeur's window only (Window), or nowhere (Off). A failure is always told.
+- **A licence that supports classeur**: Settings > General > Licence says who classeur is registered to, takes a key pasted or a licence file, and removes it. classeur does the same with or without a licence. The shop opens later: until then its page says "Coming soon".
+- **Themes of your own**: under the themes in the settings, a link opens `themes.txt` beside the settings, made from a commented template. A theme written there shows among the others as soon as the file is saved.
+- **classeur in French**: the menus, commands, palette, dialogs, messages, sidebar, inspector, jobs, settings and dates read in French, and so do the names that the Setup gives to the application menu and the icons. Settings > General > Language chooses System, English or Français. System follows the language of the system. A change takes effect at the next start.
+
+### Changed
+- **The sidebar's filter looks like the palette's search**: a band in a field's colour across the top of the sidebar, as in the palette and the menus.
+- **Every tooltip waits the same delay**: the tooltips of the bar's buttons, the rows, the sidebar's devices and the status bar's figures appear after half a second, as the settings' tooltips do. Settings > Delays and menus changes this delay.
+- **Dialogs in the middle, with a header**: the copy conflict, the name of a layout, the keys of a command, the batch rename, the confirmations and the crash report open in the middle of the window. They show their title in a strip across their top, with a close button in its corner, and their buttons at the bottom right.
+- **The palette remembers what you choose**: its Recent group holds the commands you choose often and lately. A command chosen often stays near the top for weeks, and while you type it comes before an equal match. The list of commands run last from earlier versions is not read. The palette opens once at its default size, then keeps the size you give it.
+- **New settings, in groups**: besides the look, the settings now cover the text and its fonts, the scrolling, the keyboard's repeats, the delays of tooltips and menus, the rendering and the updates. Each setting is in its group, and the technical ones are folded under an Advanced part. Light or dark replaces "Follow the system" (dark by default, as before), and the finish is a choice. The settings export to JSON, TOML or INI and import back. The names in the settings file changed: a look set before (theme, text size, rounding, density, animations, scrolling, title bar, alternating rows, dimmed panels) goes back to its default once.
+
+### Fixed
+- **The check mark and the zoom's percent stay readable in every theme**: on a light accent they are drawn dark, instead of white.
+
 ## [0.18.0] - 2026-11-13
 
 ### Added
@@ -414,6 +434,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.19.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.19.0
 [0.18.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.18.0
 [0.17.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.17.2
 [0.17.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.17.1
