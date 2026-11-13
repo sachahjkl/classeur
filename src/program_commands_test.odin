@@ -28,7 +28,7 @@ test_program_commands_listed :: proc(t: ^testing.T) {
 			c := command_find(id)
 			if !testing.expectf(t, c != nil, "%s is a command", id) { continue }
 			testing.expectf(t, len(c.tags) > 0, "%s has tags", id)
-			testing.expectf(t, c.keys[0].key != .None, "%s has a key", id)
+			testing.expectf(t, len(c.keys) > 0 && c.keys[0].key != .None, "%s has a key", id)
 			testing.expectf(t, command_group(id) == len(COMMAND_GROUPS) - 1, "%s is in the Program group", id)
 		}
 	})

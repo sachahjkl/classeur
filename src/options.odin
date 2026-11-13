@@ -79,7 +79,7 @@ options_unpreview :: proc(app: ^App) {
 SHOTS_BUILD :: #config(CLASSEUR_SHOTS, false)
 
 // The settings page's options: its build's, and the palette's list of the settings (palette.odin).
-options_page :: proc(app: ^App) -> prefs_page.Options {
+options_page :: proc(app: ^App) -> prefs_page.Page_Options {
 	return {
 		version = SHOTS_BUILD ? "" : "classeur " + APP_VERSION,
 		user = app,

@@ -1047,7 +1047,7 @@ test_keys :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
 		seen := make(map[Shortcut]string, context.temp_allocator)
 		for c in COMMANDS {
-			testing.expectf(t, c.keys[0].key != .None, "%s has a key", c.id)
+			testing.expectf(t, len(c.keys) > 0 && c.keys[0].key != .None, "%s has a key", c.id)
 			for k in c.keys {
 				if k.key == .None { continue }
 				if other, taken := seen[k]; taken { testing.expectf(t, false, "%s and %s share %s", other, c.id, ui.chord_text(k)) }

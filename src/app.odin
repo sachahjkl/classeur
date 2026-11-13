@@ -92,7 +92,6 @@ App :: struct {
 	bm_cancelled:  bool,                // Escape cancelled it, its button still down (its release opens nothing)
 	bm_line:       ui.Rect,             // where it lands, as shown ({}: none)
 	no_dialog:     bool,                // this build: no dialog takes the keys (typing goes to the filter)                // a heading was clicked or dragged: the section the commands move is known
-	shortcuts_open: bool,               // the sheet of the keys (F1)
 	side_filter: ui.Line_Edit,
 	keys_at:     Keys_At,           // what has the keyboard: the panel's list, the sidebar, the inspector (F6)
 	side_keys:   Side_Keys,         // the sidebar's cursor while it has the keyboard (sidebar.odin)
@@ -364,7 +363,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	pools_start(app)
 	licence_open(app)
 	desktop_follow(app)
-	app.palette.recording = -1   // (no command's keys recorded: the recorder is shut)
+	palette_start(app)
 	app.side_open = {.Recents = false, .Bookmarks = true, .Storage = true, .Network = true, .Places = true}
 	jobs_start(app)
 	watcher_start(app)
@@ -578,9 +577,8 @@ app_frames :: proc(app: ^App) {
 // A message in the window for a few seconds (a toast): what went wrong, a hint, a state just changed.
 say :: proc(app: ^App, format: string, args: ..any) {
 	status_keep(app, fmt.tprintf(format, ..args))
-	// (in the main window's toasts whatever state is in use: a message said between builds, a task's, shows there)
-	window := ui.Announcer{mode = .Window, state = &app.main.state}
-	if !app.headless { ui.announce(&window, .Info, app.status) }
+	// (in the main window's toasts whatever general.messages says: a message said between builds, a task's, shows there)
+	if !app.headless { ui.announce(&app.announcer, .Info, app.status, in_window = true) }
 }
 
 // A finished act (copied, saved, deleted, moved), said where general.messages says: the system's notifications, the

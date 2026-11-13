@@ -26,6 +26,7 @@ Keymap :: struct {
 	aliases: map[string]string,    // alias -> command id, both owned
 	pending: Shortcut,             // the first chord of a sequence, pressed (.None: none)
 	pending_until: f64,
+	version: u64,                  // counts the changes of custom and aliases (the palette and the sheet list again)
 }
 
 keymap_free :: proc(k: ^Keymap) {
@@ -92,6 +93,7 @@ binding_parse :: proc(text: string) -> (b: Binding, ok: bool) {
 // The preferences' values read into the keymap (prefs.odin's settings_apply).
 keymap_read :: proc(app: ^App, custom, aliases: string) {
 	k := &app.keymap
+	k.version += 1
 	for id in k.custom { delete(id) }
 	clear(&k.custom)
 	for a, id in k.aliases { delete(a); delete(id) }
@@ -127,6 +129,7 @@ keymap_save :: proc(app: ^App) {
 		n += 1
 	}
 	config.set_string(&app.prefs, "keys.aliases", strings.to_string(a))
+	app.keymap.version += 1
 }
 
 // The command `id` bound to `b` in place of its own keys (another command that had `b` loses it: one key, one command).

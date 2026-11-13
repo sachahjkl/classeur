@@ -53,7 +53,7 @@ classeur_identity :: proc() -> desktop.Identity {
 }
 
 // classeur's own parts of an install: the PATH.
-classeur_parts :: proc(o: ^desktop.Options) {
+classeur_parts :: proc(o: ^desktop.Integration_Options) {
 	o.add_to_path = true
 	o.launcher = CONSOLE_LAUNCHER   // (Windows: classeur.com with the PATH entry; nothing elsewhere)
 }
@@ -63,7 +63,7 @@ classeur_parts :: proc(o: ^desktop.Options) {
 LAUNCHER_MARK :: "(classeur console launcher)"
 
 @(private = "file")
-integration_options :: proc(args: []string) -> desktop.Options {
+integration_options :: proc(args: []string) -> desktop.Integration_Options {
 	o := desktop.options_make(classeur_identity())
 	o.exe = process.executable_path()
 	o.icons = ICON_PNGS[:]
@@ -109,11 +109,11 @@ cmd_status :: proc(args: []string) -> int {
 ////////////////////////////////
 // The Setup (a window of its own over the page)
 
-setup_config :: proc() -> setup.Config {
-	return setup.Config{
+setup_config :: proc() -> setup.Setup_Options {
+	return setup.Setup_Options{
 		identity = classeur_identity(), version = APP_VERSION, install_folder = APP_NAME, icons = ICON_PNGS[:],
 		choices = SETUP_CHOICES[:], square = true,
-		prepare = proc(o: ^desktop.Options, choices: []bool, user: rawptr) {
+		prepare = proc(o: ^desktop.Integration_Options, choices: []bool, user: rawptr) {
 			classeur_parts(o)
 			if len(choices) == len(SETUP_CHOICES) { o.add_to_path = choices[0] }
 		},
@@ -302,7 +302,7 @@ SETUP_PREFERRED_EM :: [2]f32{44, 31}
 SETUP_MIN_EM :: [2]f32{30, 18}
 
 @(private = "file")
-setup_head :: proc(app: ^App, c: setup.Config, em: f32) {
+setup_head :: proc(app: ^App, c: setup.Setup_Options, em: f32) {
 	d := &app.setup
 	f := &d.facts
 	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * 5.2))})
@@ -343,7 +343,7 @@ setup_head :: proc(app: ^App, c: setup.Config, em: f32) {
 }
 
 @(private = "file")
-setup_body :: proc(app: ^App, c: setup.Config, em: f32) {
+setup_body :: proc(app: ^App, c: setup.Setup_Options, em: f32) {
 	d := &app.setup
 	f := &d.facts
 	// the state in a sentence, and what the last action said
@@ -443,7 +443,7 @@ setup_paragraph :: proc(id, text, tone: string, em: f32) {
 // The bar of the buttons: Uninstall at the left (a second click does it), then what closes, what opens the copy just
 // installed, what installs.
 @(private = "file")
-setup_buttons :: proc(app: ^App, c: setup.Config, em: f32) -> (ev: setup.Event) {
+setup_buttons :: proc(app: ^App, c: setup.Setup_Options, em: f32) -> (ev: setup.Event) {
 	d := &app.setup
 	button :: proc(id, label: string, intent: ui.Intent, em: f32) -> bool {
 		ui.next({width = ui.text_size(em * 1.2), height = ui.px(ui.dense(em * 2.2))})
