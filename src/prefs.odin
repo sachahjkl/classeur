@@ -40,33 +40,18 @@ standard_defaults :: proc() -> prefs_page.Standard_Defaults {
 	d := prefs_page.STANDARD_DEFAULTS
 	d.theme, d.mode, d.finish, d.font_size = "Graphite", "dark", "flat", 13.5
 	d.app_name = APP_NAME
+	d.values = OWN_DEFAULTS[:]
 	return d
 }
 
-// The standard preferences whose default is classeur's own and that Standard_Defaults does not hold: the corners
-// squarer (ROUNDING), scrolling that glides even with the animations off, the frames drawn in part (the host's). Given
-// before the person's file is read, so that a reset comes back to them.
-@(private = "file", rodata)
-OWN_DEFAULTS := [?][2]string{
+// The standard preferences whose default is classeur's own and that Standard_Defaults does not name: the corners
+// squarer (ROUNDING), scrolling that glides even with the animations off, the frames drawn in part (the host's). A reset
+// comes back to them.
+@(private = "file")
+OWN_DEFAULTS := [?]prefs_page.Standard_Value{
 	{"appearance.rounding", "0.25"},
 	{"scrolling.smooth", "on"},
 	{"rendering.partial_redraw", "true"},
-}
-
-@(private = "file")
-default_own :: proc(p: ^config.Prefs, name, text: string) {
-	r := config.ref_of(p, name)
-	if r == config.NO_REF { return }
-	e := config.entry(p, r)
-	v, err := config.parse_value(e.def, text)
-	assert(err == .None, "a default of classeur's own refused")
-	if e.def.kind == .String { v.s = text }   // (a literal: the definition keeps it)
-	e.def.default = v
-	// (nothing set it yet: its value is the old default, its string owned by the registry)
-	value := v
-	if e.def.kind == .String { value.s = strings.clone(text, p.allocator) }
-	delete(e.value.s, p.allocator)
-	e.value = value
 }
 
 // The values the program reads, copied out of the registry.
@@ -105,13 +90,11 @@ prefs_open :: proc(app: ^App) {
 	// (the toolkit's standard preferences first: their descriptions live in prefs_words, as long as the registry)
 	_ = vmem.arena_init_growing(&app.prefs_words)
 	prefs_page.standard_register(&app.prefs, prefs_page.STANDARD_ALL, standard_defaults(), vmem.arena_allocator(&app.prefs_words))
-	for d in OWN_DEFAULTS { default_own(&app.prefs, d[0], d[1]) }
 	if r := config.ref_of(&app.prefs, prefs_page.SYSTEM_TITLE_PREF); r != config.NO_REF {
 		e := config.entry(&app.prefs, r)
 		// (offered where the system can draw a title bar: Windows, X11, a Wayland compositor with server-side ones;
 		// classeur changes its title bar at once: settings_apply)
 		e.def.hidden = !platform.system_title_available(app.main.win)
-		e.def.restart = false
 	}
 	// (the launcher and the start with the session apply to the copy that is integrated: their switches show once a
 	// worker found this copy is it, desktop_follow)
