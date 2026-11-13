@@ -357,7 +357,6 @@ side_move :: proc(app: ^App, s: Side_Section, to: int) {
 		strings.write_string(&b, strings.to_lower(SECTION_TITLES[x], context.temp_allocator))
 	}
 	config.set_string(&app.prefs, config.ref_of(&app.prefs, "side.order"), strings.to_string(b))
-	prefs_save(app)
 }
 
 // The place a dragged heading goes: before the first heading whose middle is under the pointer, else at the end. While

@@ -161,6 +161,7 @@ App :: struct {
 	update_serial:  int,               // the updater's state last said
 	installed_copy: bool,              // this copy is the installed one: it updates itself by itself
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
+	announcer:     ui.Announcer,       // a long job ended while the window is behind others: said by the system too
 	system_thumbs: bool,            // the system's thumbnails are asked (desktop.thumbnail: its cache, its thumbnailers);
 	                                // off headless, so a test never reaches the person's cache (one turns it on with its own)
 	session_path: string,           // owned: the tests' session file ("": the person's, none when headless)
@@ -173,7 +174,7 @@ App :: struct {
 	tab_coming_at: [2]f32,          // ... the pointer there
 	tab_coming_path: string,        // owned: ... its folder, "" until the system gives it (Linux: at the drop)
 	session_writer: File_Writer,    // the files written on a worker, one write at a time each (file_writer.odin)
-	prefs_writer:   File_Writer,
+	prefs_writer:   config.User_Writer,
 	layouts_writer: File_Writer,
 	setup_writer:   File_Writer,
 	mounting:     [dynamic]string,  // owned: the shares being found or mounted on a worker (locations.odin)
@@ -216,7 +217,7 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false) ->
 	if !standalone {
 		// (its launcher's activation token first: the first start's window comes up with it on Wayland)
 		message := app_message_make(platform.activation_token_from_env(context.temp_allocator), folders)
-		name := instance.key(ODIN_DEBUG ? "classeur.dev" : "classeur", platform.config_dir(context.temp_allocator))
+		name := instance.key(ODIN_DEBUG ? "classeur.dev" : "classeur", platform.user_dir(.Config, "", context.temp_allocator))
 		outcome, owner = instance.acquire({name = name, wait_ms = 2000}, transmute([]u8)message)
 		if outcome == .Forwarded { return 0 }
 	}
@@ -315,6 +316,7 @@ app_open :: proc(o: Open_Options) -> ^App {
 	}
 	h := &app.main
 	win := h.win
+	if !o.headless { app.announcer = {mode = .System, window = win} }
 	app.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
 	app.mono, _ = font.load_embedded(&app.shared.fonts, font.FALLBACK_MONO_DATA)
 	h.state.icon_font = app.icons   // (the menus' icons are the commands' Lucide ones; the widgets keep the toolkit's marks)
@@ -376,6 +378,7 @@ folders_show :: proc(app: ^App, folders: []string) {
 app_frame :: proc(app: ^App) {
 	host.host_frame(&app.main)
 	session_autosave(app)
+	prefs_tidy(app)   // (each round, a frame drawn or not: a change made with no frame is written too)
 	drag_run(app)   // (between frames: it blocks until the drop)
 	tab_out_run(app)
 }
@@ -405,7 +408,6 @@ app_close :: proc(app: ^App) {
 	edits_ended := pool_stop(&app.edit_pool, proc(data: rawptr) {}, until)
 	session_save(app)   // (after the workers: a bookmark's write on one of them never comes after this one)
 	// (a write still pending, its task dropped with the workers: written now)
-	file_writer_flush(&app.prefs_writer)
 	file_writer_flush(&app.layouts_writer)
 	file_writer_flush(&app.setup_writer)
 	measures_ended := pool_stop(&app.measure_pool, proc(data: rawptr) {}, until)
@@ -471,7 +473,7 @@ app_free :: proc(app: ^App) {
 	delete(app.session_written)
 	delete(app.session_seen)
 	file_writer_free(&app.session_writer)
-	file_writer_free(&app.prefs_writer)
+	_ = config.user_writer_stop(&app.prefs_writer, &app.prefs)
 	file_writer_free(&app.layouts_writer)
 	file_writer_free(&app.setup_writer)
 	for u in app.mounting { delete(u) }

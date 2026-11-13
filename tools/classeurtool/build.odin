@@ -7,9 +7,8 @@ import "core:os"
 import "core:strings"
 import toolbox "gt:toolbox"
 
-// What a build on Linux needs: the toolkit's native text backend, and the Rust standard library that both it and
-// wgpu-native carry linked once (the same code: the toolkit's own CI does the same).
-LINUX_DEFINES :: "-define:FONT_BACKEND=native"
+// What a build on Linux needs: the Rust standard library that both the toolkit's text backend and wgpu-native carry,
+// linked once (the same code: the toolkit's own CI does the same).
 LINUX_LINK    :: "-extra-linker-flags:-Wl,--allow-multiple-definition"
 // The packages that have tests, and this tool.
 TEST_PACKAGES :: [?]string{"src", "src/fs", "tools/classeurtool"}
@@ -31,7 +30,6 @@ odin_cmd :: proc(verb, pkg: string, extra: []string) -> []string {
 	cmd := make([dynamic]string, context.temp_allocator)
 	append(&cmd, "odin", verb, pkg, collection(), "-vet")
 	when ODIN_OS == .Linux {
-		append(&cmd, LINUX_DEFINES)
 		if verb != "check" { append(&cmd, LINUX_LINK) }   // (check links nothing)
 	}
 	append(&cmd, ..extra)

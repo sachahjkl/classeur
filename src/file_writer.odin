@@ -51,13 +51,6 @@ file_writer_free :: proc(w: ^File_Writer) {
 	w^ = {}
 }
 
-// Whether no text waits and no task runs (the tests wait for it).
-file_writer_idle :: proc(w: ^File_Writer) -> bool {
-	sync.mutex_lock(&w.mutex)
-	defer sync.mutex_unlock(&w.mutex)
-	return !w.due && !w.running
-}
-
 // (written beside, then renamed over: a crash while writing leaves the last text whole)
 file_write :: proc(path, text: string) {
 	_ = os.make_directory_all(fs.parent(path))

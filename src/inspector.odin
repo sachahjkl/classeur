@@ -128,7 +128,6 @@ inspector_pane_options :: proc(app: ^App) -> ui.Pane_Options {
 		user = app, on_save = proc(user: rawptr, p: ^ui.Pane) {
 			app := (^App)(user)
 			config.set_int(&app.prefs, config.ref_of(&app.prefs, "inspector.width"), i64(p.size[.X]))
-			prefs_save(app)
 		}}
 }
 

@@ -100,7 +100,7 @@ act_app_changelog :: proc(app: ^App) { launch(app, .Open, REPOSITORY_URL + "/rel
 
 // Where the settings, the session, the layouts are (prefs_file's folder).
 act_app_settings_folder :: proc(app: ^App) {
-	launch(app, .Open, strings.concatenate({platform.config_dir(context.temp_allocator), "/", APP_NAME}, context.temp_allocator))
+	launch(app, .Open, platform.user_dir(.Config, APP_NAME, context.temp_allocator))
 }
 
 act_app_version_copy :: proc(app: ^App) {
@@ -123,7 +123,6 @@ theme_step :: proc(app: ^App, by: int) {
 	for name, i in app.theme_names { if name == app.settings.theme { at = i } }
 	name := app.theme_names[((at + by) % n + n) % n]
 	_ = config.set_from_string(&app.prefs, "look.theme", name, .User)
-	prefs_save(app)
 	settings_apply(app)
 	say(app, "Theme: %s.", name)
 }
@@ -148,7 +147,6 @@ act_app_text_smaller :: proc(app: ^App) { text_size_step(app, -TEXT_STEP) }
 
 act_app_text_reset :: proc(app: ^App) {
 	_ = config.reset(&app.prefs, "look.font_size")
-	prefs_save(app)
 	settings_apply(app)
 	say(app, "Text size: %v.", app.settings.font_size)
 }
@@ -168,7 +166,6 @@ text_size_step :: proc(app: ^App, by: f32) {
 @(private = "file")
 pref_set_string :: proc(app: ^App, name, text: string) {
 	_ = config.set_from_string(&app.prefs, name, text, .User)
-	prefs_save(app)
 	settings_apply(app)
 }
 

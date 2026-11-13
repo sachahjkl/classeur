@@ -75,7 +75,6 @@ options_page :: proc(app: ^App) -> prefs_page.Options {
 		foot = "Ctrl+,: these settings",
 		changed = proc(user: rawptr, name: string) {
 			app := (^App)(user)
-			prefs_save(app)
 			settings_apply(app)
 		},
 		// (a slider held: its value shown at once, written when it is let go; only what moves nothing: a text size
@@ -95,7 +94,6 @@ options_page :: proc(app: ^App) -> prefs_page.Options {
 			app := (^App)(user)
 			if at := prefs_page.theme_cards(themes(), app.settings.theme, app.theme_shown.light, em); at >= 0 {
 				_ = config.set_from_string(&app.prefs, "look.theme", themes()[at].name, .User)
-				prefs_save(app)
 				settings_apply(app)
 			}
 		},

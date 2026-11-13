@@ -28,7 +28,7 @@ import "fs"
 session_file :: proc(app: ^App, allocator := context.temp_allocator) -> string {
 	if app.session_path != "" { return strings.clone(app.session_path, allocator) }
 	if app.headless || app.standalone { return "" }
-	return strings.concatenate({platform.config_dir(context.temp_allocator), "/", APP_NAME, "/session"}, allocator)
+	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/session"}, allocator)
 }
 
 // `later`: written on a worker (the session changed while the window runs: file_writer.odin); else now (the window

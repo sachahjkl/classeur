@@ -63,7 +63,6 @@ palette_note_run :: proc(app: ^App, id: string) {
 		n += 1
 	}
 	config.set_string(&app.prefs, config.ref_of(&app.prefs, "palette.recent"), strings.to_string(b))
-	prefs_save(app)
 }
 
 // The palette's list: the program's commands by group (`order`: each line's command), then the settings (`settings`:
@@ -290,5 +289,4 @@ palette_keep_size :: proc(app: ^App) {
 	if w == config.int_of(&app.prefs, "palette.width") && h == config.int_of(&app.prefs, "palette.height") { return }
 	config.set_int(&app.prefs, config.ref_of(&app.prefs, "palette.width"), w)
 	config.set_int(&app.prefs, config.ref_of(&app.prefs, "palette.height"), h)
-	prefs_save(app)
 }

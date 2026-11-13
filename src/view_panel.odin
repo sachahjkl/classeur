@@ -95,7 +95,6 @@ columns_save :: proc(app: ^App) {
 	}
 	config.set_string(&app.prefs, config.ref_of(&app.prefs, "view.columns"), strings.to_string(b))
 	config.set_string(&app.prefs, config.ref_of(&app.prefs, "view.column_widths"), ui.table_widths_text(l, slice.enumerated_array(&keys)))
-	prefs_save(app)
 }
 
 // The header's menu (a right click on it): the toolkit's (the column clicked back to its own width and unsorted, the
@@ -579,11 +578,11 @@ empty_state :: proc(app: ^App, t: ^Tab, em: f32) -> bool {
 	e: ui.Empty_State
 	switch c {
 	case .Reading:
-	case .Error:   e = {icon = lucide.ALERT_CIRCLE, title = fs.ERROR_TEXT[f.listing.error], actions = {"Go up", "Try again"}}
-	case .Empty:   e = {icon = lucide.FOLDER_OPEN, title = "This folder is empty", actions = {"New folder", "Paste"}}
-	case .Filter:  e = {icon = lucide.FOLDER_SEARCH, title = "No name matches", note = fmt.tprintf("Nothing here has the letters %q.", f.filter), actions = {"Clear the filter"}}
-	case .Funnels: e = {icon = lucide.FILTER, title = "No row fits the filters", note = "The types or the columns' funnels leave every row out.", actions = {"Show every row"}}
-	case .Hidden:  e = {icon = lucide.EYE_OFF, title = "Only hidden files are here", actions = {"Show hidden files"}}
+	case .Error:   e = {icon = lucide.ALERT_CIRCLE, title = fs.ERROR_TEXT[f.listing.error], actions = {{text = "Go up", icon = lucide.ARROW_UP, intent = .Primary}, {text = "Try again", icon = lucide.REFRESH_CW}}}
+	case .Empty:   e = {icon = lucide.FOLDER_OPEN, title = "This folder is empty", actions = {{text = "New folder", icon = lucide.FOLDER_PLUS, intent = .Primary}, {text = "Paste", icon = lucide.CLIPBOARD_PASTE}}}
+	case .Filter:  e = {icon = lucide.FOLDER_SEARCH, title = "No name matches", note = fmt.tprintf("Nothing here has the letters %q.", f.filter), actions = {{text = "Clear the filter", icon = lucide.X, intent = .Primary}}}
+	case .Funnels: e = {icon = lucide.FILTER, title = "No row fits the filters", note = "The types or the columns' funnels leave every row out.", actions = {{text = "Show every row", icon = lucide.FILTER, intent = .Primary}}}
+	case .Hidden:  e = {icon = lucide.EYE_OFF, title = "Only hidden files are here", actions = {{text = "Show hidden files", icon = lucide.EYE, intent = .Primary}}}
 	}
 	ui.next({width = ui.fill(), height = ui.fill(), axis = .Y})
 	empty := ui.build_box({.Clickable}, "###empty")

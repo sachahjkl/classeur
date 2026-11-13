@@ -1186,8 +1186,13 @@ test_columns :: proc(t: ^testing.T) {
 		session.click(s, "header", .Right)
 		session.frames(s, 2)
 		testing.expect(t, ui.ctx_menu_any_open(), "the columns' menu")
-		// (its item Type)
-		item := session.find_text(s, "Type", 1)
+		// (its item Type: a row's label, not the column's title nor the menu's search field)
+		item: ^ui.Box
+		for k in 0 ..< 8 {
+			b := session.find_text(s, "Type", k)
+			if b == nil { break }
+			if b.name == "lbl" { item = b; break }
+		}
 		testing.expect(t, item != nil, "the item Type")
 		if item != nil { session.click_at(s, (item.rect.min + item.rect.max) * 0.5) }
 		session.frames(s, 2)

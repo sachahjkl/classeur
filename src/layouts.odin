@@ -36,7 +36,7 @@ layouts_free :: proc(l: ^Layouts) {
 layouts_file :: proc(app: ^App) -> string {
 	if app.session_path != "" { return strings.concatenate({app.session_path, ".layouts"}, context.temp_allocator) }
 	if app.headless { return "" }
-	return strings.concatenate({platform.config_dir(context.temp_allocator), "/", APP_NAME, "/layouts"}, context.temp_allocator)
+	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/layouts"}, context.temp_allocator)
 }
 
 // Read once, on this thread: at the start, before the window is shown and the first frame (the changes are written on a

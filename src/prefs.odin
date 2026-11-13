@@ -57,7 +57,7 @@ Settings :: struct {
 }
 
 prefs_file :: proc(allocator := context.temp_allocator) -> string {
-	return strings.concatenate({platform.config_dir(context.temp_allocator), "/", APP_NAME, "/prefs"}, allocator)
+	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/prefs"}, allocator)
 }
 
 // Where the changes are written: the person's file; the tests', beside their session file (none: headless).
@@ -71,7 +71,6 @@ prefs_path :: proc(app: ^App) -> string {
 // The registry with the user's file read in (headless: the defaults alone, the person's file untouched). (Read on this
 // thread: at the start, before the window is shown and the first frame.)
 prefs_open :: proc(app: ^App) {
-	app.prefs_writer.write = prefs_write
 	app.prefs = config.prefs_make()
 	// (the theme's choices are the themes' names)
 	defs := PREF_DEFS
@@ -86,6 +85,7 @@ prefs_open :: proc(app: ^App) {
 	config.register(&app.prefs, defs[:])
 	if !app.headless { config.load_file(&app.prefs, prefs_file(), .User) }
 	settings_apply(app)
+	if path := prefs_path(app); path != "" { config.user_writer_start(&app.prefs_writer, &app.prefs, path) }
 }
 
 prefs_close :: proc(app: ^App) {
@@ -93,41 +93,11 @@ prefs_close :: proc(app: ^App) {
 	delete(app.theme_names)
 }
 
-// Writes the user's changes, on a worker (file_writer.odin). The registry stays this thread's: the worker gets the
-// person's values as text (a name and its value, each ended by a zero byte), registered or kept for another version.
-prefs_save :: proc(app: ^App) {
-	path := prefs_path(app)
-	if path == "" { return }
-	p := &app.prefs
-	b := strings.builder_make(context.temp_allocator)
-	add :: proc(b: ^strings.Builder, p: ^config.Prefs, name: string) {
-		text, ok := config.user_text(p, name)
-		if !ok { return }
-		strings.write_string(b, name)
-		strings.write_byte(b, 0)
-		strings.write_string(b, text)
-		strings.write_byte(b, 0)
-	}
-	for name in config.sorted_names(p) { add(&b, p, name) }
-	for name in p.pending { add(&b, p, name) }
-	file_writer_put(&app.prefs_writer, &app.pool, path, strings.to_string(b))
-}
-
-// On a worker: a registry of the values, written as the user's file. The values come before the definitions: one the
-// definition refuses is kept all the same, as the program's registry keeps it (config.register).
-@(private = "file")
-prefs_write :: proc(path, values: string) {
-	q := config.prefs_make()
-	defer config.prefs_destroy(&q)
-	rest := values
-	for rest != "" {
-		name, _, after := strings.partition(rest, "\x00")
-		text, _, next := strings.partition(after, "\x00")
-		_ = config.set_from_string(&q, name, text, .User)
-		rest = next
-	}
-	_ = config.register(&q, PREF_DEFS[:])
-	_ = config.save_user(&q, path)
+// Each round of the loop: the user's changes since the last text handed to the writer's thread, which writes them (config.User_Writer:
+// the interface's thread never waits for the disk; many changes, one write).
+prefs_tidy :: proc(app: ^App) {
+	config.user_writer_save(&app.prefs_writer, &app.prefs)
+	if config.user_writer_failed(&app.prefs_writer) { say(app, "The settings cannot be written to %s", prefs_path(app)) }
 }
 
 // The values where the program reads them, the program changed to follow them.
@@ -181,6 +151,5 @@ settings_apply :: proc(app: ^App) {
 // A preference changed by the program (a key, a toggle): the registry, the file, what follows.
 pref_set_bool :: proc(app: ^App, name: string, v: bool) {
 	config.set_bool(&app.prefs, config.ref_of(&app.prefs, name), v)
-	prefs_save(app)
 	settings_apply(app)
 }

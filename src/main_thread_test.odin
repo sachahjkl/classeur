@@ -55,12 +55,15 @@ test_prefs_written_on_a_worker :: proc(t: ^testing.T) {
 		defer app_close(app)
 		_ = config.set_from_string(&app.prefs, "other.version", "kept", .User)
 		pref_set_bool(app, "files.show_hidden", true)
+		// (handed to the writer's thread by a frame: written by it, the frame waits for nothing)
+		// (not in the temporary memory: each round of the loop frees it)
+		path := strings.concatenate({file, ".prefs"})
+		defer delete(path)
 		for _ in 0 ..< 2000 {
-			if file_writer_idle(&app.prefs_writer) { break }
+			app_frame(app)
+			if data, err := os.read_entire_file(path, context.temp_allocator); err == nil && strings.contains(string(data), "files.show_hidden") { break }
 			time.sleep(time.Millisecond)
 		}
-		testing.expect(t, file_writer_idle(&app.prefs_writer), "written")
-		path := strings.concatenate({file, ".prefs"}, context.temp_allocator)
 		testing.expect(t, os.exists(path), "on disk")
 		q := config.prefs_make()
 		defer config.prefs_destroy(&q)

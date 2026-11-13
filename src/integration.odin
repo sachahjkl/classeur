@@ -123,7 +123,7 @@ SETUP_CHOICES := [?]setup.Choice{
 // What the person answered the Setup (setup.CHOICE_*), kept in <config>/classeur/setup.
 @(private = "file")
 setup_choice_file :: proc() -> string {
-	return strings.concatenate({platform.config_dir(context.temp_allocator), "/", APP_NAME, "/setup"}, context.temp_allocator)
+	return strings.concatenate({platform.user_dir(.Config, APP_NAME, context.temp_allocator), "/setup"}, context.temp_allocator)
 }
 
 @(private = "file")

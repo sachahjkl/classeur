@@ -572,14 +572,21 @@ job_ended :: proc(data: rawptr, word: u64) {
 	}
 	st := sync.atomic_load(&job.state)
 	n := len(job.sources)
+	said := ""
 	switch st {
-	case .Done:
-		say(app, "%d item%s %s.", n, n == 1 ? "" : "s", JOB_DONE[job.kind])
-	case .Failed:
-		say(app, "%s", job.errors[0])
-	case .Cancelled:
-		say(app, "%s: cancelled.", JOB_VERB[job.kind])
+	case .Done:      said = fmt.tprintf("%d item%s %s.", n, n == 1 ? "" : "s", JOB_DONE[job.kind])
+	case .Failed:    said = job.errors[0]
+	case .Cancelled: said = fmt.tprintf("%s: cancelled.", JOB_VERB[job.kind])
 	case .Waiting, .Counting, .Running, .Asking:
+	}
+	if said != "" {
+		say(app, "%s", said)
+		// (one long enough to be shown in the jobs' view, ended while the window is behind others: the person is elsewhere,
+		// the system's notification tells them; one the system cannot show is the toast just shown)
+		long := job.started_ms > 0 && ui.now_ms() - job.started_ms >= JOBS_VIEW_AFTER_MS
+		if long && app.announcer.window != nil && !app.announcer.window.active && !app.announcer.missing {
+			ui.announce(&app.announcer, st == .Done ? .Good : st == .Failed ? .Bad : .Info, said)
+		}
 	}
 	job.ended_ms = ui.now_ms()
 	app_frames(app)

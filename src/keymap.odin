@@ -127,7 +127,6 @@ keymap_save :: proc(app: ^App) {
 		n += 1
 	}
 	config.set_string(&app.prefs, config.ref_of(&app.prefs, "keys.aliases"), strings.to_string(a))
-	prefs_save(app)
 }
 
 // The command `id` bound to `b` in place of its own keys (another command that had `b` loses it: one key, one command).
