@@ -3,6 +3,11 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.19.2] - 2026-11-13
+
+### Changed
+- **One licence at one price, and a new pricing page**: the classeur licence is one edition at 29 €, paid once, taxes included. The pricing page shows classeur's icon and name, one card with the price, what the licence gives as a list, one button, then "Before you buy". The licence is named "classeur licence" on the site, at checkout and in the licence file.
+
 ## [0.19.1] - 2026-11-13
 
 ### Fixed
@@ -439,6 +444,7 @@ and the versions follow [semantic versioning](https://semver.org/).
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.19.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.19.2
 [0.19.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.19.1
 [0.19.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.19.0
 [0.18.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.18.0
