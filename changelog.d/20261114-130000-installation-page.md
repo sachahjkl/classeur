@@ -1,3 +1,0 @@
-type: Changed
-
-**The install is in the settings: an Installation page.** It says where the installed copy is, its version, whether this copy is the installed one, the menu entry, Settings > Apps, the start with the session and the PATH, with Install, Repair, Upgrade and Uninstall. The command line is `--install`, `--uninstall`, `--status` (what is installed, and whether classeur runs) and `--setup`, the same as in the other programs: `classeur install`, `uninstall` and `status` are gone (`--install` installs the copy in its own folder; it no longer integrates a copy where it is), and so is the Setup command (Ctrl+Shift+F12). The palette finds the page ("install").
