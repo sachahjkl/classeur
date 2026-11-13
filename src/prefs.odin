@@ -123,10 +123,6 @@ prefs_open :: proc(app: ^App) {
 	// (the toolkit's settings to the toolkit, now and at each change: the feel, the zoom, the density, the corners, the
 	// motion, the scrolling, the text's rendering)
 	prefs_page.standard_watch(&app.standard, &app.prefs, &app.main.state, {renderer = &app.shared.r, fonts = &app.shared.fonts, partial_redraw = &app.main.partial_redraw})
-	// (what standard_apply leaves alone at a default: the default classeur gives it)
-	ui.set_rounding(&app.main.state, f32(config.float_of(&app.prefs, "appearance.rounding")))
-	if config.string_of(&app.prefs, "scrolling.smooth") == "on" { ui.set_smooth_scroll(&app.main.state, .On) }
-	app.main.partial_redraw = config.bool_of(&app.prefs, "rendering.partial_redraw")
 	if path := prefs_path(app); path != "" { config.user_writer_start(&app.prefs_writer, &app.prefs, path) }
 }
 
