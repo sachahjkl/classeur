@@ -280,19 +280,11 @@ side_item :: proc(id: string) -> bool {
 
 @(private = "file")
 side_filter :: proc(app: ^App, em: f32) {
-	// (as tall as the panels' toolbars: their lines meet across the window)
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOOLBAR_EM))})
-	if ui.row(.Center, {.Draw_Side_Bottom}, "###side_filter") {
-		ui.spacer(ui.px(em * 0.5))
-		if ui.tags("weak") { glyph(app, lucide.SEARCH, em * 1.6) }
-		key := ui.key_from_string(ui.parent_box().key, "###sfilter")
-		ui.next({width = ui.fill(), height = ui.pct(1)})
-		res: ui.Edit_Result
-		if ui.tags("bare") { res = ui.line_edit("###sfilter", &app.side_filter, {placeholder = "Filter...", clearable = true}) }
-		note_text_field(app, key)
-		if res.cancelled { ui.line_edit_clear(&app.side_filter) }
-		ui.spacer(ui.px(em * 0.4))
-	}
+	// (the toolkit's band over a list, as tall as the panels' toolbars: their lines meet across the window)
+	ui.next({height = ui.px(ui.dense(em * TOOLBAR_EM))})
+	res := ui.search_band("side_filter", &app.side_filter, {placeholder = "Filter...", clearable = true})
+	note_text_field(app, res.box.key)
+	if res.cancelled { ui.line_edit_clear(&app.side_filter) }
 }
 
 // A section's heading: its icon, its title, a chevron; a click opens or closes it. True: it is open.
