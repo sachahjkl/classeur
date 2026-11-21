@@ -7,6 +7,7 @@ import "base:runtime"
 import "core:os"
 import "core:strings"
 import "core:testing"
+import "gt:desktop"
 import "gt:platform"
 import "gt:testkit"
 import "gt:testkit/session"
@@ -207,5 +208,46 @@ test_crumb_drop_and_spring :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		wait_jobs(s)
 		testing.expect(t, fs.exists(fs.join(dir, "Photos/notes.txt", context.temp_allocator)), "dropped in the folder it opened")
+	})
+}
+
+// Asynchronous system shell context-menu items: the menu opens at once without waiting, stale serials are dropped,
+// arriving items render inline above Properties, and clicking invokes the shell item id.
+@(test)
+test_shell_context_menu_async :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		dir := fixture(t)
+		s, app := start(t, {dir}, size = {1200, 1000})
+		context.allocator = runtime.heap_allocator()
+		tab := current_tab(app)
+		point_at(t, tab, "notes.txt")
+		session.frames(s, 2)
+
+		entry_menu_open(app, tab, {300, 20}, on_entry = true)
+		app.menu.shell_serial = 7
+		session.frames(s, 2)
+		testing.expect(t, session.find_text(s, "Properties") != nil, "classeur menu opens at once")
+		testing.expect(t, session.find_text(s, "Open with Code") == nil, "no shell items yet")
+
+		// A stale answer (wrong serial) is dropped cleanly without showing or leaking.
+		stale_raw := [?]desktop.Context_Item{{id = 99, label = "Stale Action"}}
+		shell_menu_apply(app, 6, desktop.context_items_clone(stale_raw[:], runtime.heap_allocator()))
+		session.frames(s, 2)
+		testing.expect(t, session.find_text(s, "Stale Action") == nil, "stale serial ignored")
+
+		// Current serial lands asynchronously and shows items + submenus above Properties.
+		sub_raw := [?]desktop.Context_Item{{id = 12, label = "Extract Here"}}
+		fresh_raw := [?]desktop.Context_Item{
+			{label = "7-Zip", children = sub_raw[:]},
+			{id = 42, label = "Open with Code"},
+		}
+		shell_menu_apply(app, 7, desktop.context_items_clone(fresh_raw[:], runtime.heap_allocator()))
+		session.frames(s, 2)
+		testing.expect(t, session.find_text(s, "7-Zip") != nil, "shell submenu appears")
+		testing.expect(t, session.find_text(s, "Open with Code") != nil, "shell item appears")
+
+		session.click_text(s, "Open with Code")
+		session.frames(s, 2)
+		testing.expect_value(t, app.menu.shell_invoked, u32(42))
 	})
 }

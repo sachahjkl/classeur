@@ -72,5 +72,7 @@ alternatives, the subtle points. The map of the code (packages, files, threads, 
 - [features/windows.md](features/windows.md): in-process multi-window (`App_Hub` sharing `host.Shared`), instant tab
   extraction that moves the `^Tab` directly, preloaded graphics device at startup, and instant close (`host.host_hide`,
   cancellable mDNS discovery, direct `tasks.stop`)
+- [features/context-menu.md](features/context-menu.md): asynchronous system shell context-menu integration via
+  `gt:desktop`'s `Context_Menu` (Windows shell extensions, Linux KIO/Nemo/Thunar actions) without delaying menu open
 - [data/folder.md](data/folder.md): a folder as a panel shows it: the selection as flags, the worker that prepares the
   order, the serial of a read, edits in order
