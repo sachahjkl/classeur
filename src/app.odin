@@ -190,6 +190,7 @@ App :: struct {
 	devices:      []fs.Network_Device,   // the devices of the network that share files, as last found (network.odin)
 	devices_asked: u64,             // the last search asked (an older answer is dropped)
 	devices_searching: bool,        // a search runs
+	devices_cancel:    bool,        // atomic: set when the app closes, the network's search ends (fs.network_devices)
 	devices_seen_open: bool,        // the Network section was open at the last build (opened again: a new search)
 	side_device_uris: [dynamic]string,   // owned: their URIs
 	session_seen:    string,        // owned: the session's text at its last change (session_autosave waits for it to settle)
@@ -451,8 +452,8 @@ app_frame :: proc(app: ^App) {
 	if app.places_language != i18n.version() { places_load(app) }
 }
 
-// How long closing waits for the workers' tasks (a walk, a measure stop at their next folder; a read of one folder
-// does not stop).
+// How long closing waits for the workers' tasks (a walk, a measure stop at their next folder, the network's search at
+// its next read; a read of one folder does not stop).
 QUIT_WAIT_MS :: 500
 
 // The workers that read folders (the measures and the thumbnails have their own: MEASURE_THREADS, THUMB_THREADS), and
@@ -502,6 +503,8 @@ app_close :: proc(app: ^App) {
 		}
 	}
 	measures_cancel(app)
+	// (the network's search asks for NETWORK_ASK_FOR, 1.5 s: past QUIT_WAIT_MS, a close soon after the start waited for it)
+	sync.atomic_store(&app.devices_cancel, true)
 	deep_reset(app)   // (the deep search's walk ends at its next folder)
 	// (from now a worker's result is refused, the worker frees it; a worker never waits for room in the queue)
 	ui.post_close(&app.main.state)

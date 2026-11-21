@@ -30,7 +30,7 @@ it (the decisions, the refused alternatives, the subtle points) are in [src/md](
 | `src/inspector.odin` | The inspector: a picture, a PDF's first page or a video's frame (the system's 1024-pixel thumbnail, said under it), a text, a folder's rows, the properties; read on the workers when the cursor stops. |
 | `src/places.odin` | The sidebar's places (the person's folders) and volumes, read on a worker. |
 | `src/integration.odin` | classeur on the desktop (gui_toolkit's `desktop` and `setup`): the identity, the install's boxes (`SETUP_CHOICES`: on the PATH; the default file manager, which on Windows also takes Win+E), each tied to its part so that it shows what the system has. The settings' menu and session switches are the toolkit's (`prefs_page.install_follow`, which applies them to the installed copy and keeps the install's own parts as it left them). |
-| `src/network.odin` | The devices of the network that share files, searched on a worker (`fs.network_devices`: one query of multicast DNS for the file services, and on Windows the network neighbourhood) when the Network section shows or opens, and by Find network devices. |
+| `src/network.odin` | The devices of the network that share files, searched on a worker (`fs.network_devices`: one query of multicast DNS for the file services, and on Windows the network neighbourhood) when the Network section shows or opens, and by Find network devices; closing the app cancels it (`app.devices_cancel`). |
 | `src/format.odin` | Sizes, dates (local time zone), types and icons of entries. |
 | `src/app.odin` | The App, its window (`app_open`, `app_frame`, `app_close`: the tests drive the same procedures), the theme. |
 

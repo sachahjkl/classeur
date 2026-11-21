@@ -45,6 +45,10 @@ alternatives, the subtle points. The map of the code (packages, files, threads, 
 - The Recycle Bin of Windows is no folder: `fs.list` reads every drive's `$I` records into a listing whose entries
   carry their real paths (`Listing.trashed`).
 - A rename never replaces (`fs.rename`).
+- Closing waits QUIT_WAIT_MS for the workers, so every task that can run long ends at a cancel: the walks and the
+  measures at their next folder, the network's search at its next read (`app.devices_cancel`, read every `fs.ASK_WAIT`).
+  A task that cannot see a cancel holds the close that long: the search's 1.5 s held each close soon after the start
+  for the whole QUIT_WAIT_MS. A read of one folder still cannot stop (a share that hangs): that is what the limit is for.
 - The dates' words, units and order are the toolkit's (`gt:timefmt`), but classeur converts each date to the local time
   itself, with the time zone's region (`app.tz`): timefmt takes one offset, today's, and a file's date from the other
   side of a change of the clock (summer time) would read an hour off. timefmt then writes that wall clock with an

@@ -2,8 +2,8 @@
 // the services that share files, the answers taken for a moment. A device is a host with its services, each with the
 // URI that opens it (location_resolve reads them).
 //
-//   network_devices()        asks the network (blocks NETWORK_ASK_FOR: call it on a worker); Windows adds the
-//                            computers its network neighbourhood knows (network_windows.odin)
+//   network_devices()        asks the network (blocks NETWORK_ASK_FOR: call it on a worker; a cancel ends it within
+//                            ASK_WAIT); Windows adds the computers its network neighbourhood knows (network_windows.odin)
 //   dns_parse(packet)        a DNS message's records (pure: the tests give it packets they build)
 //   devices_from_records     the devices the records describe
 //   device_add               one service of a host, added to a list where each host is once
@@ -15,10 +15,14 @@ package fs
 
 import "core:net"
 import "core:strings"
+import "core:sync"
 import "core:time"
 
 NETWORK_ASK_FOR  :: 1500 * time.Millisecond   // how long the answers are taken
 NETWORK_ASK_AGAIN :: 500 * time.Millisecond   // the query sent once more (a lost packet; the names of instances the first answers gave without their host)
+// How long one socket's read waits for an answer before the next socket is read. A cancel is seen between two reads:
+// this is how late a closing program learns that the search ended (with 100 ms and three ways, closing waited 300 ms).
+ASK_WAIT :: 20 * time.Millisecond
 
 DNS_A    :: 1
 DNS_PTR  :: 12
@@ -341,16 +345,19 @@ ask_open :: proc(way: Ask_Way, query: []u8) -> (s: net.UDP_Socket, ok: bool) {
 		if net.set_option(s, .Reuse_Address, true) != .None || net.bind(s, {net.IP4_Any, 5353}) != .None { net.close(s); return }
 	}
 	// (a short wait for each: the sockets are read in turn)
-	wait: time.Duration = 100 * time.Millisecond
-	if net.set_option(s, .Receive_Timeout, wait) != .None { net.close(s); return }
+	if net.set_option(s, .Receive_Timeout, ASK_WAIT) != .None { net.close(s); return }
 	if _, send_err := net.send_udp(s, query, way.target); send_err != .None { net.close(s); return }
 	return s, true
 }
 
 // The file servers of the network: multicast DNS for NETWORK_ASK_FOR, then what the system knows of its own
-// (system_devices_add). Blocks: call it on a worker.
-network_devices :: proc(allocator := context.allocator) -> []Network_Device {
+// (system_devices_add). Blocks: call it on a worker. `cancel` (atomic, may be nil) set: it ends at the next socket's read,
+// with what came so far, and nothing of the system is asked; set before the call, nothing is asked at all. The program
+// sets it when it closes: the search's NETWORK_ASK_FOR would otherwise hold the workers' pool, and the window, that long.
+network_devices :: proc(cancel: ^bool = nil, allocator := context.allocator) -> []Network_Device {
+	cancelled :: proc(cancel: ^bool) -> bool { return cancel != nil && sync.atomic_load(cancel) }
 	list := make([dynamic]Network_Device, allocator)
+	if cancelled(cancel) { return list[:] }
 	records := make([dynamic]Dns_Record, context.temp_allocator)
 	types: [len(SERVICE_TYPES)]string
 	for st, i in SERVICE_TYPES { types[i] = st.name }
@@ -367,7 +374,7 @@ network_devices :: proc(allocator := context.allocator) -> []Network_Device {
 	start := time.tick_now()
 	again := false
 	buf: [9000]u8
-	for (open != [WAYS]bool{}) && time.tick_since(start) < NETWORK_ASK_FOR {
+	for (open != [WAYS]bool{}) && time.tick_since(start) < NETWORK_ASK_FOR && !cancelled(cancel) {
 		if !again && time.tick_since(start) >= NETWORK_ASK_AGAIN {
 			again = true
 			// (the instances named without their host: asked for it, with the services once more)
@@ -376,7 +383,7 @@ network_devices :: proc(allocator := context.allocator) -> []Network_Device {
 			for i in 0 ..< WAYS { if open[i] { _, _ = net.send_udp(sockets[i], ask, ASK_WAYS[i].target) } }
 		}
 		for i in 0 ..< WAYS {
-			if !open[i] { continue }
+			if !open[i] || cancelled(cancel) { continue }
 			n, _, err := net.recv_udp(sockets[i], buf[:])
 			#partial switch err {
 			case .None:
@@ -392,7 +399,7 @@ network_devices :: proc(allocator := context.allocator) -> []Network_Device {
 		}
 	}
 	devices_from_records(&list, records[:], allocator)
-	system_devices_add(&list, allocator)
+	if !cancelled(cancel) { system_devices_add(&list, allocator) }
 	return list[:]
 }
 

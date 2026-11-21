@@ -7,6 +7,7 @@ import "base:runtime"
 import "core:os"
 import "core:strings"
 import "core:testing"
+import "core:time"
 import "gt:testkit"
 import "gt:testkit/session"
 import "gt:testkit/unwatched"
@@ -174,6 +175,18 @@ test_network_devices_merged :: proc(t: ^testing.T) {
 	testing.expect_value(t, d.services[1].uri, "sftp://shelf.local/")
 	// (no name announced: the host's, without .local)
 	testing.expect_value(t, list[1].name, "pc")
+}
+
+// A search cancelled before it starts asks nothing and ends at once: the closing program's wait for the workers is not
+// the search's NETWORK_ASK_FOR. (No packet goes out: the network is not asked.)
+@(test)
+test_network_search_cancelled :: proc(t: ^testing.T) {
+	cancel := true
+	start := time.tick_now()
+	list := fs.network_devices(&cancel)
+	defer fs.devices_destroy(list)
+	testing.expect_value(t, len(list), 0)
+	testing.expectf(t, time.tick_since(start) < fs.NETWORK_ASK_FOR / 10, "ended at once (%v)", time.tick_since(start))
 }
 
 // The Network section shows with no share mounted: the search's answer said (none found), then the devices given to
