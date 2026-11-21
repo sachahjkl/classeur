@@ -55,6 +55,11 @@ alternatives, the subtle points. The map of the code (packages, files, threads, 
   a new copy still find each other.
 - The tests open the real program headless; they wait for the answers with `wait_read` (`app.answers_due`), never for
   a delay.
+- A close takes the window off the screen before anything else (`app_close`: `host.host_hide`): stopping the workers
+  (up to QUIT_WAIT_MS), writing the session and letting the renderer go took about 45 ms, and a task still running made
+  it half a second, all of it with the window frozen on the screen. Its place is kept just before: once hidden, the
+  window reads as neither maximized nor anywhere. (Before gui_toolkit's fix of `host_hide` for a closed window, the hide
+  did nothing on Linux.)
 
 ## File Index
 

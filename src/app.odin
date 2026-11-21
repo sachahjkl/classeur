@@ -491,6 +491,13 @@ pool_stop_until :: proc(p: ^tasks.Pool, until: time.Tick) -> bool {
 }
 
 app_close :: proc(app: ^App) {
+	// Off the screen first: what follows (the workers stopped, up to QUIT_WAIT_MS; the session written; the renderer let
+	// go) is no longer the person's to watch. The window's place is kept before: hidden, it reads as neither maximized
+	// nor anywhere.
+	if !app.headless {
+		prefs_page.placement_keep(&app.placement, &app.prefs, app.main.win)
+		host.host_hide(&app.main)
+	}
 	watcher_stop(app)
 	jobs_stop(app)
 	// the walks and the measures running end at their next folder; no tab points to its walk any more (its job is
@@ -510,7 +517,6 @@ app_close :: proc(app: ^App) {
 	until := time.tick_add(time.tick_now(), QUIT_WAIT_MS * time.Millisecond)
 	reads_ended := pool_stop_until(&app.pool, until)
 	edits_ended := pool_stop_until(&app.edit_pool, until)
-	if !app.headless { prefs_page.placement_keep(&app.placement, &app.prefs, app.main.win) }
 	// (after the workers: a bookmark asked of one of them is in it; nothing while the start's read has not come)
 	session_save(app)
 	// (what is pending written now: the process may end before their threads would)
