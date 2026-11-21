@@ -25,7 +25,7 @@ network_find :: proc(app: ^App) {
 	r^ = {app = app, serial = app.devices_asked, offline = app.headless}
 	tasks.add(&app.pool, proc(data: rawptr) {
 		r := (^Devices_Found)(data)
-		if !r.offline { r.devices = fs.network_devices() }
+		if !r.offline { r.devices = fs.network_devices(cancel = &r.app.network_cancel) }
 		if !ui.post(&r.app.main.state, devices_found, r) { devices_found_free(r) }
 	}, r)
 	app_frames(app)

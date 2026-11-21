@@ -10,13 +10,10 @@ import "core:os"
 import "core:strconv"
 import "core:slice"
 import "core:strings"
-import "core:sync"
 import "gt:draw"
 import "gt:i18n"
 import "gt:render"
-import setup "gt:setup"
 import "gt:platform"
-import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -241,20 +238,25 @@ free_panel_shell :: proc(p: ^Panel) {
 
 TAB_MIME :: "application/x-classeur-tab"
 
-// What a dragged tab carries: its process, its id and its path ("<pid>:<id>:<path>"): back in its own window, the tab
-// itself is moved (two tabs may show one folder); in another, its folder is opened.
-tab_mime_data :: proc(pid: int, id: u64, path: string) -> string { return fmt.tprintf("%d:%d:%s", pid, id, path) }
+// What a dragged tab carries: its process, its window, its id and its path ("<pid>:<win>:<id>:<path>"): back in its
+// own window, the tab itself is moved; in another window of this process, the ^Tab moves directly with its listing;
+// in another process, its folder is opened.
+tab_mime_data :: proc(pid: int, win, id: u64, path: string) -> string { return fmt.tprintf("%d:%d:%d:%s", pid, win, id, path) }
 
-tab_mime_parse :: proc(data: string) -> (pid: int, id: u64, path: string, ok: bool) {
+tab_mime_parse :: proc(data: string) -> (pid: int, win, id: u64, path: string, ok: bool) {
 	a := strings.index_byte(data, ':')
 	if a < 0 { return }
 	b := strings.index_byte(data[a + 1:], ':')
 	if b < 0 { return }
 	b += a + 1
+	c := strings.index_byte(data[b + 1:], ':')
+	if c < 0 { return }
+	c += b + 1
 	p, pok := strconv.parse_int(data[:a])
-	i, iok := strconv.parse_u64(data[a + 1:b])
-	if !pok || !iok { return }
-	return p, i, data[b + 1:], true
+	w, wok := strconv.parse_u64(data[a + 1:b])
+	i, iok := strconv.parse_u64(data[b + 1:c])
+	if !pok || !wok || !iok { return }
+	return p, w, i, data[c + 1:], true
 }
 
 // How near the window's edge a dragged tab leaves it (em): the system's drag starts there.
@@ -366,8 +368,8 @@ tab_drag_overlay :: proc(app: ^App, em: f32) {
 }
 
 // Between frames: a tab dragged out of the window (tab_out) as a drag of the system, carrying its path. Dropped on another
-// classeur window, it moves there; dropped back here, it stays (drop_answer took it); dropped anywhere else, it becomes
-// a window of its own (classeur --window <path>), unless it is the window's only tab.
+// classeur window, it moves there; dropped back here, it stays (drop_answer took it); dropped anywhere else, it opens in
+// a new in-process window sharing host.Shared, unless it is the window's only tab.
 tab_out_run :: proc(app: ^App) {
 	id := app.tab_out
 	if id == 0 { return }
@@ -376,7 +378,7 @@ tab_out_run :: proc(app: ^App) {
 	if t == nil { return }
 	path := strings.clone(t.path, context.temp_allocator)
 	data: platform.Drag_Data
-	append(&data.custom, platform.Drag_Entry{TAB_MIME, tab_mime_data(os.get_pid(), id, path)})
+	append(&data.custom, platform.Drag_Entry{TAB_MIME, tab_mime_data(os.get_pid(), app.window_id, id, path)})
 	// (no text in it: a program that takes a text with Move would close the tab and open no window)
 	defer { delete(data.custom) }
 	// (its picture under the pointer, where it was held)
@@ -396,83 +398,90 @@ tab_out_run :: proc(app: ^App) {
 		if !alone { if q := find_tab(app, id); q != nil { tab_window(app, q) } }
 		return
 	}
-	// (the window's only tab taken by another classeur window: this one has nothing left to show)
-	if alone {
-		if !app.headless { platform.request_close(app.main.win) }
-		return
-	}
-	for p in app.panels {
-		for q, i in p.tabs { if q.id == id { tab_close(app, p, i); app_frames(app); return } }
-	}
-}
-
-// A window of its own on a tab (this program again, standalone: classeur --window <path>), started on a worker: a start
-// may wait. The tab closes when it has started (tab_window_done); a failure is said and the tab stays. Headless (the
-// tests), nothing starts: it is noted in `app.opened` at once, the worker runs all the same (app.window_fails: it fails).
-tab_window :: proc(app: ^App, t: ^Tab) {
-	if t.tearing { return }   // (torn again while its window starts: one window)
-	t.tearing = true
-	if app.headless { append(&app.opened, strings.concatenate({"window:", t.path})) }
-	job := new(Tab_Window)
-	job^ = {app = app, tab = t.id, exe = strings.clone(app.exe), path = strings.clone(t.path), headless = app.headless, fails = app.window_fails}
-	tasks.add(&app.pool, tab_window_run, job)
-	app_frames(app)
-}
-
-@(private = "file")
-Tab_Window :: struct {
-	app:      ^App,
-	tab:      u64,      // the tab's id (it may be moved or closed meanwhile: found again)
-	exe:      string,   // owned
-	path:     string,   // owned
-	headless: bool,     // nothing starts (the tests) ...
-	fails:    bool,     // ... and it fails
-	ok:       bool,     // the worker's answer
-}
-
-@(private = "file")
-tab_window_run :: proc(data: rawptr) {
-	job := (^Tab_Window)(data)
-	job.ok = job.headless ? !job.fails : setup.launch(job.exe, {"--window", job.path})
-	sync.atomic_store(&job.app.launched_on, sync.current_thread_id())
-	if !ui.post(&job.app.main.state, tab_window_done, job) { tab_window_free(job) }
-}
-
-// On the interface's thread: started, the tab leaves this window (unless it is the window's only tab by now); not, it
-// stays and the failure is said.
-@(private = "file")
-tab_window_done :: proc(data: rawptr, word: u64) {
-	job := (^Tab_Window)(data)
-	defer tab_window_free(job)
-	app := job.app
-	if !job.ok { say(app, i18n.tr("No window could be started.")) }
-	alone := len(app.panels) == 1 && len(app.panels[0].tabs) == 1
+	// Park the detached tab on the hub so a target window in this process adopts it directly without re-reading the disk.
 	for p in app.panels {
 		for q, i in p.tabs {
-			if q.id != job.tab { continue }
-			q.tearing = false
-			if job.ok && !alone { tab_close(app, p, i) }
-			app_frames(app)
+			if q.id != id { continue }
+			if app.hub != nil {
+				hub_handoff_clear(app.hub)
+				app.hub.handoff = tab_detach(app, p, i)
+				app.hub.handoff_id = id
+				app.hub.handoff_from = app.window_id
+				app.hub.handoff_ttl = HANDOFF_TTL_ROUNDS
+			} else if !alone {
+				tab_close(app, p, i)
+			}
+			if alone {
+				if !app.headless { platform.request_close(app.main.win) }
+			} else {
+				app_frames(app)
+			}
 			return
 		}
 	}
+}
+
+// Moves tab `t` into a new in-process window sharing host.Shared (no OS process spawn, no graphics device init, no
+// folder re-read). On failure, the tab stays and an error is shown.
+tab_window :: proc(app: ^App, t: ^Tab) {
+	if len(app.panels) == 1 && len(app.panels[0].tabs) == 1 { return }
+	if app.window_fails {
+		say(app, i18n.tr("No window could be started."))
+		app_frames(app)
+		return
+	}
+	pi, ti := -1, -1
+	find: for p, p_idx in app.panels {
+		for q, t_idx in p.tabs {
+			if q == t { pi, ti = p_idx, t_idx; break find }
+		}
+	}
+	if pi < 0 { return }
+	p := app.panels[pi]
+	if app.hub == nil {
+		if app.headless { append(&app.opened, strings.concatenate({"window:", t.path})) }
+		tab_close(app, p, ti)
+		app_frames(app)
+		return
+	}
+	below := p.below
+	detached := tab_detach(app, p, ti)
+	if detached == nil { return }
+	sz: [2]int
+	if app.window_px.x > 0 && app.window_px.y > 0 {
+		scale := max(app.main.win.dpi_scale, 0.5)
+		sz = {int(app.window_px.x / scale + 0.5), int(app.window_px.y / scale + 0.5)}
+	}
+	w := hub_open_window(app.hub, {tab = detached, home = app.home, standalone = true, headless = app.headless, size = sz})
+	if w == nil {
+		// Restore the detached tab into its panel if the window could not open.
+		if pi >= len(app.panels) {
+			restored := new(Panel)
+			restored.below = below
+			append(&app.panels, restored)
+			append(&restored.tabs, detached)
+			restored.active = 0
+		} else {
+			dest := app.panels[pi]
+			at := min(ti, len(dest.tabs))
+			inject_at(&dest.tabs, at, detached)
+			dest.active = at
+		}
+		say(app, i18n.tr("No window could be started."))
+		app_frames(app)
+		return
+	}
+	if app.headless { append(&app.opened, strings.concatenate({"window:", detached.path})) }
 	app_frames(app)
 }
 
-@(private = "file")
-tab_window_free :: proc(job: ^Tab_Window) {
-	delete(job.exe)
-	delete(job.path)
-	free(job)
-}
-
 // A tab of a classeur window dropped here (Drop_* with TAB_MIME): it goes to the panel under the pointer. From this window
-// itself: moved there; from another: opened there (the other closes its own).
+// itself: moved there; from another window of this process: adopted directly; from another process: opened there.
 tab_drop :: proc(app: ^App, data: ^platform.Drag_Data, pos: [2]f32, kind: platform.Event_Kind) -> (effect: Maybe(platform.Drop_Effect), is_tab: bool) {
-	pid, id, path := 0, u64(0), ""
+	pid, win_id, id, path := 0, u64(0), u64(0), ""
 	for e in data.custom {
 		if e.mime != TAB_MIME { continue }
-		if p, i, at, ok := tab_mime_parse(e.data); ok { pid, id, path = p, i, at }
+		if p, w, i, at, ok := tab_mime_parse(e.data); ok { pid, win_id, id, path = p, w, i, at }
 	}
 	// (Linux reads the data at the drop only: before it, a tab is told by its type, and taken)
 	if kind != .Drop && path == "" && slice.contains(platform.drop_types(app.main.win), TAB_MIME) {
@@ -480,16 +489,17 @@ tab_drop :: proc(app: ^App, data: ^platform.Drag_Data, pos: [2]f32, kind: platfo
 		return .Move, true
 	}
 	if path == "" { return nil, false }
+	same_window := pid == os.get_pid() && win_id == app.window_id
 	// (over the window: its ghost where it would land, its folder known on Windows)
 	if kind != .Drop {
-		tab_coming(app, pos, pid == os.get_pid() ? "" : path)
+		tab_coming(app, pos, same_window ? "" : path)
 		return .Move, true
 	}
 	tab_coming_end(app)
 	panel, at := app.focus, -1
 	if to, place, _, ok := tab_drop_place(app, pos, own = false); ok { panel, at = to, place }
 	panel = clamp(panel, 0, len(app.panels) - 1)
-	if pid == os.get_pid() {
+	if same_window {
 		// (our own tab back home: that very tab moved to that panel, or left where it was)
 		app.tab_out_home = true
 		for p, pi in app.panels {
@@ -500,7 +510,14 @@ tab_drop :: proc(app: ^App, data: ^platform.Drag_Data, pos: [2]f32, kind: platfo
 		return .Move, true
 	}
 	p := app.panels[panel]
-	tab_open(app, p, path, at >= 0 ? at : p.active + 1)
+	insert_at := at >= 0 ? at : p.active + 1
+	if pid == os.get_pid() && app.hub != nil && app.hub.handoff != nil && app.hub.handoff_id == id && app.hub.handoff_from == win_id {
+		adopted := app.hub.handoff
+		app.hub.handoff, app.hub.handoff_id, app.hub.handoff_from, app.hub.handoff_ttl = nil, 0, 0, 0
+		tab_adopt(app, p, adopted, insert_at)
+	} else {
+		tab_open(app, p, path, insert_at)
+	}
 	app.focus = panel
 	platform.raise_window(app.main.win)
 	return .Move, true

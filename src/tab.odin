@@ -43,7 +43,6 @@ Tab :: struct {
 	in_archive:   bool,              // the folder is an archive entered or a folder of one (read only), read with the folder
 	measured:     u64,               // the read whose folders were given to the measures
 	locked:       bool,
-	tearing:      bool,              // its window of its own starts on a worker (tab_window): closed when that lands
 	flat:         bool,              // the search of File Pilot: every entry under the folder, flattened
 	tree:         bool,              // the tree view: folders opened in place (tree_open), their entries under them
 	group:        Group_By,          // the rows grouped (the tab's; the folder follows it at each read)
@@ -515,6 +514,38 @@ tab_open :: proc(app: ^App, p: ^Panel, path: string, at := -1) {
 	i := at < 0 ? len(p.tabs) : min(at, len(p.tabs))
 	inject_at(&p.tabs, i, t)
 	p.active = i
+}
+
+// Moves an existing tab (from another window in this process) into panel `p` of `app`, keeping its loaded listing,
+// selection, scroll, history, filter, sort and zoom without re-reading the disk.
+tab_adopt :: proc(app: ^App, p: ^Panel, t: ^Tab, at := -1) {
+	if t.walk != nil {
+		sync.atomic_store(&t.walk.cancel, true)
+		t.walk = nil
+	}
+	app.next_tab_id += 1
+	t.id = app.next_tab_id
+	t.serial += 1
+	t.measured = 0
+	t.vl.key = 0
+	t.cols_key = 0
+	t.folder.group_tz = app.tz   // (the old window may close and destroy its tz)
+	i := at < 0 ? len(p.tabs) : min(at, len(p.tabs))
+	inject_at(&p.tabs, i, t)
+	p.active = i
+	// (a folder that had not finished reading in the old window reads here; one already loaded renders at once)
+	if !t.folder.loaded || t.loading { tab_load(app, t) }
+}
+
+// Detaches tab `i` from panel `p` without destroying it, closing `p` if it was its last tab and another panel exists.
+tab_detach :: proc(app: ^App, p: ^Panel, i: int) -> ^Tab {
+	if i < 0 || i >= len(p.tabs) { return nil }
+	t := p.tabs[i]
+	ordered_remove(&p.tabs, i)
+	if p.active >= len(p.tabs) { p.active = len(p.tabs) - 1 }
+	if p.active > i { p.active -= 1 }
+	if len(p.tabs) == 0 && len(app.panels) > 1 { panel_close(app, p) }
+	return t
 }
 
 tab_close :: proc(app: ^App, p: ^Panel, i: int) {

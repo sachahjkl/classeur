@@ -297,3 +297,10 @@ test_locations :: proc(t: ^testing.T) {
 	_, x := location_resolve("gopher://h/x", context.temp_allocator)
 	testing.expect_value(t, x, Location_Error.Not_A_Location)
 }
+
+@(test)
+test_network_devices_cancel :: proc(t: ^testing.T) {
+	cancel := true
+	devs := network_devices(context.temp_allocator, &cancel)
+	testing.expect_value(t, len(devs), 0)
+}

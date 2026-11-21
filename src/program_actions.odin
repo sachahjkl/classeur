@@ -5,13 +5,10 @@ package classeur
 
 import "core:fmt"
 import "core:strings"
-import "core:sync"
 import config "gt:config"
 import "gt:i18n"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
-import setup "gt:setup"
-import tasks "gt:tasks"
 import update "gt:update"
 import "gt:ui"
 
@@ -34,45 +31,22 @@ can_restart :: proc(app: ^App) -> bool { return !app.standalone }
 ////////////////////////////////
 // The window
 
-// A window of its own on the home folder, as a torn-off tab's (classeur --window), started on a worker: a start may wait.
-// Headless (the tests), nothing starts: it is noted in `app.opened`.
+// A new in-process window on the home folder, sharing host.Shared with this window.
 act_app_new_window :: proc(app: ^App) {
+	if app.window_fails {
+		say(app, i18n.tr("No window could be started."))
+		app_frames(app)
+		return
+	}
+	if app.hub != nil {
+		if hub_open_window(app.hub, {folders = {app.home}, home = app.home, standalone = true, headless = app.headless}) == nil {
+			say(app, i18n.tr("No window could be started."))
+			app_frames(app)
+			return
+		}
+	}
 	if app.headless { append(&app.opened, strings.concatenate({"window:", app.home})) }
-	job := new(New_Window)
-	job^ = {app = app, exe = strings.clone(app.exe), path = strings.clone(app.home), headless = app.headless}
-	tasks.add(&app.pool, new_window_run, job)
-}
-
-@(private = "file")
-New_Window :: struct {
-	app:      ^App,
-	exe:      string,   // owned
-	path:     string,   // owned
-	headless: bool,
-}
-
-@(private = "file")
-new_window_run :: proc(data: rawptr) {
-	job := (^New_Window)(data)
-	ok := job.headless || setup.launch(job.exe, {"--window", job.path})
-	sync.atomic_store(&job.app.launched_on, sync.current_thread_id())
-	if ok || !ui.post(&job.app.main.state, new_window_failed, job) { new_window_free(job) }
-}
-
-// On the interface's thread: why no window came.
-@(private = "file")
-new_window_failed :: proc(data: rawptr, word: u64) {
-	job := (^New_Window)(data)
-	defer new_window_free(job)
-	say(job.app, i18n.tr("No window could be started."))
-	app_frames(job.app)
-}
-
-@(private = "file")
-new_window_free :: proc(job: ^New_Window) {
-	delete(job.exe)
-	delete(job.path)
-	free(job)
+	app_frames(app)
 }
 
 act_app_minimize :: proc(app: ^App) { platform.minimize(app.main.win) }

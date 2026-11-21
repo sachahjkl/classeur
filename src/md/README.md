@@ -9,8 +9,9 @@ alternatives, the subtle points. The map of the code (packages, files, threads, 
 
 ## Overview
 
-- One process, one window per person (`gt:instance`). The interface is built again at every frame from the program's
-  data; the data changes only on the interface's thread.
+- One process per person (`gt:instance`), holding one or more windows on a shared `host.Shared` (`App_Hub`: one graphics
+  device, one font atlas, one theme; see [features/windows.md](features/windows.md)). The interface is built again at
+  every frame from each window's data; the data changes only on the interface's thread.
 - `src/fs` is the file system with one interface on every system. The interface (`src/*.odin`) never says which system
   it runs on: `classeurtool check` refuses `ODIN_OS` outside `src/fs` and `src/system_<os>.odin`.
 - Workers (`gt:tasks` pools in `App`) do every read and write; a task gets a copy of what it needs and posts its result
@@ -68,5 +69,8 @@ alternatives, the subtle points. The map of the code (packages, files, threads, 
   folders), what reads on the workers, what each choice does, the buttons go to reaches, the commands with arguments
 - [features/goto.md](features/goto.md): GoTo and the path field: one set of rows, the deep search below the current
   folder (the index read on a worker, the matches on a worker, the serial), why a click on the toolbar opens no dialog
+- [features/windows.md](features/windows.md): in-process multi-window (`App_Hub` sharing `host.Shared`), instant tab
+  extraction that moves the `^Tab` directly, preloaded graphics device at startup, and instant close (`host.host_hide`,
+  cancellable mDNS discovery, direct `tasks.stop`)
 - [data/folder.md](data/folder.md): a folder as a panel shows it: the selection as flags, the worker that prepares the
   order, the serial of a read, edits in order

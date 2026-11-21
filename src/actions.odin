@@ -150,7 +150,12 @@ launch_run :: proc(data: rawptr) {
 	ok := true
 	if !l.headless {
 		switch l.kind {
-		case .Open:      ok = platform.open_path(l.path)
+		case .Open:
+			if strings.has_prefix(l.path, "http://") || strings.has_prefix(l.path, "https://") {
+				ok = platform.open_url(l.path)
+			} else {
+				ok = platform.open_path(l.path)
+			}
 		case .Open_With: ok = desktop.open_with(l.path, l.id)
 		case .Terminal:  ok = desktop.open_terminal(l.path)
 		}

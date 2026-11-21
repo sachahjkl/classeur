@@ -55,9 +55,18 @@ make_fixture :: proc(t: ^testing.T, files: []string) -> string {
 // (shared by the tests of the package: each file of tests uses it)
 start :: proc(t: ^testing.T, folders: []string, size := [2]int{}, home := "", session_at := "", loc := #caller_location) -> (s: ^session.Session, app: ^App) {
 	context.allocator = runtime.heap_allocator()
-	app = app_open({folders = folders, headless = true, size = size, home = home, session = session_at})
-	if !testing.expect(t, app != nil, "classeur opens", loc = loc) { session.stop_test(t, "no application", loc) }
-	testing.cleanup(t, proc(p: rawptr) { app_close((^App)(p)) }, app)
+	hub := new(App_Hub)
+	app = hub_open_window(hub, {folders = folders, headless = true, size = size, home = home, session = session_at}, show = false)
+	if !testing.expect(t, app != nil, "classeur opens", loc = loc) {
+		hub_destroy(hub)
+		free(hub)
+		session.stop_test(t, "no application", loc)
+	}
+	testing.cleanup(t, proc(p: rawptr) {
+		h := (^App_Hub)(p)
+		hub_destroy(h)
+		free(h)
+	}, hub)
 	s = session.attach(t, {win = app.main.win, state = &app.main.state, renderer = &app.shared.r, user = app, allocator = context.allocator,
 		frame = proc(user: rawptr) { app_frame((^App)(user)) }}, loc)
 	wait_read(s)
@@ -1374,7 +1383,7 @@ test_tab_out :: proc(t: ^testing.T) {
 		// a tab of another window dropped on this one's tab row: opened here
 		photos := fs.join(dir, "Photos", context.temp_allocator)
 		data: platform.Drag_Data
-		append(&data.custom, platform.Drag_Entry{TAB_MIME, tab_mime_data(1, 7, photos)})   // (another process's tab)
+		append(&data.custom, platform.Drag_Entry{TAB_MIME, tab_mime_data(1, 9, 7, photos)})   // (another process's tab)
 		defer delete(data.custom)
 		at := (app.tab_rects_last[0].rect.min + app.tab_rects_last[0].rect.max) * 0.5
 		// (past the first tab's middle: after it; its ghost there while it is over the row)
@@ -2028,14 +2037,15 @@ test_tab_drag_feedback :: proc(t: ^testing.T) {
 @(test)
 test_tab_mime :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
-		pid, id, path, ok := tab_mime_parse(tab_mime_data(42, 7, `C:\Users\me\Documents`))
+		pid, win, id, path, ok := tab_mime_parse(tab_mime_data(42, 3, 7, `C:\Users\me\Documents`))
 		testing.expect(t, ok)
 		testing.expect_value(t, pid, 42)
+		testing.expect_value(t, win, u64(3))
 		testing.expect_value(t, id, u64(7))
 		testing.expect_value(t, path, `C:\Users\me\Documents`)
-		_, _, _, ok = tab_mime_parse("/home/me")
+		_, _, _, _, ok = tab_mime_parse("/home/me")
 		testing.expect(t, !ok, "no process, no id")
-		_, _, _, ok = tab_mime_parse("x:y:/home/me")
+		_, _, _, _, ok = tab_mime_parse("x:y:z:/home/me")
 		testing.expect(t, !ok, "not numbers")
 		// the icons' sizes: the next one up, the largest past it
 		testing.expect_value(t, icon_size_for(22), 24)
@@ -2614,7 +2624,7 @@ test_tab_ghost_narrow :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		photos := fs.join(dir, "Photos", context.temp_allocator)
 		data: platform.Drag_Data
-		append(&data.custom, platform.Drag_Entry{TAB_MIME, tab_mime_data(1, 7, photos)})
+		append(&data.custom, platform.Drag_Entry{TAB_MIME, tab_mime_data(1, 9, 7, photos)})
 		defer delete(data.custom)
 		last := app.tab_rects_last[len(app.tab_rects_last) - 1].rect
 		at := [2]f32{last.max.x - 3, (last.min.y + last.max.y) * 0.5}

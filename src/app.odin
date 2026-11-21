@@ -9,7 +9,6 @@ import "core:log"
 import vmem "core:mem/virtual"
 import "core:strings"
 import "core:sync"
-import "core:thread"
 import "core:time"
 import "core:time/datetime"
 import "core:time/timezone"
@@ -32,8 +31,28 @@ import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
+// Process-wide shared state for every window open in this classeur process: one graphics device, font atlas, theme and
+// draw context (`shared`), and the list of open windows. A torn-off tab or New window opens a new window on this hub
+// instead of spawning a new OS process.
+App_Hub :: struct {
+	shared:         host.Shared,
+	icons:          font.Font_Id,   // Lucide icons font, loaded once into shared.fonts
+	mono:           font.Font_Id,   // monospace font, loaded once into shared.fonts
+	lock:           sync.Mutex,     // guards `windows` against the single-instance server thread (app_message)
+	windows:        [dynamic]^App,
+	next_window_id: u64,
+	handoff:        ^Tab,           // detached tab from a same-process drag to another window, claimed by tab_drop
+	handoff_id:     u64,
+	handoff_from:   u64,
+	handoff_ttl:    int,            // loop rounds left before an unclaimed handoff (e.g. dropped on another process) is freed
+	launch_after:   string,         // owned: Restart command run once the last window closes
+}
+
 App :: struct {
-	shared:      host.Shared,
+	shared_own:  host.Shared,       // used when opened without an App_Hub (standalone tests)
+	shared:      ^host.Shared,      // points to &hub.shared or &shared_own
+	hub:         ^App_Hub,          // the process's windows (nil in single-window tests)
+	window_id:   u64,               // unique within the process (same-process tab drag)
 	main:        host.Host,
 	icons:       font.Font_Id,      // Lucide: the thin icons of the bars' buttons
 	mono:        font.Font_Id,      // classeur's own monospace face (Standard_Targets.faces; drawn: ui.mono_font())
@@ -191,6 +210,7 @@ App :: struct {
 	devices_asked: u64,             // the last search asked (an older answer is dropped)
 	devices_searching: bool,        // a search runs
 	devices_seen_open: bool,        // the Network section was open at the last build (opened again: a new search)
+	network_cancel: bool,           // atomic: cancels in-flight mDNS discovery when the window closes
 	side_device_uris: [dynamic]string,   // owned: their URIs
 	session_seen:    string,        // owned: the session's text at its last change (session_autosave waits for it to settle)
 	session_changed_ms: f64,        // when it changed
@@ -207,24 +227,93 @@ App :: struct {
 }
 
 WINDOW_SIZE :: [2]int{1180, 720}
-
-// The window of this process (none in the tests): what a second start's message opens its folders in.
-global_app: ^App
+// Rounds a parked cross-window tab survives before an unclaimed drop (to another process) is freed: two rounds ensure
+// a target window earlier in hub.windows still claims it on the next round.
+HANDOFF_TTL_ROUNDS :: 2
 
 Open_Options :: struct {
-	folders:  []string,   // a tab for each (none: the home folder)
-	headless: bool,       // no window of the system: offscreen, the software renderer, the fonts compiled in (the tests)
-	size:     [2]int,     // 0: WINDOW_SIZE
-	home:     string,     // "": the person's (the tests give theirs)
-	session:  string,     // the session file ("": the person's; headless: none)
-	standalone: bool,     // a window of a torn-off tab: no session read or written
-	pref_args: []string,  // the command line's `--pref name=value`: for this run only, over the person's file
+	hub:        ^App_Hub, // process-wide shared host and windows (nil: standalone single-window test)
+	folders:    []string, // a tab for each (none: the home folder)
+	tab:        ^Tab,     // an existing tab moved from another window in this process (nil: open `folders`)
+	headless:   bool,     // no window of the system: offscreen, the software renderer, the fonts compiled in (the tests)
+	size:       [2]int,   // 0: WINDOW_SIZE
+	home:       string,   // "": the person's (the tests give theirs)
+	session:    string,   // the session file ("": the person's; headless: none)
+	standalone: bool,     // a secondary or torn-off window: no session read or written
+	pref_args:  []string, // the command line's `--pref name=value`: for this run only, over the person's file
 	start_gate: ^sync.Sema,   // the tests: the start's read of the session waits until it is posted (nil: it does not)
 }
 
-// `standalone`: a window of a tab torn off another (classeur --window): it owns nothing (no instance, no session).
+// Opens a window on `hub`, registers it, and shows it (when not headless).
+hub_open_window :: proc(hub: ^App_Hub, o: Open_Options, show := true) -> ^App {
+	opts := o
+	opts.hub = hub
+	app := app_open(opts)
+	if app == nil { return nil }
+	{
+		sync.mutex_guard(&hub.lock)
+		append(&hub.windows, app)
+	}
+	if show && !app.headless {
+		platform.show_window(app.main.win)
+		platform.raise_window(app.main.win)
+	}
+	return app
+}
+
+// Closes window `index` of `hub`: saves placement and hides it immediately so it leaves the screen before cleanup,
+// stops the single-instance server when it is the last window, then tears down its resources.
+hub_close_window :: proc(hub: ^App_Hub, index: int, server: ^^instance.Server = nil) {
+	w := hub.windows[index]
+	if !w.headless {
+		prefs_page.placement_keep(&w.placement, &w.prefs, w.main.win)
+		host.host_hide(&w.main)
+	}
+	if len(hub.windows) == 1 && server != nil && server^ != nil {
+		instance.serve_stop(server^)
+		server^ = nil
+	}
+	if w.launch_after != "" {
+		delete(hub.launch_after)
+		hub.launch_after = strings.clone(w.launch_after)
+	}
+	{
+		sync.mutex_guard(&hub.lock)
+		ordered_remove(&hub.windows, index)
+	}
+	updates_stop(w)
+	prefs_page.install_end(&w.install)
+	prefs_page.changelog_destroy(&w.changelog)
+	prefs_page.install_launch(&w.install)
+	app_close(w)
+}
+
+// Discards an unclaimed detached tab parked during a cross-window drag (e.g. dropped on another process).
+hub_handoff_clear :: proc(hub: ^App_Hub) {
+	if hub == nil || hub.handoff == nil { return }
+	tab_destroy(hub.handoff)
+	hub.handoff, hub.handoff_id, hub.handoff_from, hub.handoff_ttl = nil, 0, 0, 0
+}
+
+// Counts down a parked handoff tab so a target window earlier in hub.windows still claims it on the next round.
+hub_handoff_tick :: proc(hub: ^App_Hub) {
+	if hub == nil || hub.handoff == nil { return }
+	hub.handoff_ttl -= 1
+	if hub.handoff_ttl <= 0 { hub_handoff_clear(hub) }
+}
+
+// Closes any remaining windows (secondary windows first so the offscreen first window closes last in headless tests).
+hub_destroy :: proc(hub: ^App_Hub) {
+	hub_handoff_clear(hub)
+	for len(hub.windows) > 0 { hub_close_window(hub, len(hub.windows) - 1) }
+	delete(hub.windows)
+	delete(hub.launch_after)
+	hub^ = {}
+}
+
+// `standalone`: a window started with `classeur --window`: it owns no single instance and no session.
 app_run :: proc(folders: []string, setup_asked := false, standalone := false, pref_args: []string = nil) -> cli.Exit {
-	// one window per person: a second start hands its folders to the first, which opens them in tabs, and ends
+	// one process per person: a second start hands its folders to the first, which opens them in tabs, and ends
 	outcome := instance.Outcome.Other_Instance
 	owner: instance.Owner
 	if !standalone {
@@ -233,10 +322,12 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false, pr
 		outcome, owner = instance.acquire({name = app_instance_name()}, transmute([]u8)message)
 		if outcome == .Forwarded { return .Done }
 	}
+	// Start loading the graphics driver on a worker thread while user dirs, logging, time zone and window setup run.
+	_ = render.preload_device()
 	// (a window's process only: a second start forwarded above writes nothing)
 	// (the folders under the old name moved once into the vendor's, before anything reads them: the log's included)
 	_, moved_why := platform.user_dirs_move(APP_NAME, APP_FOLDER)
-	// (the session's mark: the main window's alone, a torn-off one's process ends with its tab)
+	// (the session's mark: the main window's alone, a --window process ends on its own)
 	program := host.program_start({name = APP_NAME, folder = APP_FOLDER, version = APP_VERSION, no_session = standalone})
 	program_logger = program.logger
 	context.logger = program.logger
@@ -246,14 +337,17 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false, pr
 		host.program_end(&program)
 	}
 	if moved_why != "" { log.warnf("classeur: the settings' folder stays under its old name: %s", moved_why) }
-	app := app_open({folders = folders, standalone = standalone, pref_args = pref_args})
+	hub: App_Hub
+	defer hub_destroy(&hub)
+	app := hub_open_window(&hub, {folders = folders, standalone = standalone, pref_args = pref_args}, show = false)
 	if app == nil {
+		render.release_preloaded_device()
 		if outcome == .First { instance.owner_stop(&owner) }
 		return .Failed
 	}
 	crash_bar.init(&app.crash_bar, program.last_crash)
 	server: ^instance.Server
-	if outcome == .First { server = instance.serve_start(owner, app_message, app) }
+	if outcome == .First { server = instance.serve_start(owner, app_message, &hub) }
 	platform.show_window(app.main.win)
 	// (the install read on a task; offered at the start on Windows. The tests read nothing of the person's)
 	if !app.headless { prefs_page.install_offer(&app.install, &app.main.state, offer = SETUP_AT_START && !setup_asked) }
@@ -261,19 +355,24 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false, pr
 	app.changelog.english = CHANGELOG
 	if !app.headless { prefs_page.changelog_after_update(&app.changelog, &app.prefs, APP_VERSION, &app.announcer, proc(user: rawptr) { options_show((^App)(user), prefs_page.CHANGELOG_PAGE) }, app) }
 	if setup_asked && !app.headless { prefs_page.install_open(&app.install) }
-	if !standalone { updates_start(app) }   // (one updater: the main window's; a torn-off one leaves the file alone)
-	for !platform.is_closed(app.main.win) {
-		host.hosts_wait({&app.main})
-		app_frame(app)
+	if !standalone { updates_start(app) }   // (one updater: the main window's; secondary windows leave the file alone)
+	for len(hub.windows) > 0 {
+		hosts := make([dynamic]^host.Host, 0, len(hub.windows), context.temp_allocator)
+		for w in hub.windows { append(&hosts, &w.main) }
+		host.hosts_wait(hosts[:])
+		for i := 0; i < len(hub.windows); i += 1 {
+			w := hub.windows[i]
+			if !platform.is_closed(w.main.win) { app_frame(w) }
+		}
+		hub_handoff_tick(&hub)
+		for i := 0; i < len(hub.windows); {
+			w := hub.windows[i]
+			if !platform.is_closed(w.main.win) { i += 1; continue }
+			hub_close_window(&hub, i, &server)
+		}
 	}
-	updates_stop(app)
-	instance.serve_stop(server)
-	launch := strings.clone(app.launch_after, context.temp_allocator)
-	// (the window is closed and the instance let go: the installed copy the install opened may start now)
-	prefs_page.install_end(&app.install)
-	prefs_page.changelog_destroy(&app.changelog)
-	prefs_page.install_launch(&app.install)
-	app_close(app)
+	if server != nil { instance.serve_stop(server) }
+	launch := strings.clone(hub.launch_after, context.temp_allocator)
 	if !standalone { fs.archive_take_out_clear() }   // (what was opened out of archives: the main window's to remove)
 	// (Restart after an update: it starts once this one let go of the instance)
 	if launch != "" { _ = setup.launch(launch) }
@@ -315,35 +414,57 @@ app_message_read :: proc(text: string) -> (token: string, folders: []string) {
 	return token, list[:]
 }
 
+@(private = "file")
+Message_Open :: struct {
+	hub:  ^App_Hub,
+	text: string,   // owned
+}
+
 // A second start's folders, or the toolkit's messages (--status, --quit), on the instance's thread: what acts is handed
 // to the interface's. (Not private: the tests deliver messages to it.)
 app_message :: proc(user: rawptr, message: []byte) {
-	app := (^App)(user)
+	hub := (^App_Hub)(user)
+	if hub == nil { return }
 	switch string(message) {
 	case instance.MESSAGE_PING: return   // (the answer alone tells --status that classeur runs)
 	case instance.MESSAGE_QUIT:
-		// The window belongs to the interface's thread: Quit runs there, so the end saves the session as Ctrl+Q does.
-		ui.post(&app.main.state, app_message_quit, app)
+		sync.mutex_guard(&hub.lock)
+		if len(hub.windows) == 0 { return }
+		// The windows belong to the interface's thread: Quit runs there, so the end saves the session as Ctrl+Q does.
+		_ = ui.post(&hub.windows[0].main.state, app_message_quit, hub)
 		return
 	}
-	text := strings.clone(string(message))
-	if !ui.post(&app.main.state, app_message_open, rawptr(raw_data(text)), u64(len(text))) { delete(text) }
+	sync.mutex_guard(&hub.lock)
+	if len(hub.windows) == 0 { return }
+	msg := new(Message_Open)
+	msg^ = {hub = hub, text = strings.clone(string(message))}
+	if !ui.post(&hub.windows[0].main.state, app_message_open, msg) {
+		delete(msg.text)
+		free(msg)
+	}
 }
 
-// An installer's --quit: the same end as the Quit command (app_run's loop ends, the session saved, the workers stopped).
+// An installer's --quit: closes every window in the process so it exits cleanly with its session saved.
 @(private = "file")
-app_message_quit :: proc(data: rawptr, word: u64) { act_app_quit((^App)(data)) }
+app_message_quit :: proc(data: rawptr, word: u64) {
+	hub := (^App_Hub)(data)
+	for w in hub.windows { act_app_quit(w) }
+}
 
-// The folders of a second start, each in a new tab of the panel with the keyboard (none: the home folder); the window
-// comes to the front.
+// The folders of a second start, each in a new tab of the active (or first) window; the window comes to the front.
 @(private = "file")
 app_message_open :: proc(data: rawptr, word: u64) {
-	text := string(([^]u8)(data)[:word])
-	defer delete(text)
-	app := global_app
-	if app == nil { return }
+	msg := (^Message_Open)(data)
+	defer {
+		delete(msg.text)
+		free(msg)
+	}
+	hub := msg.hub
+	if hub == nil || len(hub.windows) == 0 { return }
+	app := hub.windows[0]
+	for w in hub.windows { if w.main.win != nil && w.main.win.active { app = w; break } }
 	p := current_panel(app)
-	token, folders := app_message_read(text)
+	token, folders := app_message_read(msg.text)
 	folders_show(app, folders)
 	if len(folders) == 0 { tab_open(app, p, app.home, p.active + 1) }
 	platform.raise_window_token(app.main.win, token)
@@ -353,7 +474,16 @@ app_message_open :: proc(data: rawptr, word: u64) {
 // Opens the window and its first tabs. nil: no window (said why).
 app_open :: proc(o: Open_Options) -> ^App {
 	app := new(App)
-	if !o.headless { global_app = app }
+	app.hub = o.hub
+	if o.hub != nil {
+		app.shared = &o.hub.shared
+		o.hub.next_window_id += 1
+		app.window_id = o.hub.next_window_id
+	} else {
+		app.shared = &app.shared_own
+		app.window_id = 1
+	}
+	first_window := app.shared.main == nil
 	app.headless = o.headless
 	app.system_thumbs = !o.headless
 	app.session_path = strings.clone(o.session)
@@ -364,8 +494,12 @@ app_open :: proc(o: Open_Options) -> ^App {
 
 	platform.set_app_id(APP_NAME)
 	size := o.size != {} ? o.size : WINDOW_SIZE
-	if !host.host_open(&app.main, &app.shared, {title = APP_TITLE, size = size, integrated_title = !o.headless, headless = o.headless}, view_build, app) {
+	if !host.host_open(&app.main, app.shared, {title = APP_TITLE, size = size, integrated_title = !o.headless, headless = o.headless}, view_build, app) {
 		log.error("classeur: no window")
+		delete(app.session_path)
+		delete(app.exe)
+		delete(app.home)
+		if app.tz != nil { timezone.region_destroy(app.tz) }
 		free(app)
 		return nil
 	}
@@ -379,8 +513,13 @@ app_open :: proc(o: Open_Options) -> ^App {
 	// (its mode: general.messages, settings_apply; its toasts this window's, also for a message said between builds)
 	app.announcer.state = &h.state
 	if !o.headless { app.announcer.window = win }
-	app.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
-	app.mono, _ = font.load_embedded(&app.shared.fonts, font.FALLBACK_MONO_DATA)
+	if first_window {
+		app.icons, _ = font.load_embedded(&app.shared.fonts, lucide.DATA)
+		app.mono, _ = font.load_embedded(&app.shared.fonts, font.FALLBACK_MONO_DATA)
+		if o.hub != nil { o.hub.icons, o.hub.mono = app.icons, app.mono }
+	} else if o.hub != nil {
+		app.icons, app.mono = o.hub.icons, o.hub.mono
+	}
 	h.state.icon_font = app.icons   // (the menus' icons are the commands' Lucide ones; the widgets keep the toolkit's marks)
 	views_start(app)
 	dnd_start(app)
@@ -392,8 +531,10 @@ app_open :: proc(o: Open_Options) -> ^App {
 	prefs_page.install_vendor_mark(&app.install, &app.shared.r, #load("../assets/froment-software-64.png"))
 	h.params = app_params
 	h.input = app_input
-	app.devtools = devtools.start_from_env(win, APP_NAME)
-	h.before_input = proc(h: ^host.Host) { app := (^App)(h.user); devtools.service(app.devtools, &h.state, &app.shared.r) }
+	if first_window {
+		app.devtools = devtools.start_from_env(win, APP_NAME)
+		h.before_input = proc(h: ^host.Host) { app := (^App)(h.user); devtools.service(app.devtools, &h.state, &app.shared.r) }
+	}
 
 	pools_start(app)
 	licence_open(app)
@@ -405,13 +546,15 @@ app_open :: proc(o: Open_Options) -> ^App {
 	// (the files written as the window runs: their paths known now, a test's included)
 	if path := session_file(app); path != "" { store.writer_open(&app.session_writer, path) }
 	if path := layouts_file(app); path != "" { store.writer_open(&app.layouts_writer, path) }
-	// (the window where it was: the toolkit's window.placement)
-	if !app.headless { prefs_page.placement_restore(&app.placement, &app.prefs, app.main.win) }
+	// (the window where it was: the toolkit's window.placement; secondary windows let the compositor place them)
+	if !app.headless && !app.standalone { prefs_page.placement_restore(&app.placement, &app.prefs, app.main.win) }
 	// The start's tabs at once: the session's come back when a worker has read them (start_read_done), so a settings'
 	// folder on a share that does not answer never keeps the window from opening.
 	first := new(Panel)
 	append(&app.panels, first)
-	if len(o.folders) == 0 {
+	if o.tab != nil {
+		tab_adopt(app, first, o.tab)
+	} else if len(o.folders) == 0 {
 		tab_open(app, first, app.home)
 	} else {
 		for f in o.folders { tab_open(app, first, f) }
@@ -477,20 +620,16 @@ pools_start :: proc(app: ^App) {
 	tasks.start(&app.edit_pool, {threads = 1})
 }
 
-// Stops a pool, the work that waits dropped (its memory goes with the process), and waits for its threads until
-// `until`. A read of a share that hangs never ends and tasks.stop joins it: the stop runs on a thread of its own, and
-// one still running then is left to the process's end. False: the pool's threads may still read the App.
+// Stops a pool, dropping queued work, waiting on its condition variable at most until `until`. False when a hung task
+// still runs at the deadline (its thread and App memory are left to process exit).
 @(private = "file")
 pool_stop_until :: proc(p: ^tasks.Pool, until: time.Tick) -> bool {
-	stopper := thread.create_and_start_with_data(p, proc(data: rawptr) { tasks.stop((^tasks.Pool)(data), proc(data: rawptr) {}) })
-	for !thread.is_done(stopper) && time.tick_diff(time.tick_now(), until) > 0 { time.sleep(2 * time.Millisecond) }
-	if !thread.is_done(stopper) { return false }
-	thread.join(stopper)
-	thread.destroy(stopper)
-	return true
+	left := max(time.tick_diff(time.tick_now(), until), time.Millisecond)
+	return tasks.stop(p, proc(data: rawptr) {}, left)
 }
 
 app_close :: proc(app: ^App) {
+	sync.atomic_store(&app.network_cancel, true)
 	watcher_stop(app)
 	jobs_stop(app)
 	// the walks and the measures running end at their next folder; no tab points to its walk any more (its job is
@@ -505,12 +644,12 @@ app_close :: proc(app: ^App) {
 	deep_reset(app)   // (the deep search's walk ends at its next folder)
 	// (from now a worker's result is refused, the worker frees it; a worker never waits for room in the queue)
 	ui.post_close(&app.main.state)
-	// A read of a share that hangs never ends, and a thread cannot be joined with a time limit: the workers get until
-	// QUIT_WAIT_MS, then one still in its task is left to the process's end. It still reads the App: then it is not freed.
+	// A read of a share that hangs never ends: the workers get until QUIT_WAIT_MS, then one still in its task is left
+	// to the process's end. It still reads the App: then it is not freed.
 	until := time.tick_add(time.tick_now(), QUIT_WAIT_MS * time.Millisecond)
 	reads_ended := pool_stop_until(&app.pool, until)
 	edits_ended := pool_stop_until(&app.edit_pool, until)
-	if !app.headless { prefs_page.placement_keep(&app.placement, &app.prefs, app.main.win) }
+	if !app.headless && platform.is_window_visible(app.main.win) { prefs_page.placement_keep(&app.placement, &app.prefs, app.main.win) }
 	// (after the workers: a bookmark asked of one of them is in it; nothing while the start's read has not come)
 	session_save(app)
 	// (what is pending written now: the process may end before their threads would)
@@ -523,7 +662,6 @@ app_close :: proc(app: ^App) {
 	delete(app.type_names)
 	inspector_free(app)   // (before the renderer goes: the textures are its)
 	devtools.stop(app.devtools)
-	if global_app == app { global_app = nil }
 	// (again for a window app_run did not end: it does nothing the second time; the vendor's mark goes with it, before
 	// the renderer)
 	prefs_page.install_end(&app.install)

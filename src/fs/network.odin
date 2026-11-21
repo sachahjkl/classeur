@@ -15,10 +15,12 @@ package fs
 
 import "core:net"
 import "core:strings"
+import "core:sync"
 import "core:time"
 
-NETWORK_ASK_FOR  :: 1500 * time.Millisecond   // how long the answers are taken
-NETWORK_ASK_AGAIN :: 500 * time.Millisecond   // the query sent once more (a lost packet; the names of instances the first answers gave without their host)
+NETWORK_ASK_FOR   :: 1500 * time.Millisecond   // how long the answers are taken
+NETWORK_ASK_AGAIN :: 500 * time.Millisecond    // the query sent once more (a lost packet; the names of instances the first answers gave without their host)
+NETWORK_RECV_WAIT :: 20 * time.Millisecond     // per-socket wait while reading the sockets in turn and checking cancellation
 
 DNS_A    :: 1
 DNS_PTR  :: 12
@@ -340,17 +342,17 @@ ask_open :: proc(way: Ask_Way, query: []u8) -> (s: net.UDP_Socket, ok: bool) {
 	if way.shared {
 		if net.set_option(s, .Reuse_Address, true) != .None || net.bind(s, {net.IP4_Any, 5353}) != .None { net.close(s); return }
 	}
-	// (a short wait for each: the sockets are read in turn)
-	wait: time.Duration = 100 * time.Millisecond
-	if net.set_option(s, .Receive_Timeout, wait) != .None { net.close(s); return }
+	// (a short wait for each: the sockets are read in turn, and a cancel during shutdown ends it at once)
+	if net.set_option(s, .Receive_Timeout, NETWORK_RECV_WAIT) != .None { net.close(s); return }
 	if _, send_err := net.send_udp(s, query, way.target); send_err != .None { net.close(s); return }
 	return s, true
 }
 
 // The file servers of the network: multicast DNS for NETWORK_ASK_FOR, then what the system knows of its own
-// (system_devices_add). Blocks: call it on a worker.
-network_devices :: proc(allocator := context.allocator) -> []Network_Device {
+// (system_devices_add). Blocks: call it on a worker. When `cancel` becomes true, the search stops at its next turn.
+network_devices :: proc(allocator := context.allocator, cancel: ^bool = nil) -> []Network_Device {
 	list := make([dynamic]Network_Device, allocator)
+	if cancel != nil && sync.atomic_load(cancel) { return list[:] }
 	records := make([dynamic]Dns_Record, context.temp_allocator)
 	types: [len(SERVICE_TYPES)]string
 	for st, i in SERVICE_TYPES { types[i] = st.name }
@@ -368,6 +370,7 @@ network_devices :: proc(allocator := context.allocator) -> []Network_Device {
 	again := false
 	buf: [9000]u8
 	for (open != [WAYS]bool{}) && time.tick_since(start) < NETWORK_ASK_FOR {
+		if cancel != nil && sync.atomic_load(cancel) { return list[:] }
 		if !again && time.tick_since(start) >= NETWORK_ASK_AGAIN {
 			again = true
 			// (the instances named without their host: asked for it, with the services once more)
@@ -376,6 +379,7 @@ network_devices :: proc(allocator := context.allocator) -> []Network_Device {
 			for i in 0 ..< WAYS { if open[i] { _, _ = net.send_udp(sockets[i], ask, ASK_WAYS[i].target) } }
 		}
 		for i in 0 ..< WAYS {
+			if cancel != nil && sync.atomic_load(cancel) { return list[:] }
 			if !open[i] { continue }
 			n, _, err := net.recv_udp(sockets[i], buf[:])
 			#partial switch err {
@@ -391,6 +395,7 @@ network_devices :: proc(allocator := context.allocator) -> []Network_Device {
 			}
 		}
 	}
+	if cancel != nil && sync.atomic_load(cancel) { return list[:] }
 	devices_from_records(&list, records[:], allocator)
 	system_devices_add(&list, allocator)
 	return list[:]
