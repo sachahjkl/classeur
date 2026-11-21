@@ -3,6 +3,17 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.44.0] - 2026-11-21 17:11
+
+### Added
+- **System shell context menu actions**: right-clicking items or a folder loads third-party system actions asynchronously (Windows shell extensions such as 7-Zip, Git, VS Code, Send to; Linux KIO service menus, Nemo actions, and Thunar custom actions) without slowing menu open.
+
+### Changed
+- **Instant tab extraction, new windows, and closing**: tearing off a tab or opening a new window shares the running process and graphics device and moves the tab directly without reloading the folder; closing hides the window immediately and cancels network discovery; startup preloads the graphics device.
+
+### Fixed
+- **Opening files on Linux**: double-clicking a file or pressing Enter now opens it with the desktop default application instead of failing silently through the OpenURI portal.
+
 ## [0.43.0] - 2026-11-21 10:03
 
 ### Added
@@ -677,6 +688,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.44.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.44.0
 [0.43.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.43.0
 [0.42.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.42.0
 [0.41.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.41.2
