@@ -3,6 +3,15 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.45.0] - 2026-11-22 06:10
+
+### Added
+- **Typo-tolerant file search with frecency in GoTo, path field, and command palette**: GoTo (Ctrl+G), the path field (Ctrl+L), and the command palette / source now search files and folders below the current directory through gt:filesearch (fff-search) with typo tolerance, live watching, and shared frecency ranking.
+
+### Changed
+- **System context menu icons**: system shell actions now render through ui.Shell_Menu with native Windows and Linux theme icons.
+- **Updated gui_toolkit to v0.341.1**: Wayland secondary windows wake the loop immediately on input, selected rows keep high-contrast secondary text and search highlights across themes, and preference controls support the mouse wheel.
+
 ## [0.44.0] - 2026-11-21 17:11
 
 ### Added
@@ -688,6 +697,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.45.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.45.0
 [0.44.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.44.0
 [0.43.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.43.0
 [0.42.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.42.0
