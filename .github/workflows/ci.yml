@@ -20,7 +20,7 @@ jobs:
     name: Linux x64
     runs-on: ubuntu-24.04
     container: debian:bookworm
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       # Debian 12 (bookworm): its packages from deb.debian.org, not from the runner's Ubuntu mirrors (their DNS failed for hours),
       # and its glibc 2.36: the oldest a Linux build then needs. First: checkout needs git for the submodules.
@@ -34,9 +34,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            ext/gui_toolkit/build/text
+            ext/gui_toolkit/build/native
             ~/.cargo/registry
-          key: text-linux-${{ hashFiles('ext/gui_toolkit/native/text/**') }}
+          key: native-linux-${{ hashFiles('ext/gui_toolkit/native/gt/**', 'ext/gui_toolkit/native/text/**', 'ext/gui_toolkit/native/webp/**', 'ext/gui_toolkit/native/filesearch/**') }}
       - name: classeurtool check
         run: |
           odin build tools/classeurtool -collection:gt=ext/gui_toolkit/src -out:build/classeurtool -vet
@@ -46,7 +46,7 @@ jobs:
   windows:
     name: Windows x64
     runs-on: windows-2025
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
