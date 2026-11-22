@@ -30,6 +30,13 @@ palette_sources_add :: proc(app: ^App) {
 	}
 	ui.palette_add(&p.pal, &p.tabs)
 	ui.palette_add(&p.pal, &p.folders)
+	ui.palette_files_add(&p.pal, &p.files, {
+		title      = i18n.later("Files"),
+		dirs       = true,
+		plain      = false,
+		enter      = i18n.later("Go"),
+		alternates = {ctrl = i18n.later("Open in a new tab")},
+	})
 }
 
 ////////////////////////////////

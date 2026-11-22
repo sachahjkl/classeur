@@ -89,7 +89,7 @@ test_palette_tabs :: proc(t: ^testing.T) {
 		wait_read(s)
 		first_tab := p.tabs[0].id
 		session.key(s, .K, {.Ctrl})
-		testing.expect_value(t, strings.join(ui.palette_prefixes(&app.palette.pal), ", ", context.temp_allocator), "> Commands, @ Tabs, / Folders, : Settings")
+		testing.expect_value(t, strings.join(ui.palette_prefixes(&app.palette.pal), ", ", context.temp_allocator), "> Commands, @ Tabs, / Paths, : Settings")
 		session.type_text(s, "tab 3")
 		palette_ranked(s)
 		for k in 0 ..< ui.palette_row_count(&app.palette.pal) {

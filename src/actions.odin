@@ -113,6 +113,7 @@ open_system :: proc(app: ^App, path: string, in_archive: bool) {
 		}, job)
 		return
 	}
+	deep_note_opened(app, path)
 	launch(app, .Open, path)
 }
 

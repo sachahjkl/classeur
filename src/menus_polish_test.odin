@@ -224,24 +224,24 @@ test_shell_context_menu_async :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 
 		entry_menu_open(app, tab, {300, 20}, on_entry = true)
-		app.menu.shell_serial = 7
+		app.menu.shell.serial = 7
 		session.frames(s, 2)
 		testing.expect(t, session.find_text(s, "Properties") != nil, "classeur menu opens at once")
 		testing.expect(t, session.find_text(s, "Open with Code") == nil, "no shell items yet")
 
 		// A stale answer (wrong serial) is dropped cleanly without showing or leaking.
 		stale_raw := [?]desktop.Context_Item{{id = 99, label = "Stale Action"}}
-		shell_menu_apply(app, 6, desktop.context_items_clone(stale_raw[:], runtime.heap_allocator()))
+		ui.shell_menu_apply(&app.menu.shell, 6, desktop.context_items_clone(stale_raw[:], runtime.heap_allocator()))
 		session.frames(s, 2)
 		testing.expect(t, session.find_text(s, "Stale Action") == nil, "stale serial ignored")
 
-		// Current serial lands asynchronously and shows items + submenus above Properties.
+		// Current serial lands asynchronously and shows items + submenus above Properties (with icon support).
 		sub_raw := [?]desktop.Context_Item{{id = 12, label = "Extract Here"}}
 		fresh_raw := [?]desktop.Context_Item{
 			{label = "7-Zip", children = sub_raw[:]},
 			{id = 42, label = "Open with Code"},
 		}
-		shell_menu_apply(app, 7, desktop.context_items_clone(fresh_raw[:], runtime.heap_allocator()))
+		ui.shell_menu_apply(&app.menu.shell, 7, desktop.context_items_clone(fresh_raw[:], runtime.heap_allocator()))
 		session.frames(s, 2)
 		testing.expect(t, session.find_text(s, "7-Zip") != nil, "shell submenu appears")
 		testing.expect(t, session.find_text(s, "Open with Code") != nil, "shell item appears")
@@ -249,5 +249,6 @@ test_shell_context_menu_async :: proc(t: ^testing.T) {
 		session.click_text(s, "Open with Code")
 		session.frames(s, 2)
 		testing.expect_value(t, app.menu.shell_invoked, u32(42))
+		testing.expect(t, !app.menu.shell.ready, "menu close clears shell session")
 	})
 }

@@ -21,7 +21,8 @@ Palette :: struct {
 	pal:       ui.Command_Palette,           // the toolkit's: its field, its sources, its usage memory, its recorder
 	settings:  prefs_page.Palette_Settings,  // the settings source
 	tabs:      ui.Palette_Source,            // `@` (palette_sources.odin)
-	folders:   ui.Palette_Source,            // `/`
+	folders:   ui.Palette_Source,            // `/` (absolute paths, recents, bookmarks, places)
+	files:     ui.Palette_Files,             // `/` (gt:filesearch under the current folder)
 	tabs_sig:  u64,                          // what the tabs source's items were made from (tabs_poll)
 	folders_cache: Folders_Cache,            // the last folder the folders source listed (palette_sources.odin)
 	sheet:     ui.Shortcuts_Sheet,           // the sheet of the keys (F1)
@@ -43,6 +44,7 @@ Palette :: struct {
 // (the toolkit's palette is destroyed before the window: app_close)
 palette_free :: proc(p: ^Palette) {
 	ui.shortcuts_sheet_destroy(&p.sheet)
+	ui.palette_files_destroy(&p.files)
 	folders_cache_free(&p.folders_cache)
 	delete(p.sheet_table)
 	delete(p.table)
@@ -154,6 +156,9 @@ shortcuts_open :: proc(app: ^App) {
 // the page shows the value in the same frame as the palette.
 palette_choose :: proc(app: ^App) {
 	p := &app.palette
+	if ui.palette_is_open(&p.pal) {
+		if t := current_tab(app); t != nil && !t.in_archive && !shows_trash(t) { deep_ensure_index(app, t.path) }
+	}
 	palette_disabled_keep(app)
 	ui.palette_commands(&p.pal, p.table[:], p.disabled[:], {version = p.version, choices = palette_choices, user = app})
 	// (the toolkit's sources act in palette_chosen: a setting, a view's move, a key or an alias of one's own, go to)
@@ -199,6 +204,9 @@ palette_run :: proc(app: ^App, c: ui.Palette_Choice) {
 	if c.source == &p.tabs {
 		palette_tab_chosen(app, c.id)
 	} else if c.source == &p.folders {
+		palette_folder_chosen(app, c.id, c.mods)
+	} else if c.source == &p.files.source {
+		ui.palette_files_opened(&app.main.state, p.files.index, c.id)
 		palette_folder_chosen(app, c.id, c.mods)
 	}
 }

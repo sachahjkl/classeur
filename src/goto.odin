@@ -55,12 +55,13 @@ act_goto_popup :: proc(app: ^App) {
 	ui.view_open(&app.views, GOTO_VIEW, app)
 }
 
-// What GoTo and the path field read is read again at each opening: a file made since, a listing that failed.
+// What GoTo and the path field read is refreshed at each opening: the live-watched filesearch index stays warm in real
+// runs, and resets headless (tests) where watching is off so newly created fixture files are picked up.
 goto_fresh :: proc(app: ^App) {
 	g := &app.goto
 	delete(g.asked)
 	g.asked = ""
-	deep_reset(app)
+	if app.headless { deep_reset(app) }
 }
 
 // Its width when it opens as a dialog (em), and its top in the window.
@@ -240,6 +241,7 @@ goto_root :: proc(app: ^App) -> string {
 goto_path :: proc(app: ^App, path: string) -> bool {
 	t := current_tab(app)
 	if t == nil { return false }
+	deep_note_opened(app, path)
 	t.focus_due = .List
 	tab_go(app, t, path)
 	return true

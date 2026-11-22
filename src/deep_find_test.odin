@@ -17,13 +17,11 @@ DEEP_FIXTURE :: [?]string{
 	"packages/web/src/", "packages/web/src/main.ts", ".git/", ".git/logo.svg", "notes.txt",
 }
 
-// Frames until the deep search has answered `query` and its walk is over.
+// Frames until gt:filesearch has finished its initial scan and answered the current query.
 @(private = "file")
 wait_deep :: proc(s: ^session.Session) {
 	session.wait_until(s, proc(s: ^session.Session) -> bool {
-		app := (^App)(s.user)
-		d := &app.deep
-		return d.index != nil && !d.in_flight && d.rows_for == d.asked && d.asked != "" && d.asked_version == d.index.version && d.index.done
+		return deep_ready((^App)(s.user))
 	}, "the deep search answered")
 	session.frames(s, 2)
 }
@@ -113,5 +111,44 @@ test_crumbs_click_types_the_path :: proc(t: ^testing.T) {
 		session.key(s, .Return)
 		wait_read(s)
 		testing.expect_value(t, tab.path, fs.join(dir, "packages/web/src", context.temp_allocator))
+	})
+}
+
+// Typo-tolerant file search via gt:filesearch in GoTo and in the command palette's '/' source.
+@(test)
+test_filesearch_typo_and_palette :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := [?]string{"models/", "models/schema.odin", "notes.txt"}
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir})
+		context.allocator = runtime.heap_allocator()
+		schema := fs.join(dir, "models/schema.odin", context.temp_allocator)
+
+		// Typo in GoTo: "shcema" finds models/schema.odin.
+		session.key(s, .G, {.Ctrl})
+		session.type_text(s, "shcema")
+		wait_deep(s)
+		found := goto_rows(app, dir, "shcema")
+		if testing.expect(t, len(found.rows) > 0, "typo-tolerant match in GoTo") {
+			testing.expect_value(t, found.rows[0].path, schema)
+		}
+		session.key(s, .Escape)
+		session.frames(s, 2)
+
+		// Command palette '/' source finds models/schema.odin via ui.Palette_Files.
+		session.key(s, .K, {.Ctrl})
+		session.type_text(s, "/shcema")
+		session.wait_until(s, proc(s: ^session.Session) -> bool {
+			app := (^App)(s.user)
+			src, _, ok := ui.palette_row(&app.palette.pal, 0)
+			return ok && src == &app.palette.files.source
+		}, "palette '/' files source returns schema.odin")
+		src, id, ok := ui.palette_row(&app.palette.pal, 0)
+		testing.expect(t, ok && src == &app.palette.files.source && id == schema, "schema.odin first in palette '/'")
+		session.key(s, .Return)
+		wait_read(s)
+		testing.expect_value(t, current_tab(app).path, fs.join(dir, "models", context.temp_allocator))
+		e := folder_cursor_entry(&current_tab(app).folder)
+		testing.expect(t, e != nil && e.name == "schema.odin", "cursor placed on schema.odin")
 	})
 }

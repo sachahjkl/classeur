@@ -4,7 +4,6 @@ package classeur
 // a right click on the empty part of the list gives what can be done in the folder. Every item is a command: its keys
 // are shown beside it.
 
-import "base:runtime"
 import "core:fmt"
 import "core:strings"
 import "core:time"
@@ -40,75 +39,27 @@ ZOOM_SLIDER_MENU :: "classeur_zoom_slider"       // the zoom's slider over the f
 
 Entry_Menu :: struct {
 	tab:            u64,
-	on_entry:       bool,                   // opened on a row (else on the folder)
-	was_open:       bool,                   // tracks close edge to release the held native shell session
-	with_path:      string,                 // owned: the file "Open with" was asked for
-	handlers:       []desktop.Handler,      // its applications, read on a worker
-	handlers_ready: bool,                   // they came
-	shell:          desktop.Context_Menu,   // asynchronous system shell context-menu worker (Windows STA / Linux extensions)
-	shell_serial:   u64,                    // serial of the latest shell query (stale answers are dropped)
-	shell_items:    []desktop.Context_Item, // owned (heap): system shell items once ready
-	shell_ready:    bool,
-	shell_invoked:  u32,                    // tests: last system shell item id clicked (0: none)
+	on_entry:       bool,              // opened on a row (else on the folder)
+	was_open:       bool,              // tracks close edge to release the held native shell session
+	with_path:      string,            // owned: the file "Open with" was asked for
+	handlers:       []desktop.Handler, // its applications, read on a worker
+	handlers_ready: bool,              // they came
+	shell:          ui.Shell_Menu,     // asynchronous system shell context-menu widget (icons + STA/Linux worker)
+	shell_invoked:  u32,               // tests: last system shell item id clicked before menu close cleared m.shell
 }
 
 entry_menu_free :: proc(m: ^Entry_Menu) {
-	desktop.context_menu_destroy(&m.shell)
-	desktop.context_items_destroy(m.shell_items, runtime.heap_allocator())
+	ui.shell_menu_destroy(&m.shell)
 	delete(m.with_path)
 	desktop.handlers_destroy(m.handlers)
 	m^ = {}
 }
 
 @(private = "file")
-Shell_Ready :: struct {
-	app:    ^App,
-	serial: u64,
-	items:  []desktop.Context_Item,
-}
-
-// Worker callback from desktop.Context_Menu: posts the plain items tree back to the interface thread.
-@(private = "file")
-shell_menu_on_ready :: proc(user: rawptr, serial: u64, items: []desktop.Context_Item) {
-	app := (^App)(user)
-	a := runtime.heap_allocator()
-	msg := new(Shell_Ready, a)
-	msg^ = {app = app, serial = serial, items = items}
-	if !ui.post(&app.main.state, shell_menu_done, msg) {
-		desktop.context_items_destroy(msg.items, a)
-		free(msg, a)
-	}
-}
-
-@(private = "file")
-shell_menu_done :: proc(data: rawptr, word: u64) {
-	a := runtime.heap_allocator()
-	msg := (^Shell_Ready)(data)
-	defer free(msg, a)
-	shell_menu_apply(msg.app, msg.serial, msg.items)
-}
-
-// Applies a completed shell context-menu query if its serial is still current; otherwise frees `items`.
-shell_menu_apply :: proc(app: ^App, serial: u64, items: []desktop.Context_Item) {
-	a := runtime.heap_allocator()
-	m := &app.menu
-	if serial != m.shell_serial {
-		desktop.context_items_destroy(items, a)
-		return
-	}
-	desktop.context_items_destroy(m.shell_items, a)
-	m.shell_items = items
-	m.shell_ready = true
-	app_frames(app)
-}
-
-@(private = "file")
 shell_menu_ask :: proc(app: ^App, t: ^Tab, on_entry: bool) {
 	m := &app.menu
-	desktop.context_items_destroy(m.shell_items, runtime.heap_allocator())
-	m.shell_items = nil
-	m.shell_ready = false
-	m.shell_serial = 0
+	m.shell_invoked = 0
+	ui.shell_menu_clear(&m.shell)
 	if app.headless || t.in_archive || shows_trash(t) { return }
 
 	paths := make([dynamic]string, context.temp_allocator)
@@ -119,11 +70,11 @@ shell_menu_ask :: proc(app: ^App, t: ^Tab, on_entry: bool) {
 	}
 	if len(paths) == 0 { return }
 	excluded := SHELL_EXCLUDE_VERBS
-	m.shell_serial = desktop.context_menu_query(&m.shell, {
+	_ = ui.shell_menu_query(&m.shell, &app.main.state, {
 		paths         = paths[:],
 		background    = !on_entry,
 		exclude_verbs = excluded[:],
-	}, shell_menu_on_ready, app)
+	})
 }
 
 @(private = "file")
@@ -192,7 +143,7 @@ entry_menu_build :: proc(app: ^App, em: f32) {
 		entry_menu_items(app, m)
 	} else if m.was_open {
 		m.was_open = false
-		desktop.context_menu_clear(&m.shell)
+		ui.shell_menu_clear(&m.shell)
 	}
 }
 
@@ -263,37 +214,12 @@ entry_menu_items :: proc(app: ^App, m: ^Entry_Menu) {
 		menu_command(app, "folders_mixed", checked = !s.mixed)
 	}
 	menu_command(app, "hidden", checked = app.show_hidden)
-	// Asynchronous system shell actions (Windows shell extensions, Linux KIO/Nemo/Thunar actions) once ready.
-	if m.shell_ready && len(m.shell_items) > 0 {
-		ui.menu_separator()
-		shell_menu_items(app, m.shell_items, "sh")
-	}
+	// Asynchronous system shell actions (Windows shell extensions, Linux KIO/Nemo/Thunar actions) with icons once ready.
+	if picked := ui.shell_menu_items(&m.shell, prefix = "sh", separator = true, win = app.main.win, invoke = !app.headless); picked != 0 { m.shell_invoked = picked }
 	// (on an item, Properties last, as in every file manager)
 	if m.on_entry {
 		ui.menu_separator()
 		menu_command(app, "properties", enabled = folder_cursor_entry(&t.folder) != nil)
-	}
-}
-
-@(private = "file")
-shell_menu_items :: proc(app: ^App, items: []desktop.Context_Item, prefix: string) {
-	for it, i in items {
-		if it.separator {
-			ui.menu_separator()
-			continue
-		}
-		if len(it.children) > 0 {
-			sub_id := fmt.tprintf("%s_%d", prefix, i)
-			if ui.menu_submenu(fmt.tprintf("%s###%s", ui.text_shown(it.label), sub_id)) {
-				shell_menu_items(app, it.children, sub_id)
-			}
-			continue
-		}
-		label := fmt.tprintf("%s###%s_%d", ui.text_shown(it.label), prefix, i)
-		if ui.menu_item(label, disabled = it.disabled).clicked {
-			app.menu.shell_invoked = it.id
-			if !app.headless { desktop.context_menu_invoke(&app.menu.shell, app.menu.shell_serial, it.id, app.main.win) }
-		}
 	}
 }
 

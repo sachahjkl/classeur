@@ -39,6 +39,7 @@ of its own.
 | Open layout (`layout_open`) | the layout, among the saved ones (`Palette_Commands_Options.choices`: `layout_choices`) | the menu (`LAYOUTS_MENU`), which also deletes a layout |
 | `@`, plain | the tabs | every tab, under its panel's name; the shown one marked | its panel gets the keyboard and shows it |
 | `/`, plain | the folders | the folders of the path typed, and the recent folders, bookmarks and places the letters find | goes there in the tab; Ctrl+Enter in a new tab; Tab completes the path |
+| `/` | files (`ui.Palette_Files`) | typo-tolerant files and folders under the current folder, ranked by frecency (`gt:filesearch`, shared with `deep_find.odin`) | goes there (files select in their folder); Ctrl+Enter in a new tab; records frecency |
 
 ## Decisions
 

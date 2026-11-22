@@ -30,7 +30,7 @@ project :: proc() -> toolbox.Project {
 		name = "classeur", repository = REPOSITORY, changelog = "CHANGELOG.md",
 		version_file = "src/main.odin", version_line = "APP_VERSION :: ", program = PROGRAM,
 		// (every icon is named by its lucide constant: the subset holds them all, and the program 900 KB less)
-		features = {.Lucide_Subset, .Webp},
+		features = {.Lucide_Subset, .Webp, .Filesearch},
 		launcher = {default_rule = "detach", others = "install,uninstall,status,version,--version,help,-h,--help"},
 		title = "Classeur", description = "A fast file manager: tabs in panels, a command palette, GoTo, batch rename, undo.",
 		publisher = "Froment Software", copyright = "Copyright (c) 2026 sachahjkl",
