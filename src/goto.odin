@@ -185,33 +185,66 @@ goto_rows :: proc(app: ^App, root, text: string) -> (out: Goto_Rows) {
 		out.rows = rows[:]
 		return
 	}
+	query := strings.trim_space(text)
 	seen := make(map[string]bool, context.temp_allocator)
-	add :: proc(rows: ^[dynamic]Goto_Row, seen: ^map[string]bool, app: ^App, text, path, kind, icon: string) {
+	// Keep place scores (ui.fuzzy_score) separate from deep_rows (fff-search): never compare two different score scales.
+	// Order when typing: exact relative path, places matching their own folder name, deep_rows (fff order), then places
+	// matching only scattered letters in their full path.
+	place_named := make([dynamic]Goto_Row, context.temp_allocator)
+	place_path  := make([dynamic]Goto_Row, context.temp_allocator)
+	add_place :: proc(named, scattered: ^[dynamic]Goto_Row, seen: ^map[string]bool, app: ^App, query, path, kind, icon: string) {
 		if path in seen { return }
 		label := home_path(app, path)
-		score, ranges, ok := ui.fuzzy_score(text, label)
+		if query == "" {
+			seen[path] = true
+			append(named, Goto_Row{path, label, kind, icon, 0, nil, true})
+			return
+		}
+		score, ranges, ok := ui.fuzzy_score(query, label)
 		if !ok { return }
 		seen[path] = true
-		append(rows, Goto_Row{path, label, kind, icon, score, ranges, true})
-	}
-	for p in app.recents { add(&rows, &seen, app, text, p, i18n.tr("Recent"), lucide.HISTORY) }
-	for p in app.bookmarks { add(&rows, &seen, app, text, p, i18n.tr("Bookmark"), lucide.BOOKMARK) }
-	for p in app.places { add(&rows, &seen, app, text, p.path, i18n.tr("Place"), lucide.HOME) }
-	query := strings.trim_space(text)
-	if root != "" && query != "" {
-		deep, reading, read := deep_rows(app, root, query)
-		out.reading, out.read = reading, read
-		for r in deep {
-			path := fs.join(root, r.path, context.temp_allocator)
-			if path in seen { continue }
-			seen[path] = true
-			folder := r.kind == .Directory
-			append(&rows, Goto_Row{path, r.path, folder ? i18n.tr("Folder") : i18n.tr("File"), folder ? lucide.FOLDER : lucide.FILE, r.score, r.ranges, folder})
+		base := fs.base(path)
+		if base != "" {
+			if name_score, _, name_ok := ui.fuzzy_score(query, base); name_ok {
+				append(named, Goto_Row{path, label, kind, icon, name_score, ranges, true})
+				return
+			}
 		}
+		append(scattered, Goto_Row{path, label, kind, icon, score, ranges, true})
 	}
-	// (one order for the places and what is below: a name that starts with the letters beats letters spread along a
-	// recent folder's long path. A few dozen places and DEEP_ROWS rows: no pass over a folder)
-	if query != "" { slice.stable_sort_by(rows[:], proc(a, b: Goto_Row) -> bool { return a.score > b.score }) }
+	for p in app.recents { add_place(&place_named, &place_path, &seen, app, query, p, i18n.tr("Recent"), lucide.HISTORY) }
+	for p in app.bookmarks { add_place(&place_named, &place_path, &seen, app, query, p, i18n.tr("Bookmark"), lucide.BOOKMARK) }
+	for p in app.places { add_place(&place_named, &place_path, &seen, app, query, p.path, i18n.tr("Place"), lucide.HOME) }
+	if query != "" {
+		slice.stable_sort_by(place_named[:], proc(a, b: Goto_Row) -> bool { return a.score > b.score })
+		slice.stable_sort_by(place_path[:], proc(a, b: Goto_Row) -> bool { return a.score > b.score })
+	}
+	deep: []Deep_Row
+	if root != "" && query != "" {
+		deep, out.reading, out.read = deep_rows(app, root, query)
+	}
+	// 1. Exact relative path hit (when present, always first in deep).
+	deep_start := 0
+	if len(deep) > 0 && deep[0].score == max(int) {
+		r := deep[0]
+		path := fs.join(root, r.path, context.temp_allocator)
+		folder := r.kind == .Directory
+		append(&rows, Goto_Row{path, r.path, folder ? i18n.tr("Folder") : i18n.tr("File"), folder ? lucide.FOLDER : lucide.FILE, r.score, r.ranges, folder})
+		seen[path] = true
+		deep_start = 1
+	}
+	// 2. Places/recents/bookmarks whose own folder name matches (or all of them when query is empty).
+	for r in place_named { append(&rows, r) }
+	// 3. Deep search matches below the current folder, in fff-search's ranked order.
+	for r in deep[deep_start:] {
+		path := fs.join(root, r.path, context.temp_allocator)
+		if path in seen { continue }
+		seen[path] = true
+		folder := r.kind == .Directory
+		append(&rows, Goto_Row{path, r.path, folder ? i18n.tr("Folder") : i18n.tr("File"), folder ? lucide.FOLDER : lucide.FILE, r.score, r.ranges, folder})
+	}
+	// 4. Places/recents/bookmarks matching only scattered letters along their full path.
+	for r in place_path { append(&rows, r) }
 	out.rows = rows[:]
 	return
 }

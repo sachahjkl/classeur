@@ -6,7 +6,6 @@ package classeur
 // reads only the last answer.
 
 import "base:runtime"
-import "core:slice"
 import "core:strings"
 import filesearch "gt:filesearch"
 import "gt:platform"
@@ -378,6 +377,5 @@ deep_match_done :: proc(data: rawptr, word: u64) {
 	d.rows, m.rows = m.rows, d.rows
 	delete(d.rows_for, heap)
 	d.rows_for = strings.clone(m.query, heap)
-	slice.stable_sort_by(d.rows[:], proc(a, b: Deep_Row) -> bool { return a.score > b.score })
 	app_frames(app)
 }

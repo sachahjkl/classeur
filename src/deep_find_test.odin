@@ -35,6 +35,9 @@ test_goto_deep :: proc(t: ^testing.T) {
 		context.allocator = runtime.heap_allocator()
 		tab := current_tab(app)
 		logo := fs.join(dir, "packages/web/public/brand/logo.svg", context.temp_allocator)
+		// Regression: a recent path with scattered matching letters (like Windows AppData\Local\Temp\gui_toolkit)
+		// must never outrank a direct filename match from gt:filesearch.
+		append(&app.recents, fs.clean("/Users/runner/AppData/Local/Temp/gui_toolkit-classeur-42"))
 
 		// a few letters of a name four folders down: that file, and not the one under the hidden .git
 		session.key(s, .G, {.Ctrl})
