@@ -8,6 +8,7 @@ import "core:os"
 import "core:strings"
 import "core:sys/linux"
 import "gt:i18n"
+import process "gt:process"
 
 // The folder gvfs mounts its shares under: its runtime folder, $XDG_RUNTIME_DIR, else the one systemd makes. (Not the
 // toolkit's platform.user_dir(.Runtime): without the variable it gives the temporary folder, where gvfs never mounts.)
@@ -88,11 +89,11 @@ find_mounted :: proc(u: Uri, allocator := context.allocator) -> (path: string, o
 // Mounts a share (blocks: call it on a worker): `gio mount <uri>`, which asks for a password through the session's
 // agent when the share wants one. ok = false: `why` says what gio said.
 share_mount :: proc(uri: string, allocator := context.temp_allocator) -> (ok: bool, why: string) {
-	state, stdout, stderr, err := os.process_exec({command = {"gio", "mount", uri}}, context.temp_allocator)
-	if err != nil { return false, strings.clone(i18n.tr("gio is not there: gvfs mounts the shares"), allocator) }
-	if state.exited && state.exit_code == 0 { return true, "" }
-	msg := strings.trim_space(string(stderr))
-	if msg == "" { msg = strings.trim_space(string(stdout)) }
+	r := process.run({"gio", "mount", uri}, {}, context.temp_allocator)
+	if !r.started { return false, strings.clone(i18n.tr("gio is not there: gvfs mounts the shares"), allocator) }
+	if r.ok { return true, "" }
+	msg := strings.trim_space(r.stderr)
+	if msg == "" { msg = strings.trim_space(r.stdout) }
 	if msg == "" { msg = i18n.tr("gio mount failed") }
 	return false, strings.clone(msg, allocator)
 }

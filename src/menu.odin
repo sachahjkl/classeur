@@ -7,10 +7,8 @@ package classeur
 import "core:fmt"
 import "core:strings"
 import "core:time"
-import "gt:desktop"
 import "gt:i18n"
 import lucide "gt:lucide"
-import tasks "gt:tasks"
 import "gt:ui"
 import "fs"
 
@@ -41,17 +39,14 @@ Entry_Menu :: struct {
 	tab:            u64,
 	on_entry:       bool,              // opened on a row (else on the folder)
 	was_open:       bool,              // tracks close edge to release the held native shell session
-	with_path:      string,            // owned: the file "Open with" was asked for
-	handlers:       []desktop.Handler, // its applications, read on a worker
-	handlers_ready: bool,              // they came
+	open_with:      ui.Open_With,      // the file's applications and their icons, read on a chore when the menu opens
 	shell:          ui.Shell_Menu,     // asynchronous system shell context-menu widget (icons + STA/Linux worker)
 	shell_invoked:  u32,               // tests: last system shell item id clicked before menu close cleared m.shell
 }
 
 entry_menu_free :: proc(m: ^Entry_Menu) {
 	ui.shell_menu_destroy(&m.shell)
-	delete(m.with_path)
-	desktop.handlers_destroy(m.handlers)
+	ui.open_with_destroy(&m.open_with)
 	m^ = {}
 }
 
@@ -77,50 +72,11 @@ shell_menu_ask :: proc(app: ^App, t: ^Tab, on_entry: bool) {
 	})
 }
 
-@(private = "file")
-Handlers_Read :: struct {
-	app:      ^App,
-	path:     string,
-	handlers: []desktop.Handler,
-}
-
-// The applications of the file at the cursor, asked on a worker (the system's associations are read from files).
-@(private = "file")
-handlers_ask :: proc(app: ^App, path: string) {
-	m := &app.menu
-	delete(m.with_path)
-	m.with_path = strings.clone(path)
-	desktop.handlers_destroy(m.handlers)
-	m.handlers, m.handlers_ready = nil, false
-	job := new(Handlers_Read)
-	job^ = {app = app, path = strings.clone(path)}
-	tasks.add(&app.pool, proc(data: rawptr) {
-		job := (^Handlers_Read)(data)
-		job.handlers = desktop.handlers_for_file(job.path)
-		if !ui.post(&job.app.main.state, proc(data: rawptr, word: u64) {
-			job := (^Handlers_Read)(data)
-			m := &job.app.menu
-			if m.with_path == job.path && !m.handlers_ready {
-				m.handlers, m.handlers_ready = job.handlers, true
-				app_frames(job.app)
-			} else {
-				desktop.handlers_destroy(job.handlers)
-			}
-			delete(job.path)
-			free(job)
-		}, job) {
-			desktop.handlers_destroy(job.handlers)
-			delete(job.path)
-			free(job)
-		}
-	}, job)
-}
-
 entry_menu_open :: proc(app: ^App, t: ^Tab, pos: ui.Vec2, from_keyboard := false, on_entry := true) {
 	m := &app.menu
 	m.tab, m.on_entry = t.id, on_entry
 	if on_entry {
-		if e := folder_cursor_entry(&t.folder); e != nil && e.kind != .Directory { handlers_ask(app, entry_path(t, e)) }
+		if e := folder_cursor_entry(&t.folder); e != nil && e.kind != .Directory { ui.open_with_ask(&m.open_with, &app.main.state, entry_path(t, e)) }
 	}
 	shell_menu_ask(app, t, on_entry)
 	ui.menu_open(ENTRY_MENU, pos, from_keyboard = from_keyboard)
@@ -468,12 +424,10 @@ panel_menu_build :: proc(app: ^App, em: f32) {
 @(private = "file")
 open_with_menu :: proc(app: ^App, path: string) {
 	if ui.menu_submenu(i18n.tr("Open with"), icon = lucide.APP_WINDOW) {
-		ready := app.menu.with_path == path && app.menu.handlers_ready
-		hs := ready ? app.menu.handlers : nil
-		if !ready { _ = ui.menu_item(i18n.tr("Reading…"), disabled = true) } else if len(hs) == 0 { _ = ui.menu_item(i18n.tr("No application"), disabled = true) }
-		for h, i in hs {
-			label := h.default ? fmt.tprintf("%s###ow%d", fmt.tprintf(i18n.tr("%s (default)"), ui.text_shown(h.name)), i) : fmt.tprintf("%s###ow%d", ui.text_shown(h.name), i)
-			if ui.menu_item(label).clicked { launch(app, .Open_With, path, h.id, h.name) }
+		ow := &app.menu.open_with
+		// (classeur's own start: on a worker, said when it fails, noted by the tests)
+		if ui.open_with_items(ow, "ow") {
+			if h, ok := ui.open_with_chosen(ow); ok { launch(app, .Open_With, path, h.id, h.name) }
 		}
 	}
 }

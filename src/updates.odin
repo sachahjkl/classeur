@@ -7,7 +7,6 @@ package classeur
 // it was unpacked, is updated when the settings' Check now asks. A copy from the Nix store is left to Nix (the Updater
 // says so).
 
-import "core:strings"
 import "gt:platform"
 import prefs_page "gt:prefs_page"
 import update "gt:update"
@@ -34,7 +33,6 @@ updates_follow :: proc(app: ^App) {
 
 // The new program takes over: started once this one has ended (it holds the single instance until then).
 updates_restart :: proc(app: ^App) {
-	delete(app.launch_after)
-	app.launch_after = strings.clone(app.exe)
+	app.restart = true
 	platform.request_close(app.main.win)
 }

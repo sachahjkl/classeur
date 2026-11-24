@@ -19,5 +19,10 @@ and Thunar custom actions) load asynchronously via `ui.Shell_Menu` (`gt:ui` over
 - **Prompt release**: when `ENTRY_MENU` closes, `ui.shell_menu_clear` releases any held native `IContextMenu`, `HMENU`,
   and icon textures. Because `gt:desktop` processes a queued `invoke` before `clear`, clicking an item right as the
   menu closes still runs its action.
+- **"Open with" is the toolkit's (`ui.Open_With`)**: `entry_menu_open` asks it for the file under the cursor, and a
+  chore reads the applications and their icons. The submenu shows them, the default first. classeur keeps the start
+  itself: `ui.open_with_chosen` gives the application, and `launch` starts it on a worker. That path reports a failure
+  in a toast and, in a headless test, records the start in `app.opened` instead of running it. `open_with_run` is not
+  used because it has neither of these.
 - **Headless isolation**: when `app.headless` is true, `entry_menu_open` skips querying the host desktop so tests never
   read the person's `uca.xml` or Windows registry; tests inject items directly through `ui.shell_menu_apply`.

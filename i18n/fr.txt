@@ -1152,12 +1152,6 @@ fr Grouper par
 en Open with
 fr Ouvrir avec
 
-en No application
-fr Aucune application
-
-en %s (default)
-fr %s (par défaut)
-
 en Go
 fr Aller
 

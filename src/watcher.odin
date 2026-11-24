@@ -1,17 +1,17 @@
 package classeur
 
-// The folders of the tabs are watched (fs.Watch, on a thread of its own): a change made by any program reads the folder
+// The folders of the tabs are watched (fsx.Watch, on a thread of its own): a change made by any program reads the folder
 // again, with the cursor and the selection kept. Each frame the interface gives the watcher the folders of its tabs
 // when they changed.
 
 import "core:slice"
 import "core:strings"
 import "core:thread"
+import "gt:fsx"
 import "gt:ui"
-import "fs"
 
 Folder_Watch :: struct {
-	watch:  fs.Watch,
+	watch:  fsx.Watch,
 	thread: ^thread.Thread,
 	on:     bool,
 	given:  [dynamic]string,   // owned: what the watcher was given last (the interface's copy)
@@ -21,7 +21,7 @@ Folder_Watch :: struct {
 watcher_start :: proc(app: ^App) {
 	w := &app.watch
 	w.app = app
-	if !fs.watch_open(&w.watch) { return }
+	if !fsx.watch_open(&w.watch) { return }
 	w.on = true
 	w.thread = thread.create_and_start_with_data(w, watcher_work)
 }
@@ -29,10 +29,10 @@ watcher_start :: proc(app: ^App) {
 watcher_stop :: proc(app: ^App) {
 	w := &app.watch
 	if w.on {
-		fs.watch_stop(&w.watch)
+		fsx.watch_stop(&w.watch)
 		thread.join(w.thread)
 		thread.destroy(w.thread)
-		fs.watch_close(&w.watch)
+		fsx.watch_close(&w.watch)
 	}
 	for p in w.given { delete(p) }
 	delete(w.given)
@@ -52,14 +52,14 @@ watcher_update :: proc(app: ^App) {
 	for p in w.given { delete(p) }
 	clear(&w.given)
 	for p in paths { append(&w.given, strings.clone(p)) }
-	fs.watch_set(&w.watch, paths[:])
+	fsx.watch_set(&w.watch, paths[:])
 }
 
 @(private = "file")
 watcher_work :: proc(data: rawptr) {
 	w := (^Folder_Watch)(data)
 	for {
-		changed, closed := fs.watch_wait(&w.watch)
+		changed, closed := fsx.watch_wait(&w.watch)
 		if closed { return }
 		for p in changed {
 			c := new(Changed)

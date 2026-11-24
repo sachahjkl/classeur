@@ -177,7 +177,7 @@ test_quit :: proc(t: ^testing.T) {
 		session.key(s, .Q, {.Ctrl})
 		session.frames(s, 1)
 		testing.expect(t, platform.is_closed(app.main.win), "Ctrl+Q: closed")
-		testing.expect_value(t, app.launch_after, "")
+		testing.expect(t, !app.restart, "no restart")
 	})
 }
 
@@ -198,7 +198,7 @@ test_quit_message :: proc(t: ^testing.T) {
 		app_message(app.hub, transmute([]u8)string(instance.MESSAGE_QUIT))
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return platform.is_closed((^App)(s.user).main.win) }, "closed by --quit")
 		testing.expect_value(t, len(current_panel(app).tabs), tabs)
-		testing.expect_value(t, app.launch_after, "")
+		testing.expect(t, !app.restart, "no restart")
 	})
 }
 
@@ -213,6 +213,6 @@ test_restart :: proc(t: ^testing.T) {
 		command_find("app_restart").run(app)
 		session.frames(s, 1)
 		testing.expect(t, platform.is_closed(app.main.win), "closed")
-		testing.expect_value(t, app.launch_after, app.exe)
+		testing.expect(t, app.restart, "restart asked")
 	})
 }

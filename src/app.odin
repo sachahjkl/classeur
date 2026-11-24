@@ -25,7 +25,6 @@ import "gt:render"
 import prefs_page "gt:prefs_page"
 import process "gt:process"
 import crash_bar "gt:crash_bar"
-import setup "gt:setup"
 import store "gt:store"
 import tasks "gt:tasks"
 import "gt:ui"
@@ -45,7 +44,7 @@ App_Hub :: struct {
 	handoff_id:     u64,
 	handoff_from:   u64,
 	handoff_ttl:    int,            // loop rounds left before an unclaimed handoff (e.g. dropped on another process) is freed
-	launch_after:   string,         // owned: Restart command run once the last window closes
+	restart:        bool,           // a window asked Restart after an update: program_end starts classeur again
 }
 
 App :: struct {
@@ -182,7 +181,7 @@ App :: struct {
 	drag_out:    bool,              // ... or left it: the system's drag takes them after this frame (drag_run)
 	install:     prefs_page.Install,   // the install: its offer, its dialog, the settings' page (integration.odin)
 	changelog:   prefs_page.Changelog, // What's new: CHANGELOG.md on a page of the settings, said once after an update
-	launch_after: string,           // owned: this program again after an update (Restart), started once this one has ended ("": none)
+	restart:     bool,              // Restart after an update: classeur starts again once this one has ended (host.restart_after_exit)
 	updates:        prefs_page.Updates,   // checks, downloads and puts in place a new classeur (updates.odin; its updater nil headless)
 	measures_sorted_at: f64,           // when measures_resort last sorted (ui.now_ms)
 	headless:    bool,              // the tests: no window of the system, no program started (open_system)
@@ -273,10 +272,7 @@ hub_close_window :: proc(hub: ^App_Hub, index: int, server: ^^instance.Server = 
 		instance.serve_stop(server^)
 		server^ = nil
 	}
-	if w.launch_after != "" {
-		delete(hub.launch_after)
-		hub.launch_after = strings.clone(w.launch_after)
-	}
+	if w.restart { hub.restart = true }
 	{
 		sync.mutex_guard(&hub.lock)
 		ordered_remove(&hub.windows, index)
@@ -307,7 +303,6 @@ hub_destroy :: proc(hub: ^App_Hub) {
 	hub_handoff_clear(hub)
 	for len(hub.windows) > 0 { hub_close_window(hub, len(hub.windows) - 1) }
 	delete(hub.windows)
-	delete(hub.launch_after)
 	hub^ = {}
 }
 
@@ -372,10 +367,9 @@ app_run :: proc(folders: []string, setup_asked := false, standalone := false, pr
 		}
 	}
 	if server != nil { instance.serve_stop(server) }
-	launch := strings.clone(hub.launch_after, context.temp_allocator)
 	if !standalone { fs.archive_take_out_clear() }   // (what was opened out of archives: the main window's to remove)
-	// (Restart after an update: it starts once this one let go of the instance)
-	if launch != "" { _ = setup.launch(launch) }
+	// (Restart after an update: program_end starts it, once this one let go of the instance and ended its session)
+	if hub.restart { host.restart_after_exit(&program) }
 	return .Done
 }
 
@@ -692,7 +686,6 @@ app_free :: proc(app: ^App) {
 	batch_free(&app.batch)
 	band_free(&app.band)
 	layouts_free(&app.layouts)
-	delete(app.launch_after)
 	delete(app.exe)
 	tab_image_free(app)
 	delete(app.tab_rects)
