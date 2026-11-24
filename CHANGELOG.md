@@ -3,6 +3,12 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.46.0] - 2026-11-24 11:01
+
+### Changed
+- **Updated gui_toolkit to v0.352.0**: the folder watcher, the start of child programs and the restart after an update now use the toolkit, as the other programs do.
+- **Open with shows the applications with their icons**: the submenu of a file lists each application with its icon, the default first.
+
 ## [0.45.1] - 2026-11-22 06:36
 
 ### Fixed
@@ -702,6 +708,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.46.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.46.0
 [0.45.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.45.1
 [0.45.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.45.0
 [0.44.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.44.0
