@@ -3,6 +3,11 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.46.1] - 2026-11-24 13:09
+
+### Fixed
+- **Open with speaks French again**: when no application opens a file, the submenu says Aucune application instead of No application.
+
 ## [0.46.0] - 2026-11-24 11:01
 
 ### Changed
@@ -708,6 +713,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.46.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.46.1
 [0.46.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.46.0
 [0.45.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.45.1
 [0.45.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.45.0
