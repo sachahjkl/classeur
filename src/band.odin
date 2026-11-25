@@ -13,13 +13,14 @@ import "gt:ui"
 Band :: struct {
 	using band: ui.Item_Band,
 	tab:        u64,   // the tab whose list it runs in
+	frame:      u64,   // the last build of that list
 }
 
 // Ctrl and a press on a row: a band from there, its rows taken out of the selection when that row was in it. Called
 // before the press toggles the row: the base is the selection there was.
 band_begin_on_row :: proc(app: ^App, t: ^Tab, removing: bool) {
 	ui.item_band_begin(&app.band.band, band_box(t), &t.folder.selection, removing)
-	if app.band.active { app.band.tab = t.id }
+	if app.band.active { app.band.tab, app.band.frame = t.id, u64(app.frame) }
 }
 
 // The box the items of `t` are laid out in: the columns view's, or the virtual list's.
@@ -36,8 +37,8 @@ band_free :: proc(b: ^Band) {
 // After the items of `t`'s list: a band starts, follows the pointer, or ends; a right click on the empty part opens the
 // folder's menu. `pressed_row`: an item took the press; `pressed_empty`, `right_empty`: a press, a right click on an
 // empty part that is not the box itself (between the grid's cards); `layout`: where the items are (its list: the tab's,
-// when nil; a list's rows when it is all zero).
-band_update :: proc(app: ^App, t: ^Tab, pressed_row: bool, pressed_empty := false, right_empty := false, layout := ui.Item_Band_Layout{}) {
+// when nil; a list's rows when it is all zero); `row_press`: a press on the empty part of a row (ui.item_band_row_press).
+band_update :: proc(app: ^App, t: ^Tab, pressed_row: bool, pressed_empty := false, right_empty := false, layout := ui.Item_Band_Layout{}, row_press := ui.Item_Band_Press{}) {
 	f := &t.folder
 	box := band_box(t)
 	if box == nil { return }
@@ -46,16 +47,20 @@ band_update :: proc(app: ^App, t: ^Tab, pressed_row: bool, pressed_empty := fals
 	// (a right click on the empty part: the folder's menu, what makes and pastes)
 	if (sig.right_clicked || right_empty) && !pressed_row { entry_menu_open(app, t, ui.mouse_pos(), on_entry = false) }
 	// (one band for the window: while it runs in another tab, this one's list starts none and is left as it is)
-	if b.active && b.tab != t.id { return }
+	if (b.active || b.pending) && b.tab != t.id {
+		if b.frame + 1 >= u64(app.frame) { return }
+		b.active, b.pending = false, false   // (its list is shown no more)
+	}
 	layout := layout
 	if layout.vl == nil { layout.vl = &t.vl }
 	// (a folded group's title row is not selectable in folder_rows: the band leaves it as it is)
 	bytes: Band_Bytes
 	band_bytes_begin(b, &bytes, f)
-	running := ui.item_band_update(&b.band, &f.selection, folder_rows(f), box, layout, pressed_row, pressed_empty, fmt.tprintf("###band%d", t.id))
+	running := ui.item_band_update(&b.band, &f.selection, folder_rows(f), box, layout, pressed_row, pressed_empty, fmt.tprintf("###band%d", t.id), row_press)
 	band_bytes_end(b, &bytes)
+	if running || b.pending { b.tab, b.frame = t.id, u64(app.frame) }
 	if !running { return }
-	b.tab = t.id
+	t.cols_cursor = f.sel   // (the rectangle moves the cursor: the columns scroll by the pointer, not to the cursor)
 	app_frames(app)
 }
 
@@ -64,7 +69,7 @@ band_cancel :: proc(app: ^App) {
 	b := &app.band
 	t := find_tab(app, b.tab)
 	if t == nil {
-		b.active = false
+		b.active, b.pending = false, false
 		return
 	}
 	bytes: Band_Bytes

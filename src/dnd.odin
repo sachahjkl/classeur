@@ -180,7 +180,7 @@ dnd_start :: proc(app: ^App) {
 // A press on a selected row that moved past the system's distance: the selection is dragged (after this frame).
 drag_maybe :: proc(app: ^App, t: ^Tab, sig: ui.Signal) {
 	if sig.pressed { app.drag_started = false }   // (a new press: it may drag)
-	if !sig.dragging || app.drag_started || app.band.active || app.gesture_cancelled { return }   // (a band of Ctrl selects; it drags no file)
+	if !sig.dragging || app.drag_started || app.band.active || app.band.pending || app.gesture_cancelled { return }   // (a band selects; it drags no file)
 	d := sig.drag_delta
 	th := platform.drag_threshold(app.main.win)
 	if abs(d.x) < th.x && abs(d.y) < th.y { return }

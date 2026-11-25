@@ -43,6 +43,7 @@ grid_list :: proc(app: ^App, t: ^Tab, focused: bool, em: f32) {
 	grid_ids_update(t, cols)
 	t.vl.sel = f.sel >= 0 ? f.sel / cols : -1
 	t.vl.list.no_typeahead = true   // (the letters typed go to the filter: filter_field)
+	t.vl.end_space = 0   // (the details' list is the same Virtual_List)
 	rows, ok := ui.vlist("###grid", &t.vl, t.grid_ids[:], ids_version = t.grid_ids_version)
 	if !ok { return }
 	if t.focus_due == .List && t.vl.key != 0 {

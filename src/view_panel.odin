@@ -680,6 +680,7 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, names_only: bool, em: f32
 	least: f32 = 0
 	if !names_only { least = ui.table_min_width(&app.columns) }
 	t.vl.list.no_typeahead = true   // (the letters typed go to the filter, File Pilot's: filter_field)
+	t.vl.end_space = ui.dense(em * ROW_EM) * 0.5   // (a full list keeps an empty part: the rectangle, the folder's menu)
 	// (no labels: no type-ahead to read them; the ids' version: a frame that changed nothing does no pass over the rows)
 	// (a folded group's title row is not selectable: the list's own keys skip it as the folder's rules do)
 	rows, ok := ui.vlist("###list", &t.vl, f.ids[:], selectable = f.selectable[:], ids_version = f.ids_version)
@@ -695,6 +696,7 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, names_only: bool, em: f32
 		t.focus_due = .None
 	}
 	clicked := false
+	row_press: ui.Item_Band_Press
 	fold := ""   // a group's title clicked: folded once the rows are built
 	look := row_look(app, focused, em)
 	for row in rows.first ..< rows.last {
@@ -722,6 +724,7 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, names_only: bool, em: f32
 		sel_up := row > 0 && f.ids[row - 1] in f.selected
 		sel_down := row + 1 < len(f.shown) && f.ids[row + 1] in f.selected
 		if !folded { row_paint(sig.box, look, selected, row == f.sel && (!selected || len(f.selected) > 1), row & 1 == 1, head, sel_up, sel_down) }
+		empty := ui.item_band_row_press(row, sig, selected, t.vl.pressed_empty)
 		check := false
 		if ui.parent(sig.box) {
 			if title != "" {
@@ -767,6 +770,10 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, names_only: bool, em: f32
 			folder_pick(f, row)
 			act_open(app)
 			return
+		} else if empty.active {
+			// (after the name, between the cells: a drag from there is a rectangle, a click picks the row, both band_update's)
+			clicked = true
+			row_press = empty
 		} else if sig.pressed && selected && sig.mods == {} && len(f.selected) > 1 {
 			// (a press on the selection may drag it: the row alone is picked at the click)
 			clicked = true
@@ -782,7 +789,8 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, names_only: bool, em: f32
 			}
 		}
 		if sig.clicked && !check && selected && sig.mods == {} && len(f.selected) > 1 && !app.drag_started { folder_pick(f, row) }
-		drag_maybe(app, t, sig)
+		// (a press and its first move may come in one build: the rectangle waits only from band_update on)
+		if empty.active { app.drag_started = false } else { drag_maybe(app, t, sig) }
 		if e.kind == .Directory {
 			dir := fs.join(t.path, e.name, context.temp_allocator)
 			drop_zone(app, sig.box.rect, dir)
@@ -803,7 +811,7 @@ folder_list :: proc(app: ^App, t: ^Tab, focused: bool, names_only: bool, em: f32
 		}
 	}
 	if fold != "" { folder_fold(f, fold) }
-	band_update(app, t, clicked)
+	band_update(app, t, clicked, row_press = row_press)
 	// a move of the list's own keys (Up, Down, Page Up, Home, type-ahead): the cursor's row alone is selected
 	if t.vl.changed && !clicked && !app.band.active && t.vl.sel >= 0 { folder_pick(f, t.vl.sel) }
 	if t.vl.activated && !clicked { act_open(app) }

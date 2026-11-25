@@ -2543,6 +2543,7 @@ mouse_matrix :: proc(t: ^testing.T, zoom: int) {
 	folder_select_none(&tab.folder)
 	session.frames(s, 2)
 	from, into := middle(rn), middle(rp)
+	if mode < .Columns { from.x = lb.rect.min.x + 80 }   // (the name's text: after it, a drag is a rectangle)
 	session.press(s, from)
 	session.move(s, from + {0, -12})
 	session.move(s, into)

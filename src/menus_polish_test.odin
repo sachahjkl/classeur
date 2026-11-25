@@ -197,7 +197,7 @@ test_crumb_drop_and_spring :: proc(t: ^testing.T) {
 		to: [2]f32
 		for z in app.drop_zones_last { if strings.has_suffix(z.path, fs.SEPARATOR_STRING + "Photos") && z.rect.min.x > tab.cursor_rect.min.x - 1 { to = (z.rect.min + z.rect.max) * 0.5 } }
 		testing.expect(t, to != {}, "the row of Photos")
-		from := [2]f32{tab.cursor_rect.min.x + 120, (tab.cursor_rect.min.y + tab.cursor_rect.max.y) * 0.5}
+		from := [2]f32{tab.cursor_rect.min.x + 80, (tab.cursor_rect.min.y + tab.cursor_rect.max.y) * 0.5}
 		session.press(s, from)
 		session.move(s, from + {0, 12})
 		session.move(s, to)

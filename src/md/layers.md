@@ -71,6 +71,12 @@ This file keeps, per layer, the decisions that the code does not explain. The pl
     know: one band for the window (`Band.tab`: the other panels' lists are left alone while it runs), the folder's menu
     on a right click in the empty part, and the selection's bytes kept row by row through `Item_Band.changed` (a count
     over the folder at each frame of a drag was refused). Escape gives the selection back (`item_band_cancel`).
+    In Details and List a press on the empty part of a row (after the name's text, between the cells) waits
+    (`Item_Band.pending`): past the drag threshold it is a rectangle, let go before it is a click that picks the row. A
+    press on the name or the icon drags the files. A full list would otherwise have no place to start a rectangle; half
+    a row of empty space stays at its end too (`Virtual_List.end_space`). A pending press is a gesture: no file is
+    dragged by it, and Escape ends it. A band whose list is shown no more (`Band.frame`) does not block another tab's.
+    In Columns the rectangle moves the cursor, but the view follows the pointer and does not reveal the cursor.
   - a folded group's title row cannot be selected (`Folder.selectable`, given in `folder_rows`, made with the rows in
     `folder_refilter`). The row stands for a group whose files are not shown: no click, key, Select all, Invert
     selection or rectangle takes its first file, which an action would then act on unseen. The band, the clicks and
