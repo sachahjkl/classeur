@@ -39,17 +39,17 @@
     "gui_toolkit": {
       "flake": false,
       "locked": {
-        "lastModified": 1795688984,
-        "narHash": "sha256-nKkmX/CUMyBg/CR57NC6c63vosZz5rAv9tSc4R6izVk=",
+        "lastModified": 1795709226,
+        "narHash": "sha256-d/P1WZYnb+aAA0vtjmNEmvD5a0YVCbiY+tRRjZ0v9LU=",
         "owner": "sachahjkl",
         "repo": "gui_toolkit",
-        "rev": "248af439e8efd39b28364dddfc9fca7a3bfaa905",
+        "rev": "336ec625a7f4f9c27714082fc92883be55f71bd5",
         "type": "github"
       },
       "original": {
         "owner": "sachahjkl",
         "repo": "gui_toolkit",
-        "rev": "248af439e8efd39b28364dddfc9fca7a3bfaa905",
+        "rev": "336ec625a7f4f9c27714082fc92883be55f71bd5",
         "type": "github"
       }
     },
