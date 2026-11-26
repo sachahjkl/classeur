@@ -5,6 +5,7 @@ package classeur
 import "core:fmt"
 import "core:strings"
 import "core:sync"
+import base "gt:base"
 import "gt:desktop"
 import "gt:i18n"
 import "gt:platform"
@@ -170,6 +171,12 @@ launch_run :: proc(data: rawptr) {
 launch_failed :: proc(data: rawptr, word: u64) {
 	l := (^Launch)(data)
 	defer launch_free(l)
+	// (an elevated classeur opens nothing with the person's programs: the toolkit refused, and it is no missing application)
+	if base.restricted() {
+		say(l.app, "%s", base.restricted_words(.Opens))
+		app_frames(l.app)
+		return
+	}
 	switch l.kind {
 	case .Open:      say(l.app, i18n.tr("No application opens %s."), fs.base(l.path))
 	case .Open_With: say(l.app, i18n.tr("%s cannot start."), l.name)

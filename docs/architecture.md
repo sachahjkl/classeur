@@ -51,7 +51,8 @@ it (the decisions, the refused alternatives, the subtle points) are in [src/md](
 - A thumbnailer the system runs for a PDF or a video (`desktop.thumbnail`) runs on a worker, which waits for it (at
   most 30 seconds): the grid's on the thumbnails' pool, the inspector's on the workers.
 - A program started (the system's application for a file, Open with, a terminal) is a task of the workers (`launch`):
-  a failure comes back to be said. The files written as the window runs (the session, the layouts) are
+  a failure comes back to be said. An elevated classeur (administrator, root) starts none of them: the toolkit refuses
+  (`base.restricted`), and the message says that reason, not a missing application. The files written as the window runs (the session, the layouts) are
   each a `store.Writer` (gt:store: its own thread, the latest text wins), the preferences a `config.User_Writer`. Only the read of the
   preferences runs on the interface's thread, before the first frame. The session and the layouts are read by a task at
   the start; the window shows its start's tab until they come (`app.start_read`, src/md/features/session.md).

@@ -7,6 +7,7 @@ package fs
 import "core:os"
 import "core:strings"
 import "core:sys/linux"
+import base "gt:base"
 import "gt:i18n"
 import process "gt:process"
 
@@ -90,7 +91,11 @@ find_mounted :: proc(u: Uri, allocator := context.allocator) -> (path: string, o
 // agent when the share wants one. ok = false: `why` says what gio said.
 share_mount :: proc(uri: string, allocator := context.temp_allocator) -> (ok: bool, why: string) {
 	r := process.run({"gio", "mount", uri}, {}, context.temp_allocator)
-	if !r.started { return false, strings.clone(i18n.tr("gio is not there: gvfs mounts the shares"), allocator) }
+	if !r.started {
+		// (as root a name on the PATH is not started: base.restricted, and gio is there all the same)
+		if base.restricted() { return false, strings.clone(base.restricted_words(.Opens), allocator) }
+		return false, strings.clone(i18n.tr("gio is not there: gvfs mounts the shares"), allocator)
+	}
 	if r.ok { return true, "" }
 	msg := strings.trim_space(r.stderr)
 	if msg == "" { msg = strings.trim_space(r.stdout) }
