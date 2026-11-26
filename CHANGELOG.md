@@ -3,6 +3,14 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.48.0] - 2026-11-26 10:33
+
+### Fixed
+- **Folders opened by other programs open in Classeur on Windows**: with Open folders and Win+E with Classeur on, a folder or a drive that a program opens by its verb (most Open folder buttons) no longer opens in File Explorer. An existing install shows this part as to repair: run Install again in the settings.
+
+### Security
+- **An elevated Classeur opens nothing with your programs**: run as administrator (Windows) or as root (Linux), it opens no file, URL, terminal or Open with application and does not update or install itself. A message says why, and on Windows the title ends with (Administrator).
+
 ## [0.47.0] - 2026-11-25 22:18
 
 ### Added
@@ -721,6 +729,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.48.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.48.0
 [0.47.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.47.0
 [0.46.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.46.1
 [0.46.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.46.0
