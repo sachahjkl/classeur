@@ -6,7 +6,8 @@ import "gt:testkit/session"
 import "gt:testkit/unwatched"
 import "gt:ui"
 
-// A row's box checks on its way, its fill then its tick, and empties the same way; with the animations off it is at once.
+// A row's box checks on its way, its fill then its tick; unchecked, its icon comes back at once; with the animations off
+// it checks at once.
 @(test)
 test_check_animates :: proc(t: ^testing.T) {
 	unwatched.run(t, proc(t: ^testing.T) {
@@ -22,7 +23,7 @@ test_check_animates :: proc(t: ^testing.T) {
 		ui.set_animations(&app.main.state, .On)
 		folder_pick(&tab.folder, 0)
 		folder_pick(&tab.folder, 1, {.Ctrl})
-		session.frames(s, 1)
+		session.frames(s, 3)   // (a tween's first frame starts it: it moves from the next)
 		p := progress(app, tab, 1)
 		testing.expectf(t, p > 0 && p < 1, "on its way after one frame: %v", p)
 		// (bounded: the anim settles within a second of frames)
@@ -32,8 +33,7 @@ test_check_animates :: proc(t: ^testing.T) {
 		}, "checked")
 		folder_pick(&tab.folder, 2)
 		session.frames(s, 1)
-		p = progress(app, tab, 1)
-		testing.expectf(t, p > 0 && p < 1, "empties on its way: %v", p)
+		testing.expect_value(t, progress(app, tab, 1), f32(0))   // (unchecked: the icon at once)
 
 		ui.set_animations(&app.main.state, .Off)
 		folder_pick(&tab.folder, 3, {.Ctrl})

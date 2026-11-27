@@ -77,11 +77,13 @@ This file keeps, per layer, the decisions that the code does not explain. The pl
     a row of empty space stays at its end too (`Virtual_List.end_space`). A pending press is a gesture: no file is
     dragged by it, and Escape ends it. A band whose list is shown no more (`Band.frame`) does not block another tab's.
     In Columns the rectangle moves the cursor, but the view follows the pointer and does not reveal the cursor.
-  - a row's box checks on its way (`check_progress`, `src/view_panel.odin`): its fill grows from the middle, then its
-    tick is drawn stroke by stroke, about a quarter of a second; it empties the same way. A rectangle drawn over the
+  - a row's box checks on its way (`check_progress`, `src/view_panel.odin`): it fills at once, at its size, and its tick is
+    drawn stroke by stroke in 225 ms, gentle at both ends (a tween: an easing that tends to its end put the whole move in
+    50 ms, which nobody saw). Refused: a fill that grows past its size, and a halo: the box that grows looked ugly;
+    what was missing was a tick slow enough to be seen. No empty outline shows
+    first, and an unchecked row gets its icon back at once: both read as a delay. A rectangle drawn over the
     rows then checks them one after the other as it reaches them. Its state is the box shown checked (the row
-    selected among others), not the selection: a row selected alone shows its icon, and a box that empties stays until
-    it is empty. Only the rows built ask for it (one `ui.anim` each, by tab and row id): a row scrolled into view
+    selected among others), not the selection: a row selected alone shows its icon. Only the rows built ask for it (one `ui.tween` each, by tab and row id): a row scrolled into view
     starts at its state, and no frame passes over the folder. The Animations setting off: at once.
   - a folded group's title row cannot be selected (`Folder.selectable`, given in `folder_rows`, made with the rows in
     `folder_refilter`). The row stands for a group whose files are not shown: no click, key, Select all, Invert

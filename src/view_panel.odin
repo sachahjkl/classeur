@@ -557,16 +557,16 @@ column_filter_open :: proc(app: ^App, t: ^Tab, key: fs.Sort_Key) {
 
 
 @(private = "file")
-// How fast a row's box checks (ui.anim: halvings of the distance per second): its fill, then its tick, in about a
-// quarter of a second. The person's Animations setting off: at once.
-CHECK_ANIM_RATE :: 16
-// The share of the way that fills the box; the rest draws the tick, stroke by stroke.
-CHECK_FILL_SHARE :: 0.4
-// The fill's size at its start, a share of the box's: it grows from the middle.
-CHECK_FILL_FROM :: 0.3
+// How long a row's box takes to check (ui.tween, a fixed time: an easing that tends to its end, as ui.anim does, put
+// the whole move in 50 ms, which no eye saw on a box of 16 pixels). Unchecked, the icon comes back at once: a box that
+// emptied first read as a delay. Animations off: at once.
+// The box fills at once, at its size; only its tick moves: drawn stroke by stroke in this time, gentle at both ends (the
+// pace the person chose; an ease that slows at its end drew most of it in the first frames). Refused: a fill that
+// grows past its size and a halo around it: the person found the box that grows ugly.
+CHECK_ANIM_MS :: 225
 
-// `p`: 0 empty, 1 checked; between, the box on its way (check_progress).
-Check_Draw :: struct { p: f32, some: bool, line, fill, mark: ui.Color, round: f32 }
+// `p`: 0 empty, 1 checked; between, its tick on its way (check_progress). `rising`: on its way to checked (no outline).
+Check_Draw :: struct { p: f32, some: bool, line, fill, mark: ui.Color, round: f32, rising: bool }
 
 @(private = "file")
 check_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
@@ -577,19 +577,16 @@ check_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	box := ui.Rect{c - s * 0.5, c + s * 0.5}
 	w := max(1, s * 0.09)
 	radius := s * 0.12 * d.round
-	if d.p < 1 {
+	// (empty: its outline. On its way to checked there is no outline under the fill: an empty box seen first read as a
+	// delay)
+	if d.p <= 0 && !d.rising {
 		draw.rect(dc, box, d.line, radius = radius, border = w)
-		if d.p <= 0 && d.some { draw.rect(dc, {{box.min.x + s * 0.25, c.y - w}, {box.max.x - s * 0.25, c.y + w}}, d.line) }
+		if d.some { draw.rect(dc, {{box.min.x + s * 0.25, c.y - w}, {box.max.x - s * 0.25, c.y + w}}, d.line) }
+		return
 	}
-	if d.p <= 0 { return }
-	// the fill grows from the middle and comes in
-	f := ui.ease_at(.Out, d.p / CHECK_FILL_SHARE)
-	half := s * 0.5 * (CHECK_FILL_FROM + (1 - CHECK_FILL_FROM) * f)
-	fill := d.fill
-	fill.a *= f
-	draw.rect(dc, {c - half, c + half}, fill, radius = radius * half / (s * 0.5))
+	draw.rect(dc, box, d.fill, radius = radius)
 	// the tick, drawn along its two strokes as a pen would
-	k := clamp((d.p - CHECK_FILL_SHARE) / (1 - CHECK_FILL_SHARE), 0, 1)
+	k := ui.ease_at(.In_Out, d.p)
 	if k <= 0 { return }
 	a := ui.Vec2{box.min.x + s * 0.22, c.y + s * 0.02}
 	m := ui.Vec2{box.min.x + s * 0.42, c.y + s * 0.22}
@@ -604,11 +601,11 @@ check_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	draw.line(dc, m, m + (z - m) * ((run - l1) / l2), w * 1.6, d.mark)
 }
 
-// Where row `row`'s box is on its way to `checked` (0 empty, 1 checked), eased at each build. Asked for each row built,
-// shown or not: a row's box that appears (a second row selected) shows its state, and a row scrolled into view does
-// not animate (its first ask starts at its state). Only the rows built: no pass over the folder.
+// Where row `row`'s box is on its way to checked (0 empty, 1 checked); unchecked, 0 at once. Asked for each row built,
+// shown or not: a row scrolled into view does not animate (its first ask starts at its state). Only the rows built: no
+// pass over the folder.
 check_progress :: proc(t: ^Tab, row: int, checked: bool) -> f32 {
-	return ui.anim(check_key(t, row), checked ? 1 : 0, CHECK_ANIM_RATE)
+	return ui.tween(check_key(t, row), checked ? 1 : 0, checked ? CHECK_ANIM_MS : 0, .Linear)
 }
 
 // (by the tab and the row's id: the same row in two panels animates in each)
@@ -618,7 +615,7 @@ check_key :: proc(t: ^Tab, row: int) -> ui.Key { return ui.key_from_u64(ui.key_f
 @(private = "file")
 check_box :: proc(app: ^App, id: string, on, some: bool, width: f32) -> bool {
 	d := ui.frame_new(Check_Draw)
-	d^ = {on ? 1 : 0, some, ui.color("text"), ui.color("accent"), ui.ink_on(ui.color("accent")), corner_k()}
+	d^ = {on ? 1 : 0, some, ui.color("text"), ui.color("accent"), ui.ink_on(ui.color("accent")), corner_k(), false}
 	ui.next({width = ui.px(width), height = ui.pct(1)})
 	b := ui.custom(fmt.tprintf("###%s", id), check_draw, d, {.Clickable})
 	return ui.signal(b).clicked
@@ -633,13 +630,13 @@ icon_check :: proc(app: ^App, t: ^Tab, e: fs.Entry, row: int, selected: bool, em
 	ui.next({width = ui.px(width), height = ui.pct(1)})
 	cell := ui.build_box({}, fmt.tprintf("###check%d", row))
 	over = ui.pointer_on(cell)   // (the last layout's)
-	// (its box shows checked while the row is selected among others; it stays while it empties, then the icon comes back)
+	// (its box shows checked while the row is selected among others; unchecked, the icon comes back at once)
 	checked := selected && len(t.folder.selected) > 1
 	p := check_progress(t, row, checked)
 	if ui.parent(cell) {
-		if over || checked || p > 0 {
+		if over || checked {
 			d := ui.frame_new(Check_Draw)
-			d^ = {selected && over && !checked ? 1 : p, false, ui.color("text"), ui.color("accent"), ui.ink_on(ui.color("accent")), corner_k()}
+			d^ = {checked ? p : selected ? 1 : 0, false, ui.color("text"), ui.color("accent"), ui.ink_on(ui.color("accent")), corner_k(), checked}
 			ui.next({width = ui.px(width), height = ui.pct(1)})
 			ui.custom("###box", check_draw, d)
 		} else {
