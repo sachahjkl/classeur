@@ -3,6 +3,12 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.51.0] - 2026-11-27 20:22
+
+### Changed
+- **Compact rows is Ctrl+Shift+Alt+R**: its key was Ctrl+Shift+Alt+D, which opens the debug window in a debug build.
+- **Updated gui_toolkit to v0.367.0**: photos in the grid are turned the way they were taken, SVG files show their picture, and drop-down lists are as wide as their rows.
+
 ## [0.50.1] - 2026-11-27 05:56
 
 ### Changed
@@ -749,6 +755,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.51.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.51.0
 [0.50.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.50.1
 [0.50.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.50.0
 [0.49.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.49.0
