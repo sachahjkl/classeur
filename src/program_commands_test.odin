@@ -100,7 +100,7 @@ test_look_commands :: proc(t: ^testing.T) {
 		session.frames(s, 1)
 		testing.expect_value(t, app.settings.font_size, size)
 		compact := app.settings.compact
-		session.key(s, .D, {.Ctrl, .Shift, .Alt})
+		session.key(s, .R, {.Ctrl, .Shift, .Alt})
 		session.frames(s, 1)
 		testing.expect_value(t, app.settings.compact, !compact)
 		command_find("app_density").run(app)

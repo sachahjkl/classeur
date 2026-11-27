@@ -163,7 +163,7 @@ COMMANDS := [?]Command{
 	{id = "app_version_copy", title = i18n.later("Copy the version"), icon = lucide.CODE, tags = {"about", "number", "clipboard"}, keys = {{.V, {.Ctrl, .Shift, .Alt}}}, in_text = true, run = act_app_version_copy},
 	{id = "app_theme_next", title = i18n.later("Next theme"), icon = lucide.PALETTE, tags = {"color", "colour", "dark", "light", "look"}, keys = {{.Period, {.Ctrl, .Shift, .Alt}}}, in_text = true, run = act_app_theme_next},
 	{id = "app_theme_previous", title = i18n.later("Previous theme"), icon = lucide.PALETTE, tags = {"color", "colour", "dark", "light", "look"}, keys = {{.Comma, {.Ctrl, .Shift, .Alt}}}, in_text = true, run = act_app_theme_previous},
-	{id = "app_density", title = i18n.later("Compact rows"), icon = lucide.MENU, tags = {"density", "comfortable", "spacing"}, keys = {{.D, {.Ctrl, .Shift, .Alt}}}, in_text = true, run = act_app_density},
+	{id = "app_density", title = i18n.later("Compact rows"), icon = lucide.MENU, tags = {"density", "comfortable", "spacing"}, keys = {{.R, {.Ctrl, .Shift, .Alt}}}, in_text = true, run = act_app_density},
 	{id = "app_animations", title = i18n.later("Animations"), icon = lucide.PLAY, tags = {"motion", "transitions", "on or off"}, keys = {{.A, {.Ctrl, .Shift, .Alt}}}, in_text = true, run = act_app_animations},
 	{id = "app_text_bigger", title = i18n.later("Larger text"), icon = lucide.TYPE, tags = {"font size", "bigger", "interface", "scale"}, keys = {{.Equal, {.Ctrl, .Alt}}}, in_text = true, run = act_app_text_bigger},
 	{id = "app_text_smaller", title = i18n.later("Smaller text"), icon = lucide.TYPE, tags = {"font size", "interface", "scale"}, keys = {{.Minus, {.Ctrl, .Alt}}}, in_text = true, run = act_app_text_smaller},

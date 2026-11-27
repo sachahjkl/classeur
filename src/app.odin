@@ -181,6 +181,7 @@ App :: struct {
 	drag_out:    bool,              // ... or left it: the system's drag takes them after this frame (drag_run)
 	install:     prefs_page.Install,   // the install: its offer, its dialog, the settings' page (integration.odin)
 	changelog:   prefs_page.Changelog, // What's new: CHANGELOG.md on a page of the settings, said once after an update
+	check_ms:    f32,               // how long a row's tick is drawn (CHECK_ANIM_MS; the Look debug panel tunes it)
 	restart:     bool,              // Restart after an update: classeur starts again once this one has ended (host.restart_after_exit)
 	updates:        prefs_page.Updates,   // checks, downloads and puts in place a new classeur (updates.odin; its updater nil headless)
 	measures_sorted_at: f64,           // when measures_resort last sorted (ui.now_ms)
@@ -530,6 +531,8 @@ app_open :: proc(o: Open_Options) -> ^App {
 		h.before_input = proc(h: ^host.Host) { app := (^App)(h.user); devtools.service(app.devtools, &h.state, &app.shared.r) }
 	}
 
+	app.check_ms = CHECK_ANIM_MS
+	debug_panels_register(&app.main.state, app)
 	pools_start(app)
 	licence_open(app)
 	palette_start(app)
