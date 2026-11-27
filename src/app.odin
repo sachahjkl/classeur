@@ -538,7 +538,9 @@ app_open :: proc(o: Open_Options) -> ^App {
 	palette_start(app)
 	app.side_open = {.Recents = false, .Bookmarks = true, .Storage = true, .Network = true, .Places = true}
 	jobs_start(app)
-	watcher_start(app)
+	// (headless tests skip the folder watcher unless a test starts it, matching deep_find: fsx.Watch notifies once a
+	// new watch begins, which otherwise races with tests asserting no background reload)
+	if !app.headless { watcher_start(app) }
 	places_load(app)
 	// (the files written as the window runs: their paths known now, a test's included)
 	if path := session_file(app); path != "" { store.writer_open(&app.session_writer, path) }

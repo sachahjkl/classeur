@@ -667,6 +667,9 @@ test_watch :: proc(t: ^testing.T) {
 		files := FIXTURE
 		dir := make_fixture(t, files[:])
 		s, app := start(t, {dir})
+		context.allocator = runtime.heap_allocator()
+		watcher_start(app)
+		session.frames(s, 1)   // (gives the watcher the tab's folder)
 		tab := current_tab(app)
 		// another program makes a file and removes one: the list follows, no key pressed
 		_ = os.write_entire_file(fs.join(dir, "from elsewhere.txt", context.temp_allocator), transmute([]u8)string("hello"))
