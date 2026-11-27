@@ -3,6 +3,11 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.50.1] - 2026-11-27 05:56
+
+### Changed
+- **A row's tick is drawn so it can be seen**: its box fills at once and its tick is drawn in about a quarter of a second; an unchecked row gets its icon back at once.
+
 ## [0.50.0] - 2026-11-26 21:35
 
 ### Added
@@ -744,6 +749,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.50.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.50.1
 [0.50.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.50.0
 [0.49.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.49.0
 [0.48.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.48.1
