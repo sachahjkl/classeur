@@ -156,6 +156,9 @@ test_share_name_read_with_the_folder :: proc(t: ^testing.T) {
 		dir := make_fixture(t, files[:])
 		s, app := start(t, {dir})
 		context.allocator = runtime.heap_allocator()
+		// (stop the folder watcher: fsx.Watch notifies once a new watch begins, which would reload the share after
+		// XDG_RUNTIME_DIR changes below)
+		watcher_stop(app)
 		tab := current_tab(app)
 		testing.expect_value(t, tab.share_root, "")
 		tab_go(app, tab, "smb://nas/docs")

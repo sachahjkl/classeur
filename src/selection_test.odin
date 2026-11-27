@@ -126,3 +126,24 @@ test_list_selection_keys :: proc(t: ^testing.T) {
 		testing.expect_value(t, selected_names(f), `["d.txt"]`)
 	})
 }
+
+// Reloading the same folder keeps the Shift anchor while its row exists, so extending a range with Shift+Down across a
+// background refresh does not restart from the cursor.
+@(test)
+test_selection_anchor_kept_on_reload :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		dir := make_fixture(t, {"a.txt", "b.txt", "c.txt", "d.txt"})
+		s, app := start(t, {dir})
+		context.allocator = runtime.heap_allocator()
+		tab := current_tab(app)
+		f := &tab.folder
+
+		session.key(s, .Home)
+		session.key(s, .Down, {.Shift})
+		testing.expect_value(t, selected_names(f), `["a.txt", "b.txt"]`)
+		tab_load(app, tab)
+		wait_read(s)
+		session.key(s, .Down, {.Shift})
+		testing.expect_value(t, selected_names(f), `["a.txt", "b.txt", "c.txt"]`)
+	})
+}

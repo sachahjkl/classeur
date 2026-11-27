@@ -194,7 +194,12 @@ folder_take :: proc(f, p: ^Folder) {
 	} else {
 		ui.item_selection_keep(&f.selection, folder_rows(f))
 	}
-	if cursor_name != "" { folder_cursor_to_name(f, cursor_name) }
+	// (only move the cursor back by name: item_selection_keep already kept or dropped the Shift anchor)
+	if cursor_name != "" {
+		if i := folder_find_name(f, cursor_name); i >= 0 && i < len(f.row_of) && f.row_of[i] >= 0 {
+			f.sel = int(f.row_of[i])
+		}
+	}
 	if f.sel < 0 && len(f.shown) > 0 { folder_cursor_place(f, 0) }
 }
 

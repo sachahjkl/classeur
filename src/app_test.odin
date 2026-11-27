@@ -861,7 +861,7 @@ test_goto :: proc(t: ^testing.T) {
 		session.frames(s, 2)
 		session.key(s, .Tab)
 		session.frames(s, 2)
-		testing.expect_value(t, ui.line_edit_string(&app.goto.field), fmt.tprintf("%s%s", fs.join(dir, "Projects", context.temp_allocator), fs.SEPARATOR_STRING))
+		testing.expect_value(t, ui.line_edit_string(&app.goto.field), fmt.tprintf("%s%s", home_path(app, fs.join(dir, "Projects", context.temp_allocator)), fs.SEPARATOR_STRING))
 		session.type_text(s, "cla")
 		session.wait_until(s, proc(s: ^session.Session) -> bool { return strings.has_suffix((^App)(s.user).goto.dir, "Projects") }, "Projects read")
 		session.frames(s, 2)
