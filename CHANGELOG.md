@@ -3,6 +3,15 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.52.0] - 2026-11-28 12:54
+
+### Added
+- **About Classeur dialog**: Shift+F1 and the About Classeur command now open a modal with Classeur logo, version, toolkit version, licence, an in-app What is new button, Website and Online release notes links, Copy version, and Copy diagnostics.
+
+### Changed
+- **Updated gui_toolkit to v0.370.0**: faster startup with a CPU-rendered first frame, permanent compact header bars on lone docked panels, scrollable debug window tabs with a drag grip (Ctrl+Alt+Shift+D in every build), 300 ms safe-triangle corridor for context submenus, and aligned theme picker rows.
+- **Tabs match the toolkit Folder style**: panel tabs now render through ui.tab_face with concave feet, one continuous strip line, subtle hover fill, and a top accent mark on the focused panel.
+
 ## [0.51.1] - 2026-11-27 21:24
 
 ### Fixed
@@ -760,6 +769,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.52.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.52.0
 [0.51.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.51.1
 [0.51.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.51.0
 [0.50.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.50.1
