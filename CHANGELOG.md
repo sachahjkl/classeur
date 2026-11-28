@@ -3,6 +3,11 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.52.2] - 2026-11-28 15:48
+
+### Changed
+- **Simpler program description**: the desktop entry, package metadata, and About dialog now use the short label File manager without a subtitle in About.
+
 ## [0.52.1] - 2026-11-28 13:40
 
 ### Changed
@@ -774,6 +779,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.52.2]: https://github.com/sachahjkl/classeur/releases/tag/v0.52.2
 [0.52.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.52.1
 [0.52.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.52.0
 [0.51.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.51.1
