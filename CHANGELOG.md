@@ -3,6 +3,11 @@
 All notable changes to classeur are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the versions follow [semantic versioning](https://semver.org/).
 
+## [0.52.1] - 2026-11-28 13:40
+
+### Changed
+- **Updated gui_toolkit to v0.370.2**: items listed under Recent in the command palette are no longer repeated below, stacked view tabs gain a close button and middle-click close, and debug tabs use tighter padding.
+
 ## [0.52.0] - 2026-11-28 12:54
 
 ### Added
@@ -769,6 +774,7 @@ The command line is `--install`, `--uninstall`, `--status` and `--setup`, as in 
   window per person: a second `classeur <folder>` opens a tab in it.
 - Options (Ctrl+,): the theme, the font size, hidden files, extensions, folders first, single click, the measures.
 
+[0.52.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.52.1
 [0.52.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.52.0
 [0.51.1]: https://github.com/sachahjkl/classeur/releases/tag/v0.51.1
 [0.51.0]: https://github.com/sachahjkl/classeur/releases/tag/v0.51.0
