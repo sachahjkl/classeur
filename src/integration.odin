@@ -37,7 +37,7 @@ ICON_PNGS := [?]desktop.Icon{
 classeur_identity :: proc() -> desktop.Identity {
 	sync.once_do(&identity_once, proc() {
 		id := desktop.identity_of("Froment Software", APP_TITLE, APP_NAME, runtime.heap_allocator())
-		id.description = "A fast file manager: tabs in panels, a command palette, GoTo, batch rename, undo."
+		id.description = "File manager"
 		id.generic_name, id.categories = "File Manager", "System;FileTools;FileManager;Utility;Core;"
 		id.keywords = "folder;manager;explore;disk;filesystem;files;"
 		id.uninstall_arguments = "--setup"

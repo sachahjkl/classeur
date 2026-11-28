@@ -20,7 +20,7 @@ SITE_LD :: [?][2]string{
 // (the fields live as long as the tool: site.command keeps them)
 site_meta :: proc() -> tk_site.Meta {
 	// (where the site is published, what it is: the one place that says it; the vendor's fields are the toolkit's)
-	m := tk_site.meta_default("Classeur", "https://classeur.froment.software/", REPOSITORY, "A fast file manager you drive from the keyboard", "#141517", "#4f9de8")
+	m := tk_site.meta_default("Classeur", "https://classeur.froment.software/", REPOSITORY, "File manager", "#141517", "#4f9de8")
 	ld := SITE_LD
 	m.ld_fields = make([][2]string, len(ld))
 	copy(m.ld_fields, ld[:])

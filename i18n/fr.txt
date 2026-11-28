@@ -580,9 +580,6 @@ en+ Its %d items are deleted for good: this cannot be undone.
 fr %d élément sera supprimé définitivement : cette action est irréversible.
 fr+ %d éléments seront supprimés définitivement : cette action est irréversible.
 
-en A fast file manager you drive from the keyboard.
-fr Un gestionnaire de fichiers rapide, piloté au clavier.
-
 en A name is taken
 fr Un nom est déjà utilisé
 

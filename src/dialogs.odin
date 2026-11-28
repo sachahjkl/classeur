@@ -90,7 +90,6 @@ about_build :: proc(app: ^App) {
 	ui.about_modal("classeur_about", &app.about_open, {
 		name         = APP_TITLE,
 		version      = APP_VERSION,
-		tagline      = i18n.tr("A fast file manager you drive from the keyboard."),
 		licence      = "MIT",
 		copyright    = "© 2026 Froment Software",
 		logo_draw    = logo_draw,

@@ -1,5 +1,5 @@
 {
-  description = "classeur: a fast file manager you drive from the keyboard";
+  description = "File manager";
 
   inputs = {
     # The toolkit, at the submodule's commit: a flake fetched from GitHub is a tarball without submodules
@@ -123,7 +123,7 @@
           name = "classeur";
           desktopName = "Classeur";
           genericName = "File Manager";
-          comment = "A fast file manager: tabs, panels, search, preview, keyboard first.";
+          comment = "File manager";
           # (folders as paths, and the places that are not paths as URIs: trash:///, smb://..., which classeur reads)
           exec = "classeur %U";
           icon = "classeur";
@@ -146,7 +146,7 @@
       '';
 
       meta = {
-        description = "A fast file manager you drive from the keyboard";
+        description = "File manager";
         homepage = "https://classeur.froment.software/";
         license = lib.licenses.mit;
         platforms = [system];
