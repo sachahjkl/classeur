@@ -92,6 +92,15 @@ This file keeps, per layer, the decisions that the code does not explain. The pl
   - the keys' moves in the grid and the columns view are `ui.item_move_target` (Lines of a row's cards, Columns of a
     column's names); what a move does to the selection was already `item_selection_move`.
   - a card's name is cut by `ui.table_card_name` (its middle, its extension kept).
+  - the tab strip uses the toolkit's tab face (`ui.tabs_over(.Folder, ...)`, `ui.tab_face`, `ui.tab_body`,
+    `ui.tab_strip_start`, `ui.tab_line_draw`; `src/view.odin`, `src/view_panel.odin`, `src/tab_drag.odin`): fixed-width
+    tabs, drags, drop zones and close buttons stay classeur's, while the Folder silhouette, concave feet, strip line,
+    hover fill and focused-panel top accent (`mark`) come from the toolkit. Refused: keeping a local `tab_paint` copy.
+  - About Classeur (`Shift+F1`, `src/dialogs.odin`, `src/program_actions.odin`) uses `ui.about_modal`: classeur's
+    drawn folder logo, version, toolkit version, licence, prioritized built-in "What's new" button (opening Settings >
+    What's new), Website, Online release notes, Copy version, and Copy diagnostics (renderer adapter and theme from
+    in-memory state, never blocking). Links open through `launch` so workers, elevation restrictions and headless tests
+    stay unified.
 - **One window per person** (`gt:instance` `serve_start`), the session (`src/session.odin`).
 - Back and Forward come back to the row and the scroll left (`Visit`, `src/tab.odin`). A refused rename keeps its name.
 - The letters typed go to the panel's filter (`no_typeahead`), not to a jump in the list.

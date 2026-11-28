@@ -25,6 +25,8 @@ TAB_EM     :: 14
 TAB_MIN_EM :: 5
 // What a row of tabs holds after them: the new tab's button, the gap before it and the room around it, in ems.
 TAB_ROW_END_EM :: 2 + ui.TOOL_GAP + 0.5
+// Room reserved for ui.tab_strip_start() and the chosen tab's trailing fillet before computing fixed tab widths, in ems.
+TAB_STRIP_LEAD_EM :: 0.8
 // The button of the list of the tabs, before the new tab's (a row with more tabs than it holds), in ems.
 TAB_LIST_EM :: 2
 
@@ -53,8 +55,8 @@ view_build :: proc(h: ^host.Host, size: host.Vec2) {
 	append(&app.text_keys_before, ..app.text_keys[:])
 	clear(&app.text_keys)
 	typing := slice.contains(app.text_keys_before[:], ui.focus_key())
-	// (a view shown as a dialog holds the keys; one that floats or is docked keeps those it is given)
-	app.no_dialog = !ui.views_hold_keys(&app.views)
+	// (a view shown as a dialog, or About, holds the keys; one that floats or is docked keeps those it is given)
+	app.no_dialog = !ui.views_hold_keys(&app.views) && !app.about_open
 	keys_follow(app)
 	// the palette's choice, before anything is built: a value its run mode writes shows on the settings' view in the
 	// same frame (the views are built first, in views_frame)
@@ -173,197 +175,156 @@ command_keys :: proc(app: ^App, c: ^Command) -> string {
 
 @(private = "file")
 build_top :: proc(app: ^App, em: f32) {
-	ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOP_EM)), bg = draw.hex(surfaces(app).top)})
-	ui.push_tags("bar")
-	defer ui.pop_tags()
-	if ui.title_bar("###titlebar", {.Draw_Background}) {
-		// its bottom line, the whole width: the shown tab paints over it (its own lines going up), one line with them
-		edge := ui.frame_new(ui.Color)
-		edge^ = draw.hex(surfaces(app).edge)
-		bar := ui.parent_box()
-		bar.custom, bar.custom_user = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-			w := max(1, ui.scale())
-			draw.rect(dc, {{b.rect.min.x, b.rect.max.y - w}, b.rect.max}, (^ui.Color)(user)^)
-		}, edge
-		// each part as wide as what is under it: over the views docked at the left (the sidebar, its handle) the head,
-		// then the columns sharing the panels' room, a line between two. The panels' room is the views' frame's content
-		// as the last build laid it out; what is docked at each side keeps its width when the window is resized, so the
-		// tabs move with their panels in the same frame (only a handle dragged is a frame behind). (each region starts on
-		// the column of the line at the left of its panel: the shown tab's left line is that line going up, not a second
-		// one beside it)
-		line := max(1, ui.scale())
-		cols := 0
-		for p in app.panels { if !p.below { cols += 1 } }
-		c := app.content_rect
-		left, right: f32
-		if c.max.x > c.min.x {
-			left, right = max(c.min.x, 0), max(app.window_px_last.x - c.max.x, 0)
+	if ui.tabs_over(.Folder, {ground = draw.hex(surfaces(app).list), edge = draw.hex(surfaces(app).edge)}) {
+		ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOP_EM)), bg = draw.hex(surfaces(app).top)})
+		ui.push_tags("bar")
+		defer ui.pop_tags()
+		if ui.title_bar("###titlebar", {.Draw_Background}) {
+			// its bottom line, the whole width: ui.tab_face rises out of it as one shape with the panel below
+			bar := ui.parent_box()
+			bar.custom, bar.custom_user = ui.tab_line_draw, ui.tab_strip_look({})
+			// each part as wide as what is under it: over the views docked at the left (the sidebar, its handle) the head,
+			// then the columns sharing the panels' room, a line between two. The panels' room is the views' frame's content
+			// as the last build laid it out; what is docked at each side keeps its width when the window is resized, so the
+			// tabs move with their panels in the same frame (only a handle dragged is a frame behind). (each region starts on
+			// the column of the line at the left of its panel: the shown tab's left line is that line going up, not a second
+			// one beside it)
+			line := max(1, ui.scale())
+			cols := 0
+			for p in app.panels { if !p.below { cols += 1 } }
+			c := app.content_rect
+			left, right: f32
+			if c.max.x > c.min.x {
+				left, right = max(c.min.x, 0), max(app.window_px_last.x - c.max.x, 0)
+			}
+			// (the head holds the logo and the sidebar's button while the sidebar is wide enough; over its folded rail only
+			// the button, which unfolds it: both drawn in the rail's width ran over each other and over the first tab)
+			toggle_w := em * (2.0 + ui.SPACE_1 + ui.SPACE_2)
+			with_logo := left - line >= toggle_w + em * (1.8 + ui.SPACE_2)
+			head := max(left - line, toggle_w)
+			col_w := (app.window_px.x - left - right - f32(max(cols - 1, 0)) * line) / f32(max(cols, 1))
+			ui.next({width = ui.px(head), height = ui.pct(1)})
+			if ui.row(.Center, {}, "###head") {
+				ui.space(ui.SPACE_2)
+				if with_logo { logo_icon(em * 1.8) }
+				ui.spacer(ui.fill())
+				if icon_action(app, "sidebar", sidebar_shown(app) ? lucide.PANEL_LEFT : lucide.PANEL_RIGHT, command_tip(app, "sidebar"), em, command = "sidebar") { act_toggle_sidebar(app) }
+				ui.space(ui.SPACE_1)
+			}
+			// (a column's top panel has its tabs here; a panel below another has them at its own top: panel_build)
+			for p, i in app.panels {
+				if p.below { continue }
+				last := true
+				for q in app.panels[i + 1:] { if !q.below { last = false; break } }
+				// (the last region ends at the window's buttons: what is left of the bar)
+				w: ui.Size = last ? ui.fill() : ui.px(col_w + line)
+				tab_region(app, p, i, w, col_w, em)
+			}
+			// (an update to install, coming, or in place: a button before the window's own; nothing otherwise)
+			if app.updates.updater != nil {
+				ui.next({height = ui.px(ui.dense(em * 1.9))})
+				if prefs_page.update_badge(app.updates.updater, proc(user: rawptr) { updates_restart((^App)(user)) }, app) != nil { ui.space(ui.CONTROL_GAP) }
+			}
+			ui.window_buttons()
 		}
-		// (the head holds the logo and the sidebar's button while the sidebar is wide enough; over its folded rail only
-		// the button, which unfolds it: both drawn in the rail's width ran over each other and over the first tab)
-		toggle_w := em * (2.0 + ui.SPACE_1 + ui.SPACE_2)
-		with_logo := left - line >= toggle_w + em * (1.8 + ui.SPACE_2)
-		head := max(left - line, toggle_w)
-		col_w := (app.window_px.x - left - right - f32(max(cols - 1, 0)) * line) / f32(max(cols, 1))
-		ui.next({width = ui.px(head), height = ui.pct(1)})
-		if ui.row(.Center, {}, "###head") {
-			ui.space(ui.SPACE_2)
-			if with_logo { logo_icon(em * 1.8) }
-			ui.spacer(ui.fill())
-			if icon_action(app, "sidebar", sidebar_shown(app) ? lucide.PANEL_LEFT : lucide.PANEL_RIGHT, command_tip(app, "sidebar"), em, command = "sidebar") { act_toggle_sidebar(app) }
-			ui.space(ui.SPACE_1)
-		}
-		// (a column's top panel has its tabs here; a panel below another has them at its own top: panel_build)
-		for p, i in app.panels {
-			if p.below { continue }
-			last := true
-			for q in app.panels[i + 1:] { if !q.below { last = false; break } }
-			// (the last region ends at the window's buttons: what is left of the bar)
-			w: ui.Size = last ? ui.fill() : ui.px(col_w + line)
-			tab_region(app, p, i, w, col_w, em)
-		}
-		// (an update to install, coming, or in place: a button before the window's own; nothing otherwise)
-		if app.updates.updater != nil {
-			ui.next({height = ui.px(ui.dense(em * 1.9))})
-			if prefs_page.update_badge(app.updates.updater, proc(user: rawptr) { updates_restart((^App)(user)) }, app) != nil { ui.space(ui.CONTROL_GAP) }
-		}
-		ui.window_buttons()
 	}
 }
 
-Tab_Paint :: struct { base, edge, line: ui.Color, radius: f32 }
-
-// The shown tab: its surface, a line at its left, top and right; none at its bottom, where the toolbar goes on. With a
-// `line` (the panel that has the keyboard, among several), its top edge is that colour, tab_line_px() thick: in place
-// of the edge there, one line and not two side by side.
-tab_paint :: proc(b: ^ui.Box, base, edge, line: ui.Color, radius: f32) {
-	d := ui.frame_new(Tab_Paint)
-	d^ = {base, edge, line, radius}
-	b.custom = proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
-		d := (^Tab_Paint)(user)
-		r := b.rect
-		w := max(1, ui.scale())
-		// (its top corners: its foot is the toolbar's top, one surface)
-		corners :: proc(radius: f32) -> [4]f32 { return {max(radius, 0), 0, max(radius, 0), 0} }
-		lw := w
-		if d.line.a > 0 {
-			// the accent over the whole shape, then the edge below it: the accent shows along its top and caps its
-			// corners
-			lw = tab_line_px()
-			draw.rect_corners(dc, r, {d.line, d.line, d.line, d.line}, corners(d.radius))
-			below := ui.Rect{{r.min.x, r.min.y + lw}, r.max}
-			draw.rect_corners(dc, below, {d.edge, d.edge, d.edge, d.edge}, corners(d.radius - lw))
-		} else {
-			draw.rect_corners(dc, r, {d.edge, d.edge, d.edge, d.edge}, corners(d.radius))
-		}
-		inner := ui.Rect{{r.min.x + w, r.min.y + lw}, {r.max.x - w, r.max.y}}
-		draw.rect_corners(dc, inner, {d.base, d.base, d.base, d.base}, corners(d.radius - lw))
-	}
-	b.custom_user = d
-}
-
-// The thickness of the accent along the top of the focused panel's shown tab: two lines' worth, so that it reads at a
-// glance which panel has the keyboard.
-tab_line_px :: proc() -> f32 { return max(1, ui.scale()) * 2 }
-
-// A tab's top corners: TAB_RADIUS_EM at a rounding of 1 (appearance.rounding), square at 0.
+// A tab's floating drag ghost corner radius: TAB_RADIUS_EM at a rounding of 1 (appearance.rounding), square at 0.
 TAB_RADIUS_EM :: 0.6
 tab_radius :: proc(em: f32) -> f32 { return em * TAB_RADIUS_EM * ui.rounding(ui.current_state()) }
 
-// A panel's tabs, at the top of the window over it: as wide as TAB_EM, narrower when they do not fit; the shown one
-// in the list's colour, with a line of the accent along its top when its panel has the keyboard. More tabs than the row
-// holds at TAB_MIN_EM: they scroll on the toolkit's strip (its arrows, the wheel), the shown one brought into view, and a
-// chevron lists them.
+// A panel's tabs, at the top of the window over it: as wide as TAB_EM, narrower when they do not fit; drawn with the
+// toolkit's Folder tab face (ui.tab_face, ui.tab_body, ui.tab_strip_start), with an accent mark along the top when
+// its panel has the keyboard. More tabs than the row holds at TAB_MIN_EM: they scroll on the toolkit's strip (its
+// arrows, the wheel), the shown one brought into view, and a chevron lists them.
 tab_region :: proc(app: ^App, p: ^Panel, index: int, width: ui.Size, room: f32, em: f32) {
-	focused := index == app.focus
-	id := fmt.tprintf("###tabs%d", index)
-	// the tabs' room: the row's as laid out last time, less the new tab's button (the last panel's row ends at the
-	// window's buttons, short of the panel's width); before that, the panel's width less a margin
-	avail := room - em * 4.5
-	if pb := ui.prev_box(id); pb != nil && pb.size.x > 0 { avail = pb.size.x - em * TAB_ROW_END_EM }
-	ui.next({width = width, height = ui.pct(1)})
-	if ui.row(.End, {.Clip}, id) {
-		// (where a dragged tab lands in this row: a ghost of it there, the tabs after it moved along; the row's room
-		// shared with it, or it would run past the row's end, cut)
-		ghost_at := tab_ghost_slot(app, index)
-		n := len(p.tabs) + (ghost_at >= 0 ? 1 : 0)
-		// (too many even at their least width: the list's button takes its room from theirs)
-		over := room > 0 && n > 0 && avail < f32(n) * em * TAB_MIN_EM
-		if over { avail -= em * TAB_LIST_EM }
-		tab_w := em * TAB_EM
-		if room > 0 && n > 0 { tab_w = clamp(avail / f32(n), em * TAB_MIN_EM, em * TAB_EM) }
-		// the tabs on the toolkit's strip, as wide as they are up to their room: past it they scroll with its arrows and
-		// the wheel, the shown one brought into view when it changes; the buttons after it stay
-		view_w := f32(n) * tab_w
-		if avail > 0 { view_w = min(view_w, avail) }
-		ui.next({width = ui.px(view_w), height = ui.pct(1), axis = .X, cross = .End})
-		close := -1
-		if ui.strip("###tab_view") {
-			view := ui.parent_box()
-			for t, i in p.tabs {
-				if i == ghost_at { tab_ghost(app, tab_w, em) }
-				on := i == p.active
-				// (square, from the panel's left edge: the shown tab is the top of the toolbar under it, one surface)
-				// (a hidden tab's hover in the same shape: the rounding of the settings; the box's radius is scaled by it)
-				ui.next({width = ui.px(tab_w), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .Y, radius = em * TAB_RADIUS_EM})
-				flags := ui.Box_Flags{.Clickable, .Hot_Within, .Middle_Click}
-				if !on { flags += {.Draw_Hot_Effects} }
-				tab := ui.build_box(flags, fmt.tprintf("###tab%d", t.id))
-				if on { ui.strip_reveal(tab) }
-				// (the line of the accent along the top says, with several panels, which one has the keyboard)
-				line := on && focused && len(app.panels) > 1 ? ui.color("accent") : ui.Color{}
-				if on { tab_paint(tab, draw.hex(surfaces(app).list), draw.hex(surfaces(app).edge), line, tab_radius(em)) }
-				// (a tab scrolled out of the row takes no drop where it lies, over what is beside the row)
-				part := ui.Rect{{max(tab.rect.min.x, view.rect.min.x), tab.rect.min.y}, {min(tab.rect.max.x, view.rect.max.x), tab.rect.max.y}}
-				if part.max.x > part.min.x { drop_zone(app, part, t.path) }
-				if app.drop_hover == t.path && !on { drop_mark(tab) }
-				sig := ui.signal(tab)
-				if ui.parent(tab) {
-					ui.spacer(ui.px(max(2, ui.scale() * 2)))
-					ui.next({width = ui.fill(), height = ui.fill()})
-					if ui.row(.Center) {
-						ui.space(ui.SPACE_3)
-						path_icon(app, t.path, true, em * 1.6)
-						ui.space(ui.ICON_GAP)
-						ui.next({width = ui.fill(), height = ui.pct(1)})
-						if !on { ui.push_tags("weak") }
-						ui.label(fmt.tprintf("%s###title", ui.text_shown(tab_title(app, t))))
-						if !on { ui.pop_tags() }
-						if on || ui.hot_within(tab.key) {
-							ui.next({width = ui.px(em * 1.6), height = ui.px(em * 1.6), font = app.icons, font_size = em * 0.85, text_pad = 0})
-							ui.next_merge(control_look(em))
-							if ui.button("close", icon = lucide.X, o = {icon_font = app.icons}).clicked { close = i }
-						} else {
-							ui.spacer(ui.px(em * 1.6))
+	if ui.tabs_over(.Folder, {ground = draw.hex(surfaces(app).list), edge = draw.hex(surfaces(app).edge)}) {
+		focused := index == app.focus
+		id := fmt.tprintf("###tabs%d", index)
+		// the tabs' room: the row's as laid out last time, less the new tab's button and the Folder strip lead
+		// (the last panel's row ends at the window's buttons, short of the panel's width)
+		avail := room - em * (4.5 + TAB_STRIP_LEAD_EM)
+		if pb := ui.prev_box(id); pb != nil && pb.size.x > 0 { avail = pb.size.x - em * (TAB_ROW_END_EM + TAB_STRIP_LEAD_EM) }
+		ui.next({width = width, height = ui.pct(1)})
+		if ui.row(.Center, {.Clip}, id) {
+			// (where a dragged tab lands in this row: a ghost of it there, the tabs after it moved along; the row's room
+			// shared with it, or it would run past the row's end, cut)
+			ghost_at := tab_ghost_slot(app, index)
+			n := len(p.tabs) + (ghost_at >= 0 ? 1 : 0)
+			// (too many even at their least width: the list's button takes its room from theirs)
+			over := room > 0 && n > 0 && avail < f32(n) * em * TAB_MIN_EM
+			if over { avail -= em * TAB_LIST_EM }
+			tab_w := em * TAB_EM
+			if room > 0 && n > 0 { tab_w = clamp(avail / f32(n), em * TAB_MIN_EM, em * TAB_EM) }
+			// the tabs on the toolkit's strip: hugs its tabs (children_sum(0)) and gives way first when the row is short,
+			// scrolling with arrows and leaving the Folder bottom line showing under the arrows (Strip_Options.edge)
+			ui.next({height = ui.pct(1), axis = .X, cross = .End})
+			close := -1
+			if ui.strip("###tab_view", {edge = max(1, ui.scale())}) {
+				view := ui.parent_box()
+				ui.tab_strip_start()
+				for t, i in p.tabs {
+					if i == ghost_at { tab_ghost(app, tab_w, em) }
+					on := i == p.active
+					ui.next({width = ui.px(tab_w), height = ui.pct(1)})
+					tab := ui.build_box({.Clickable, .Hot_Within, .Middle_Click}, fmt.tprintf("###tab%d", t.id))
+					// (the mark along the top says, with several panels, which one has the keyboard)
+					line := on && focused && len(app.panels) > 1 ? ui.color("accent") : ui.Color{}
+					ui.tab_face(tab, on, line)
+					if on { ui.strip_reveal(tab) }
+					// (a tab scrolled out of the row takes no drop where it lies, over what is beside the row)
+					part := ui.Rect{{max(tab.rect.min.x, view.rect.min.x), tab.rect.min.y}, {min(tab.rect.max.x, view.rect.max.x), tab.rect.max.y}}
+					if part.max.x > part.min.x { drop_zone(app, part, t.path) }
+					if app.drop_hover == t.path && !on { drop_mark(tab) }
+					sig := ui.signal(tab)
+					if ui.parent(tab) {
+						if ui.tab_body() {
+							// (fixed-width tabs: let tab_body span the tab so the title fills and Close stays at the right)
+							ui.parent_box().pref[.X] = ui.pct(1)
+							ui.space(ui.SPACE_3)
+							path_icon(app, t.path, true, em * 1.6)
+							ui.space(ui.ICON_GAP)
+							ui.next({width = ui.fill(), height = ui.pct(1)})
+							if !on { ui.push_tags("weak") }
+							ui.label(fmt.tprintf("%s###title", ui.text_shown(tab_title(app, t))))
+							if !on { ui.pop_tags() }
+							if on || ui.hot_within(tab.key) {
+								ui.next({width = ui.px(em * 1.6), height = ui.px(em * 1.6), font = app.icons, font_size = em * 0.85, text_pad = 0})
+								ui.next_merge(control_look(em))
+								if ui.button("close", icon = lucide.X, o = {icon_font = app.icons}).clicked { close = i }
+							} else {
+								ui.spacer(ui.px(em * 1.6))
+							}
+							ui.space(ui.SPACE_2)
 						}
-						ui.space(ui.SPACE_2)
+					}
+					if sig.pressed { p.active = i; app.focus = index }
+					if !app.tab_drag.active { hover_tip(sig, home_path(app, t.path), t.locked ? i18n.tr("Locked: folders open in a new tab") : "") }
+					append(&app.tab_rects, Tab_Rect{index, i, tab.rect})
+					tab_drag_signal(app, index, i, sig)
+					// (the tab dragged, dimmed where it was: its ghost follows the pointer; not while its picture is read)
+					if app.tab_drag.active && app.tab_drag.tab == t.id && app.tab_drag.alone == 0 { tab.transparency = 0.5 }
+					if sig.middle_clicked { close = i }
+					if sig.right_clicked {
+						p.active, app.focus = i, index
+						tab_menu_open(app)
 					}
 				}
-				if sig.pressed { p.active = i; app.focus = index }
-				if !app.tab_drag.active { hover_tip(sig, home_path(app, t.path), t.locked ? i18n.tr("Locked: folders open in a new tab") : "") }
-				append(&app.tab_rects, Tab_Rect{index, i, tab.rect})
-				tab_drag_signal(app, index, i, sig)
-				// (the tab dragged, dimmed where it was: its ghost follows the pointer; not while its picture is read)
-				if app.tab_drag.active && app.tab_drag.tab == t.id && app.tab_drag.alone == 0 { tab.transparency = 0.5 }
-				if sig.middle_clicked { close = i }
-				if sig.right_clicked {
-					p.active, app.focus = i, index
-					tab_menu_open(app)
-				}
+				if ghost_at == len(p.tabs) { tab_ghost(app, tab_w, em) }
 			}
-			if ghost_at == len(p.tabs) { tab_ghost(app, tab_w, em) }
+			if over && icon_action(app, fmt.tprintf("tablist%d", index), lucide.CHEVRON_DOWN, i18n.tr("Every tab of the panel"), em) {
+				app.focus = index
+				tabs_menu_open(app, p)
+			}
+			ui.space(ui.TOOL_GAP)
+			// (New tab acts on the panel with the keyboard: its button is that panel's)
+			if icon_action(app, fmt.tprintf("newtab%d", index), lucide.PLUS, command_tip(app, "tab_new"), em, command = focused ? "tab_new" : "") {
+				app.focus = index
+				act_tab_new(app)
+			}
+			if close >= 0 { tab_close(app, p, close) }
 		}
-		if over && icon_action(app, fmt.tprintf("tablist%d", index), lucide.CHEVRON_DOWN, i18n.tr("Every tab of the panel"), em) {
-			app.focus = index
-			tabs_menu_open(app, p)
-		}
-		ui.space(ui.TOOL_GAP)
-		// (New tab acts on the panel with the keyboard: its button is that panel's)
-		if icon_action(app, fmt.tprintf("newtab%d", index), lucide.PLUS, command_tip(app, "tab_new"), em, command = focused ? "tab_new" : "") {
-			app.focus = index
-			act_tab_new(app)
-		}
-		if close >= 0 { tab_close(app, p, close) }
 	}
 }
 

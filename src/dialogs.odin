@@ -9,6 +9,8 @@ import "core:strings"
 import "core:sync"
 import "gt:i18n"
 import lucide "gt:lucide"
+import prefs_page "gt:prefs_page"
+import "gt:render"
 import "gt:timefmt"
 import "gt:ui"
 import "fs"
@@ -63,6 +65,43 @@ confirm_empty_trash :: proc(app: ^App, paths: []string, names: []string = nil) {
 dialogs_build :: proc(app: ^App) {
 	confirm_follow(app)
 	conflict_follow(app)
+	about_build(app)
+}
+
+@(private = "file")
+about_diagnostics :: proc(app: ^App) -> string {
+	b := strings.builder_make(context.temp_allocator)
+	ai := render.adapter_info(&app.shared.r)
+	if ai.name != "" || ai.api != "" {
+		fmt.sbprintf(&b, "Renderer: %s (%s)%s", ai.name, ai.api, ai.software ? ", software" : "")
+	}
+	if app.settings.theme != "" {
+		if strings.builder_len(b) > 0 { strings.write_byte(&b, '\n') }
+		fmt.sbprintf(&b, "Theme: %s", app.settings.theme)
+	}
+	return strings.to_string(b)
+}
+
+// About Classeur: toolkit's generic modal with drawn logo, built-in "What's new" jumping to Settings, links via launch,
+// and non-blocking diagnostics.
+@(private = "file")
+about_build :: proc(app: ^App) {
+	if !app.about_open { return }
+	ui.about_modal("classeur_about", &app.about_open, {
+		name         = APP_TITLE,
+		version      = APP_VERSION,
+		tagline      = i18n.tr("A fast file manager you drive from the keyboard."),
+		licence      = "MIT",
+		copyright    = "© 2026 Froment Software",
+		logo_draw    = logo_draw,
+		logo_user    = logo_draw_data(),
+		on_whats_new = proc(user: rawptr) { options_show((^App)(user), prefs_page.CHANGELOG_PAGE) },
+		website_url  = SITE_URL,
+		releases_url = REPOSITORY_URL + "/releases",
+		diagnostics  = about_diagnostics(app),
+		on_link      = proc(url: string, user: rawptr) { launch((^App)(user), .Open, url) },
+		user         = app,
+	})
 }
 
 // The answer of the question before deleting for good.

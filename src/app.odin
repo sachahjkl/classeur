@@ -162,6 +162,7 @@ App :: struct {
 	jobs:        Jobs,              // copies, moves, the trash (jobs.odin)
 	confirm:     Confirm,           // delete for good? (dialogs.odin)
 	conflict:    Conflict_View,     // a name taken: what to do (dialogs.odin)
+	about_open:  bool,              // About Classeur modal (dialogs.odin, ui.about_modal)
 	prefs:       config.Prefs,      // the preferences (settings.odin)
 	settings:    Settings,          // their values as the program reads them
 	standard:    prefs_page.Standard_Watch,   // the toolkit's standard settings applied as they change (settings.odin)

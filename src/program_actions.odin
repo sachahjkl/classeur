@@ -67,7 +67,7 @@ update_installed :: proc(app: ^App) -> bool { return app.updates.updater != nil 
 // About classeur
 
 act_app_about :: proc(app: ^App) {
-	say(app, i18n.tr("Classeur %s, on gui_toolkit %s. %s"), APP_VERSION, ui.VERSION, SITE_URL)
+	app.about_open = true
 }
 
 act_app_website :: proc(app: ^App) { launch(app, .Open, SITE_URL) }

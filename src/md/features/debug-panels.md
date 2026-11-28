@@ -13,9 +13,9 @@ test drives the same acts.
 
 ## Decisions
 
-- **Ctrl+Alt+Shift+D is the toolkit's**: it opens the debug window in a debug build and in the tests. Compact rows,
-  which had that key, took Ctrl+Alt+Shift+R (rows): in the tests the toolkit read the key first, and the command
-  never ran.
+- **Ctrl+Alt+Shift+D is the toolkit's**: it opens the debug window in every build (since gui_toolkit v0.368.0,
+  `TOOLKIT_DEBUG_WINDOW` is on in releases too, while `TOOLKIT_DEVTOOLS` stays off). Compact rows stays on
+  Ctrl+Alt+Shift+R (rows) so both shortcuts remain distinct.
 
 - **One panel per part that keeps state**: Tabs (the folder read, the view), Selection (with the rectangle), Thumbnails,
   Watcher, Undo, File search (GoTo's index), Jobs, Updates, Look. A panel is the part's, not a dump of `App`.
@@ -27,7 +27,9 @@ test drives the same acts.
   jobs' counters are atomics, read as the jobs' view reads them. No panel reads the disk or waits.
 - **Live values where a person tunes something**: the tick's time (`app.check_ms`, from `CHECK_ANIM_MS`), the
   system's thumbnails, a tab's zoom, flat, tree and grouping. A grouping chosen reads the folder again, as the menu does.
-- **A release has none**: `debug.ENABLED` is on in a debug build and in the tests; a release compiles every call away.
+- **Always available in the debug window**: since gui_toolkit v0.368.0, `TOOLKIT_DEBUG_WINDOW` is on by default in
+  releases too (Ctrl+Alt+Shift+D opens the window with View and classeur's panels), while `TOOLKIT_DEVTOOLS` (CDP)
+  stays off in releases.
 
 ## Subtle points
 

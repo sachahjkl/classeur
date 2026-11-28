@@ -65,21 +65,21 @@ test_focused_panel_stands_out :: proc(t: ^testing.T) {
 		focused := session.find(s, fmt.tprintf("tab%d", panel_tab(app.panels[1]).id))
 		other := session.find(s, fmt.tprintf("tab%d", panel_tab(app.panels[0]).id))
 		if !testing.expect(t, focused != nil && other != nil, "the two shown tabs") { return }
-		fp, op := (^Tab_Paint)(focused.custom_user), (^Tab_Paint)(other.custom_user)
-		if !testing.expect(t, fp != nil && op != nil, "both painted") { return }
-		testing.expect(t, fp.line.a > 0, "the focused panel's tab has the accent")
-		testing.expect(t, op.line.a == 0, "the other's has none")
+		if !testing.expect(t, focused.ring_at != nil && other.ring_at != nil, "both use ui.tab_face") { return }
+		fr, _ := focused.ring_at(focused)
+		or, _ := other.ring_at(other)
 
-		// the accent is the tab's top edge, tab_line_px() thick: its first row and its second are the accent, not the
-		// edge's colour that the other tab's top is
+		// the accent band along the top of the focused panel's Folder tab (ui.tab_face's mark): inside its silhouette
+		// top rows differ from the unfocused panel's tab, while deeper inside both show the list's ground
 		img := session.capture(s)
-		lw := int(tab_line_px())
-		fx, ox := int((focused.rect.min.x + focused.rect.max.x) * 0.5), int((other.rect.min.x + other.rect.max.x) * 0.5)
-		fy, oy := int(focused.rect.min.y), int(other.rect.min.y)
-		top := session.pixel(img, fx, fy)
-		testing.expect(t, !session.near(top, session.pixel(img, ox, oy), 8), "the focused tab's top is not the edge's colour")
-		testing.expect(t, session.near(top, session.pixel(img, fx, fy + lw - 1), 8), "the accent is as thick as tab_line_px")
-		testing.expect(t, !session.near(top, session.pixel(img, fx, fy + lw + 1), 8), "and no thicker")
+		fx, ox := int((fr.min.x + fr.max.x) * 0.5), int((or.min.x + or.max.x) * 0.5)
+		fy, oy := int(fr.min.y), int(or.min.y)
+		diff_top := 0
+		for dy in 0 ..< 5 {
+			if !session.near(session.pixel(img, fx, fy + dy), session.pixel(img, ox, oy + dy), 16) { diff_top += 1 }
+		}
+		testing.expectf(t, diff_top >= 1, "the focused tab's top has the accent mark (%d differing rows)", diff_top)
+		testing.expect(t, session.near(session.pixel(img, fx, fy + 6), session.pixel(img, ox, oy + 6), 8), "below the accent both tabs share the panel surface")
 
 		// the contents of the panel without the keyboard are dimmed, its column titles with its rows
 		dimmed, lit := session.find(s, "content", 0), session.find(s, "content", 1)

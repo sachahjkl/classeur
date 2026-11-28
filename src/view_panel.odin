@@ -168,8 +168,14 @@ panel_build :: proc(app: ^App, p: ^Panel, index: int, em: f32) -> ui.Rect {
 		room := box.rect.max.x - box.rect.min.x
 		// (a panel below another: its tabs at its own top, on the window's top surface)
 		if p.below {
-			ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOP_EM)), bg = draw.hex(surfaces(app).top)})
-			if ui.row(.Start, {.Draw_Background}, "###below_tabs") { tab_region(app, p, index, ui.fill(), room, em) }
+			if ui.tabs_over(.Folder, {ground = draw.hex(surfaces(app).list), edge = draw.hex(surfaces(app).edge)}) {
+				ui.next({width = ui.fill(), height = ui.px(ui.dense(em * TOP_EM)), bg = draw.hex(surfaces(app).top)})
+				if ui.row(.Start, {.Draw_Background}, "###below_tabs") {
+					bar := ui.parent_box()
+					bar.custom, bar.custom_user = ui.tab_line_draw, ui.tab_strip_look({})
+					tab_region(app, p, index, ui.fill(), room, em)
+				}
+			}
 		}
 		toolbar(app, p, t, index, em)
 		// the list

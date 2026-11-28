@@ -216,3 +216,46 @@ test_restart :: proc(t: ^testing.T) {
 		testing.expect(t, app.restart, "restart asked")
 	})
 }
+
+// Shift+F1 opens the toolkit About modal with built-in What's new (jumps to Settings > What's new), Website link via
+// launch, Copy version / diagnostics, and Escape close.
+@(test)
+test_about_modal :: proc(t: ^testing.T) {
+	unwatched.run(t, proc(t: ^testing.T) {
+		files := FIXTURE
+		dir := make_fixture(t, files[:])
+		s, app := start(t, {dir}, home = dir)
+		context.allocator = runtime.heap_allocator()
+		testing.expect(t, !app.about_open, "closed at start")
+		session.key(s, .F1, {.Shift})
+		session.frames(s, 3)
+		testing.expect(t, app.about_open, "Shift+F1 opens About")
+		testing.expect(t, session.find(s, "about_whats_new") != nil, "What's new button shown")
+		testing.expect(t, session.find(s, "about_copy_version") != nil, "Copy version button shown")
+		testing.expect(t, session.find(s, "about_copy_diagnostics") != nil, "Copy diagnostics button shown")
+
+		// Website opens through launch (recorded headless)
+		opened := len(app.opened)
+		session.click(s, "about_website")
+		session.frames(s, 2)
+		if testing.expect_value(t, len(app.opened), opened + 1) {
+			testing.expect_value(t, app.opened[opened], SITE_URL)
+		}
+
+		// What's new closes About and opens Settings on the What's new page
+		session.click(s, "about_whats_new")
+		session.frames(s, 3)
+		testing.expect(t, !app.about_open, "What's new closes About")
+		testing.expect(t, ui.view_is_open(&app.views, OPTIONS_VIEW), "Settings opened")
+		session.key(s, .Escape)
+		session.frames(s, 2)
+
+		// Escape closes About without affecting background state
+		session.key(s, .F1, {.Shift})
+		session.frames(s, 3)
+		testing.expect(t, app.about_open, "re-opened")
+		session.key(s, .Escape)
+		session.frames(s, 2)
+		testing.expect(t, !app.about_open, "Escape closes About")
+	})
+}

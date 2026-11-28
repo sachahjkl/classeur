@@ -270,18 +270,20 @@ entry_glyph :: proc(app: ^App, dir: string, e: fs.Entry, width: f32) {
 LOGO_BACK  :: 0x1f4f8aff
 LOGO_FRONT :: 0x4f97e0ff
 
-@(private = "file")
 Logo_Draw :: struct { back, front: ui.Color }
+
+logo_draw_data :: proc() -> ^Logo_Draw {
+	d := ui.frame_new(Logo_Draw)
+	d^ = {draw.hex(LOGO_BACK), draw.hex(LOGO_FRONT)}
+	return d
+}
 
 // classeur's mark, drawn: a folder, its back with the tab, its front lower.
 logo_icon :: proc(width: f32) {
-	d := ui.frame_new(Logo_Draw)
-	d^ = {draw.hex(LOGO_BACK), draw.hex(LOGO_FRONT)}
 	ui.next({width = ui.px(width), height = ui.pct(1)})
-	ui.custom("###logo", logo_draw, d)
+	ui.custom("###logo", logo_draw, logo_draw_data())
 }
 
-@(private = "file")
 logo_draw :: proc(b: ^ui.Box, user: rawptr, dc: ^draw.Context) {
 	d := (^Logo_Draw)(user)
 	r := b.rect

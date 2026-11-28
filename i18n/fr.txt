@@ -580,6 +580,9 @@ en+ Its %d items are deleted for good: this cannot be undone.
 fr %d élément sera supprimé définitivement : cette action est irréversible.
 fr+ %d éléments seront supprimés définitivement : cette action est irréversible.
 
+en A fast file manager you drive from the keyboard.
+fr Un gestionnaire de fichiers rapide, piloté au clavier.
+
 en A name is taken
 fr Un nom est déjà utilisé
 
@@ -1202,9 +1205,6 @@ fr Vidéos
 
 en No window could be started.
 fr Impossible d'ouvrir une fenêtre.
-
-en Classeur %s, on gui_toolkit %s. %s
-fr Classeur %s, sur gui_toolkit %s. %s
 
 en The version is copied.
 fr Version copiée.

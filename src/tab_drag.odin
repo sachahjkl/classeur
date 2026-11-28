@@ -79,18 +79,23 @@ tab_ghost :: proc(app: ^App, width, em: f32) {
 		if t == nil { return }
 		path, title = t.path, ui.text_shown(tab_title(app, t))
 	}
-	// (a tab's own shape, its sides and its top in the accent, open at the bottom as the tabs are: the settings' rounding)
-	ui.next({width = ui.px(width), height = ui.px(ui.dense(em * (TOP_EM - 0.45))), axis = .X, cross = .Center})
-	b := ui.build_box({}, "###tab_land")
-	tab_paint(b, draw.hex(surfaces(app).top), ui.color("accent"), ui.Color{}, tab_radius(em))
-	if ui.parent(b) {
-		ui.space(ui.SPACE_3)
-		if path != "" {
-			path_icon(app, path, true, em * 1.6)
-			ui.space(ui.ICON_GAP)
+	// (the toolkit's Folder tab shape, in the top bar's ground with an accent outline where the tab will land)
+	if ui.tabs_over(.Folder, {ground = draw.hex(surfaces(app).top), edge = ui.color("accent")}) {
+		ui.next({width = ui.px(width), height = ui.pct(1)})
+		b := ui.build_box({}, "###tab_land")
+		ui.tab_face(b, true)
+		if ui.parent(b) {
+			if ui.tab_body() {
+				ui.parent_box().pref[.X] = ui.pct(1)
+				ui.space(ui.SPACE_3)
+				if path != "" {
+					path_icon(app, path, true, em * 1.6)
+					ui.space(ui.ICON_GAP)
+				}
+				ui.next({width = ui.fill(), height = ui.pct(1)})
+				ui.label(fmt.tprintf("%s###title", title))
+			}
 		}
-		ui.next({width = ui.fill(), height = ui.pct(1)})
-		ui.label(fmt.tprintf("%s###title", title))
 	}
 }
 
